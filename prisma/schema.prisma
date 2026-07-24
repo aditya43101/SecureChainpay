@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MERCHANT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  PAYMENT
+}
+
+model User {
+  id             String    @id @default(uuid())
+  email          String?   @unique
+  phone          String?   @unique
+  passwordHash   String?
+  firstName      String?
+  lastName       String?
+  role           Role      @default(USER)
+  isEmailVerified Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  wallets          Wallet[]
+  sessions         Session[]
+  devices          Device[]
+  loginHistory     LoginHistory[]
+  notifications    Notification[]
+  kycDocument      KycDocument?
+  linkedAccounts   LinkedAccount[]
+  merchant         Merchant?
+  sentTransactions Transaction[] @relation("Sender")
+  receivedTransactions Transaction[] @relation("Receiver")
+  paymentRequestsSent PaymentRequest[] @relation("Requestor")
+  paymentRequestsReceived PaymentRequest[] @relation("Requestee")
+  chatMessagesSent ChatMessage[] @relation("MessageSender")
+  chatMessagesReceived ChatMessage[] @relation("MessageReceiver")
+  auditLogs        AuditLog[]
+  scheduledPayments ScheduledPayment[]
+  spendingGoals    SpendingGoal[]
+  favouriteContacts FavouriteContact[] @relation("UserContacts")
+  favouritedBy     FavouriteContact[] @relation("ContactedUser")
+  reports          Report[]
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  address   String   @unique
+  balance   Decimal  @default(0.0)
+  currency  String   @default("USD")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id              String            @id @default(uuid())
+  txHash          String?           @unique
+  senderId        String?
+  sender          User?             @relation("Sender", fields: [senderId], references: [id])
+  receiverId      String?
+  receiver        User?             @relation("Receiver", fields: [receiverId], references: [id])
+  amount          Decimal
+  currency        String            @default("USD")
+  status          TransactionStatus @default(PENDING)
+  type            TransactionType
+  description     String?
+  fee             Decimal           @default(0.0)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  settlement      Settlement?       @relation(fields: [settlementId], references: [id])
+  settlementId    String?
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+}
+
+model Device {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  deviceId   String   @unique
+  deviceName String?
+  isTrusted  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LoginHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  ipAddress String?
+  userAgent String?
+  status    String   // SUCCESS, FAILED
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   // INFO, ALERT, TRANSACTION
+  createdAt DateTime @default(now())
+}
+
+model PaymentRequest {
+  id          String   @id @default(uuid())
+  requestorId String
+  requestor   User     @relation("Requestor", fields: [requestorId], references: [id])
+  requesteeId String
+  requestee   User     @relation("Requestee", fields: [requesteeId], references: [id])
+  amount      Decimal
+  currency    String   @default("USD")
+  status      String   // PENDING, PAID, CANCELLED
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model KycDocument {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  documentType String   // ID_CARD, PASSPORT, DRIVERS_LICENSE
+  documentUrl  String
+  status       String   // PENDING, APPROVED, REJECTED
+  uploadedAt   DateTime @default(now())
+  verifiedAt   DateTime?
+}
+
+model LinkedAccount {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  provider      String   // STRIPE, PAYPAL, BANK
+  accountId     String
+  accountName   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Merchant {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  businessName String
+  apiKey       String   @unique
+  webhookUrl   String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  settlements  Settlement[]
+}
+
+model Settlement {
+  id           String   @id @default(uuid())
+  merchantId   String
+  merchant     Merchant @relation(fields: [merchantId], references: [id])
+  amount       Decimal
+  currency     String   @default("USD")
+  status       String   // PENDING, COMPLETED, FAILED
+  transactions Transaction[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("MessageSender", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User     @relation("MessageReceiver", fields: [receiverId], references: [id])
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model ScheduledPayment {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  recipientId String
+  amount      Decimal
+  currency    String   @default("USD")
+  frequency   String   // DAILY, WEEKLY, MONTHLY
+  nextRunAt   DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SpendingGoal {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  category    String
+  targetAmount Decimal
+  currentAmount Decimal @default(0.0)
+  currency    String   @default("USD")
+  month       Int
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FavouriteContact {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserContacts", fields: [userId], references: [id])
+  contactId String
+  contact   User     @relation("ContactedUser", fields: [contactId], references: [id])
+  nickname  String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, contactId])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  reportType  String   // TRANSACTION_HISTORY, TAX_REPORT
+  fileUrl     String?
+  status      String   // PENDING, COMPLETED, FAILED
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Usernames collection: 
+    // - Anyone can read a specific username to check availability
+    // - Only authenticated users can create a username
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if request.auth != null;
+    }
+    
+    // Users collection:
+    // - Users can only read and write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
