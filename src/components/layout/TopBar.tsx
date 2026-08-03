@@ -6,7 +6,8 @@ import { useWalletStore } from '../../stores/wallet-store';
 
 export const TopBar: React.FC = () => {
   const { user } = useAuthStore();
-  const { address, balance, isConnected } = useWalletStore();
+  const { address, balances } = useWalletStore();
+  const isConnected = !!address;
 
   const headerStyle: React.CSSProperties = {
     display: 'flex',
@@ -68,7 +69,7 @@ export const TopBar: React.FC = () => {
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4CAF50', boxShadow: '0 0 10px #4CAF50' }} />
             {formatAddress(address)}
             <span style={{ opacity: 0.3 }}>|</span>
-            <span style={{ color: '#D4AF37', fontWeight: 700 }}>{balance} ETH</span>
+            <span style={{ color: '#D4AF37', fontWeight: 700 }}>{balances?.ETH || 0} ETH</span>
           </motion.div>
         ) : (
           <motion.button
