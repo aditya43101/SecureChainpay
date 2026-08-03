@@ -12,7 +12,7 @@ export async function getEncryptionKey(secret: string): Promise<CryptoKey> {
     {
       name: 'PBKDF2',
       salt: enc.encode('securechain-static-salt-2024'), // Static salt for simple local derivation
-      iterations: 100000,
+      iterations: 10000,
       hash: 'SHA-256',
     },
     keyMaterial,

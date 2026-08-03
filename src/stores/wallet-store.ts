@@ -1,9 +1,15 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { db, auth } from '@/lib/firebase/client';
-import { doc, getDoc, setDoc, collection, getDocs, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, runTransaction, serverTimestamp, query, where } from 'firebase/firestore';
 import { ethers } from 'ethers';
 import { encryptPrivateKey } from '@/lib/crypto/client-aes';
+
+// Global lock to prevent concurrent initialization per user
+const initializationLocks: Record<string, Promise<void> | null> = {};
+
+// Helper for strict string validation
+const isValidString = (val: any) => typeof val === 'string' && val.trim().length > 0;
 
 export interface Transaction {
   id: string;
@@ -90,6 +96,15 @@ export const useWalletStore = create<WalletState>()(
       setHasHydrated: (state) => set({ _hasHydrated: state }),
       
       initializeWallet: async (uid: string) => {
+        if (initializationLocks[uid]) {
+          console.log(`[SecureChain] initializeWallet already running for ${uid}, waiting...`);
+          await initializationLocks[uid];
+          return;
+        }
+
+        let resolveLock: () => void;
+        initializationLocks[uid] = new Promise(resolve => { resolveLock = resolve; });
+
         try {
           const walletRef = doc(db, 'users', uid, 'wallet', 'data');
           const walletSnap = await getDoc(walletRef);
@@ -98,32 +113,51 @@ export const useWalletStore = create<WalletState>()(
             const data = walletSnap.data();
             let finalData = { ...data };
             let needsHealing = false;
+            let repairedFields: string[] = [];
             
-            // SELF-HEALING LOGIC
-            const missingCrypto = !data.encryptedPrivateKey || !data.publicKey || !data.address;
-            if (missingCrypto) {
-               console.warn("[SecureChain: Self-Healing] Missing crypto keys detected. Regenerating missing keys securely...");
+            // STRICT SELF-HEALING LOGIC
+            const missingAddress = !isValidString(data.address);
+            const missingPublicKey = !isValidString(data.publicKey);
+            const missingEncryptedKey = !isValidString(data.encryptedPrivateKey);
+            
+            if (missingAddress || missingPublicKey || missingEncryptedKey) {
+               console.warn("[SecureChain: Self-Healing] Missing or corrupted crypto keys detected. Regenerating missing keys securely...");
                needsHealing = true;
                const newWallet = ethers.Wallet.createRandom();
                const clientSecret = getClientSecret(uid);
                
-               if (!data.address) finalData.address = newWallet.address;
-               if (!data.publicKey) finalData.publicKey = newWallet.publicKey;
-               if (!data.encryptedPrivateKey) finalData.encryptedPrivateKey = await encryptPrivateKey(newWallet.privateKey, clientSecret);
-               if (!data.keyGeneratedAt) finalData.keyGeneratedAt = new Date().toISOString();
-               if (!data.algorithm) finalData.algorithm = 'ECDSA/secp256k1';
-               if (!data.walletVersion) finalData.walletVersion = '1.0';
-               if (!data.keyFingerprint) finalData.keyFingerprint = (await generateHash(finalData.publicKey)).substring(0, 16);
+               if (missingAddress) { finalData.address = newWallet.address; repairedFields.push('address'); }
+               if (missingPublicKey) { finalData.publicKey = newWallet.publicKey; repairedFields.push('publicKey'); }
+               if (missingEncryptedKey) { finalData.encryptedPrivateKey = await encryptPrivateKey(newWallet.privateKey, clientSecret); repairedFields.push('encryptedPrivateKey'); }
+               if (!isValidString(data.keyGeneratedAt)) { finalData.keyGeneratedAt = new Date().toISOString(); repairedFields.push('keyGeneratedAt'); }
+               if (!isValidString(data.algorithm)) { finalData.algorithm = 'ECDSA/secp256k1'; repairedFields.push('algorithm'); }
+               if (!isValidString(data.walletVersion)) { finalData.walletVersion = '1.0'; repairedFields.push('walletVersion'); }
+               if (!isValidString(data.keyFingerprint)) { finalData.keyFingerprint = (await generateHash(finalData.publicKey)).substring(0, 16); repairedFields.push('keyFingerprint'); }
             }
             
-            if (data.lastBlockNumber === undefined) {
+            if (typeof data.lastBlockNumber !== 'number' || data.lastBlockNumber < 0) {
                needsHealing = true;
                finalData.lastBlockNumber = 0;
+               repairedFields.push('lastBlockNumber');
+            }
+            if (!isValidString(data.lastBlockHash)) {
+               needsHealing = true;
+               finalData.lastBlockHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
+               repairedFields.push('lastBlockHash');
             }
             
             if (needsHealing) {
                await setDoc(walletRef, finalData, { merge: true });
-               console.log("[SecureChain: Self-Healing] Wallet data successfully repaired.");
+               
+               // Create Audit Log
+               const auditRef = doc(collection(db, 'users', uid, 'audit_logs'));
+               await setDoc(auditRef, {
+                 timestamp: new Date().toISOString(),
+                 reason: 'Auto-recovery triggered due to missing or invalid fields',
+                 repairedFields,
+                 status: 'SUCCESS'
+               });
+               console.log(`[SecureChain: Self-Healing] Wallet data successfully repaired. Repaired: ${repairedFields.join(', ')}`);
             }
 
             set({ 
@@ -138,6 +172,7 @@ export const useWalletStore = create<WalletState>()(
               lastBlockNumber: finalData.lastBlockNumber || 0,
               lastBlockHash: finalData.lastBlockHash || null,
             });
+
           } else {
             // GENERATE PUBLIC/PRIVATE KEY SYSTEM
             const newWallet = ethers.Wallet.createRandom();
@@ -160,12 +195,19 @@ export const useWalletStore = create<WalletState>()(
               lastBlockHash: null // Will be updated by genesis block
             };
             
-            // Generate Genesis Block
-            const genesisTimeISO = generatedAt;
-            const payloadToHash = `00SystemSystem0${genesisTimeISO}genesis`;
-            const genesisHash = await generateHash(payloadToHash);
+            // Check if Genesis block already exists to prevent duplicates
+            const genesisCheckQ = query(collection(db, 'users', uid, 'transactions'), where('type', '==', 'genesis'));
+            const genesisCheckSnap = await getDocs(genesisCheckQ);
+            const genesisExists = !genesisCheckSnap.empty;
+
+            let genesisHash = '0x0000000000000000000000000000000000000000000000000000000000000000';
             
-            const genesisTxId = `tx_genesis_${uid}`;
+            if (!genesisExists) {
+              const genesisTimeISO = generatedAt;
+              const payloadToHash = `00SystemSystem0${genesisTimeISO}genesis`;
+              genesisHash = await generateHash(payloadToHash);
+              
+              const genesisTxId = `tx_genesis_${uid}`;
             const genesisBlock: Transaction = {
               id: genesisTxId,
               blockNumber: 0,
@@ -186,15 +228,21 @@ export const useWalletStore = create<WalletState>()(
               blockSize: 256
             };
             
-            // Execute atomic initialization
-            await runTransaction(db, async (transaction) => {
-               const newTxRef = doc(db, 'users', uid, 'transactions', genesisTxId);
-               transaction.set(newTxRef, genesisBlock);
-               transaction.set(walletRef, { ...initData, lastBlockHash: genesisHash });
-            });
+              // Execute atomic initialization
+              await runTransaction(db, async (transaction) => {
+                 const newTxRef = doc(db, 'users', uid, 'transactions', genesisTxId);
+                 transaction.set(newTxRef, genesisBlock);
+                 transaction.set(walletRef, { ...initData, lastBlockHash: genesisHash });
+              });
+            } else {
+              // Genesis already existed but wallet didn't? Just create wallet.
+              genesisHash = genesisCheckSnap.docs[0].data().hash;
+              await setDoc(walletRef, { ...initData, lastBlockHash: genesisHash });
+            }
             
             set({ ...initData, lastBlockHash: genesisHash });
           }
+
           
           // Fetch transactions
           const txsRef = collection(db, 'users', uid, 'transactions');
@@ -211,6 +259,9 @@ export const useWalletStore = create<WalletState>()(
         } catch (error) {
           console.error("[SecureChain: Error] Failed to initialize wallet from DB:", error);
           throw error;
+        } finally {
+          resolveLock!();
+          initializationLocks[uid] = null;
         }
       },
       
@@ -229,14 +280,34 @@ export const useWalletStore = create<WalletState>()(
         let newBlockNumber = 0;
         let newBlockHash = '';
         
-        // Decrypt key in memory for signing ONLY
-        const state = get();
-        if (!state.encryptedPrivateKey) throw new Error("Wallet keys not found!");
+        // PRE-EXECUTION VALIDATIONS
+        let state = get();
         
+        // 1. Validate Keys Exist. If missing, Auto-Recover.
+        if (!isValidString(state.encryptedPrivateKey) || !isValidString(state.address)) {
+          console.warn("[SecureChain] Keys missing during transaction execution. Auto-recovering...");
+          await get().initializeWallet(uid);
+          state = get();
+          
+          if (!isValidString(state.encryptedPrivateKey)) {
+            throw new Error("Wallet Keys Not Found: Auto-recovery failed. Please try again.");
+          }
+        }
+        
+        // 2. Validate Genesis Block Exists
+        if (!state.transactions.some(t => t.type === 'genesis')) {
+          console.warn("[SecureChain] Genesis block missing during transaction. Auto-recovering...");
+          await get().initializeWallet(uid);
+          state = get();
+          if (!state.transactions.some(t => t.type === 'genesis')) {
+            throw new Error("Blockchain Metadata Error: Genesis block missing.");
+          }
+        }
+
         const { decryptPrivateKey } = await import('@/lib/crypto/client-aes');
         let tempWallet: ethers.Wallet;
         try {
-           const decryptedKey = await decryptPrivateKey(state.encryptedPrivateKey, getClientSecret(uid));
+           const decryptedKey = await decryptPrivateKey(state.encryptedPrivateKey!, getClientSecret(uid));
            tempWallet = new ethers.Wallet(decryptedKey);
         } catch (e) {
            throw new Error("Failed to decrypt private key for signing");
@@ -254,18 +325,18 @@ export const useWalletStore = create<WalletState>()(
           const currentBalances = currentData.balances || { USD: 0, BTC: 0, ETH: 0 };
           const currentLastBlock = currentData.lastBlockNumber || 0;
           
-          newBalances = { ...currentBalances };
+          newBalances = { ...currentBalances } as Balances;
           if (type === 'credit') {
-            newBalances[currency] += amount;
+            newBalances![currency] += amount;
           } else if (type === 'debit') {
-            if (newBalances[currency] < amount) throw new Error("Insufficient funds");
-            newBalances[currency] -= amount;
+            if (newBalances![currency] < amount) throw new Error("Insufficient funds");
+            newBalances![currency] -= amount;
           } else if (type === 'trade') {
-            if (newBalances[currency] < amount) throw new Error("Insufficient funds");
-            newBalances[currency] -= amount;
+            if (newBalances![currency] < amount) throw new Error("Insufficient funds");
+            newBalances![currency] -= amount;
             if (payload?.tradeAsset && payload?.tradeAmount) {
               const asset = payload.tradeAsset as keyof Balances;
-              newBalances[asset] = (newBalances[asset] || 0) + payload.tradeAmount;
+              newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
             }
           }
           
@@ -289,9 +360,18 @@ export const useWalletStore = create<WalletState>()(
           const hashString = `${prevHash}${newBlockNumber}${senderWallet}${receiverWallet}${amount}${serverTimeISO}${type}`;
           const hash = await generateHash(hashString);
           
-          // TRANSACTION SIGNING
+          // TRANSACTION SIGNING & VERIFICATION
           const signPayload = `${senderWallet}${receiverWallet}${amount}${serverTimeISO}${prevHash}${newBlockNumber}`;
           const digitalSignature = await tempWallet.signMessage(signPayload);
+          
+          // Verify that the signature was actually created by the sender's private key
+          const recoveredAddress = ethers.verifyMessage(signPayload, digitalSignature);
+          if (recoveredAddress !== tempWallet.address) {
+            throw new Error("Cryptographic verification failed: Signature does not match the private key");
+          }
+          if (senderWallet !== uid && recoveredAddress !== senderWallet) {
+             throw new Error("Cryptographic verification failed: Sender address mismatch");
+          }
           
           newTransaction = {
             id: txId,
@@ -299,7 +379,7 @@ export const useWalletStore = create<WalletState>()(
             hash,
             previousHash: prevHash,
             walletAddress: uid,
-            senderPublicKey: tempWallet.publicKey,
+            senderPublicKey: state.publicKey || tempWallet.address,
             digitalSignature: digitalSignature,
             type,
             amount,

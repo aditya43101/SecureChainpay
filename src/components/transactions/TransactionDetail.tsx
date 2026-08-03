@@ -97,29 +97,29 @@ export default function TransactionDetail({ transaction, onClose }: TransactionD
               </span>
             </div>
 
-            {transaction.networkFee !== undefined && (
+            {transaction.payload?.networkFee !== undefined && (
               <div className="flex justify-between items-center py-3 border-b border-gray-800/50">
                 <span className="text-gray-400 text-sm">Network Fee</span>
                 <span className="text-gray-200 text-sm font-medium">
-                  {transaction.currency} {transaction.networkFee.toFixed(4)}
+                  {transaction.currency} {transaction.payload.networkFee.toFixed(4)}
                 </span>
               </div>
             )}
 
-            {transaction.sender && (
+            {transaction.walletAddress && (
               <div className="flex justify-between items-center py-3 border-b border-gray-800/50">
                 <span className="text-gray-400 text-sm">From</span>
-                <span className="text-gray-200 text-sm font-medium truncate max-w-[200px]" title={transaction.sender}>
-                  {transaction.sender}
+                <span className="text-gray-200 text-sm font-medium truncate max-w-[200px]" title={transaction.walletAddress}>
+                  {transaction.walletAddress}
                 </span>
               </div>
             )}
 
-            {transaction.recipient && (
+            {transaction.payload?.receiverWallet && (
               <div className="flex justify-between items-center py-3 border-b border-gray-800/50">
                 <span className="text-gray-400 text-sm">To</span>
-                <span className="text-gray-200 text-sm font-medium truncate max-w-[200px]" title={transaction.recipient}>
-                  {transaction.recipient}
+                <span className="text-gray-200 text-sm font-medium truncate max-w-[200px]" title={transaction.payload.receiverWallet}>
+                  {transaction.payload.receiverWallet}
                 </span>
               </div>
             )}

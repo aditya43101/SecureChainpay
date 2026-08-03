@@ -2,8 +2,10 @@
 
 import { Eye, EyeOff, TrendingUp, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
+import { useWalletStore } from '@/stores/wallet-store';
 
 export function WalletCard() {
+  const { balances, address } = useWalletStore();
   const [showBalance, setShowBalance] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -47,30 +49,25 @@ export function WalletCard() {
             </div>
             <div className="flex items-baseline gap-2">
               <h2 className="text-5xl sm:text-6xl font-black text-white tracking-tight drop-shadow-md">
-                {showBalance ? '$45,231' : '••••••'}
-                {showBalance && <span className="text-3xl text-neutral-400 font-bold ml-1">.89</span>}
+                {showBalance ? `$${(balances.USD + balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}` : '••••••'}
+                {showBalance && <span className="text-3xl text-neutral-400 font-bold ml-1">.{((balances.USD + balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[1])}</span>}
               </h2>
             </div>
           </div>
           
           <div className="flex flex-col items-end gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-xl text-sm font-bold border border-emerald-500/30 backdrop-blur-md shadow-lg shadow-emerald-500/10">
-              <TrendingUp size={16} />
-              <span>+5.2%</span>
-            </div>
-            <span className="text-sm text-neutral-400 font-medium">Past 24h</span>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-8 bg-neutral-950/40 p-5 rounded-2xl border border-white/5 backdrop-blur-md">
           <div className="flex-1">
             <p className="text-sm text-neutral-400 font-medium mb-1">Crypto Assets</p>
-            <p className="text-xl font-bold text-white">{showBalance ? '$41,050.00' : '••••••'}</p>
+            <p className="text-xl font-bold text-white">{showBalance ? `$${(balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</p>
           </div>
           <div className="hidden sm:block w-px h-10 bg-white/10" />
           <div className="flex-1">
             <p className="text-sm text-neutral-400 font-medium mb-1">Fiat Balance</p>
-            <p className="text-xl font-bold text-white">{showBalance ? '$4,181.89' : '••••••'}</p>
+            <p className="text-xl font-bold text-white">{showBalance ? `$${balances.USD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</p>
           </div>
           <div className="hidden sm:block w-px h-10 bg-white/10" />
           
@@ -79,7 +76,7 @@ export function WalletCard() {
             onClick={handleCopy}
             className="flex items-center justify-between sm:justify-start gap-3 px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium text-neutral-200 transition-all group/btn w-full sm:w-auto"
           >
-            <span className="font-mono tracking-wider">0x71C...976F</span>
+            <span className="font-mono tracking-wider">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Loading...'}</span>
             {copied ? (
               <Check size={16} className="text-emerald-400" />
             ) : (

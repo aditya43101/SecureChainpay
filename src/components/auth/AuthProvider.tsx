@@ -9,9 +9,22 @@ import { useRouter, usePathname } from 'next/navigation';
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isProvisioning, setIsProvisioning] = useState(false);
-  const { initializeWallet, disconnectWallet, _hasHydrated } = useWalletStore();
+  const { 
+    initializeWallet, disconnectWallet, _hasHydrated, 
+    address, publicKey, encryptedPrivateKey, 
+    lastBlockNumber, lastBlockHash 
+  } = useWalletStore();
   const router = useRouter();
   const pathname = usePathname();
+
+  const isValidString = (val: any) => typeof val === 'string' && val.trim().length > 0;
+  
+  const isValidWallet = 
+    isValidString(address) && 
+    isValidString(publicKey) && 
+    isValidString(encryptedPrivateKey) && 
+    typeof lastBlockNumber === 'number' && 
+    isValidString(lastBlockHash);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -19,7 +32,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         // Save the UID securely in local storage so Zustand persist can access it immediately
         localStorage.setItem('securechain_uid', user.uid);
         
-        const hasWalletLocally = !!useWalletStore.getState().encryptedPrivateKey;
+        const state = useWalletStore.getState();
+        const hasWalletLocally = 
+            isValidString(state.encryptedPrivateKey) && 
+            isValidString(state.address) &&
+            isValidString(state.publicKey) &&
+            isValidString(state.lastBlockHash);
         
         if (!hasWalletLocally) {
           setIsProvisioning(true);
@@ -71,10 +89,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     );
   }
 
-  if (isInitializing || (auth.currentUser && !_hasHydrated)) {
+  if (isInitializing || (auth.currentUser && (!_hasHydrated || !isValidWallet))) {
     return (
       <div className="flex justify-center items-center h-screen bg-[#0a0a0a]">
-        <span className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <span className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+          <span className="text-emerald-500/50 text-sm font-medium animate-pulse">Syncing blockchain metadata...</span>
+        </div>
       </div>
     );
   }
