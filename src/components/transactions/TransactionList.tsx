@@ -3,18 +3,7 @@
 import React, { useState } from 'react';
 import TransactionDetail from './TransactionDetail';
 
-export type Transaction = {
-  id: string;
-  type: 'credit' | 'debit';
-  amount: number;
-  currency: string;
-  status: 'completed' | 'pending' | 'failed';
-  date: string;
-  recipient?: string;
-  sender?: string;
-  description: string;
-  networkFee?: number;
-};
+import { Transaction } from '@/stores/wallet-store';
 
 interface TransactionListProps {
   transactions: Transaction[];

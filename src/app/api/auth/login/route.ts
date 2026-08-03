@@ -18,11 +18,14 @@ export async function POST(request: Request) {
     const decodedToken = await firebaseAuth().verifyIdToken(idToken);
     
     // Ensure the token corresponds to the phone number if provided, or extract from token
-    const verifiedPhone = decodedToken.phone_number || phoneNumber;
+    let verifiedPhone = decodedToken.phone_number || phoneNumber;
     
     if (!verifiedPhone) {
       return NextResponse.json({ error: 'No phone number found in token' }, { status: 400 });
     }
+
+    // Normalize username/email/phone
+    verifiedPhone = String(verifiedPhone).trim().toLowerCase();
 
     // Find or create the user in PostgreSQL
     let user = await db.user.findUnique({

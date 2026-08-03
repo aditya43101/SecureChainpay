@@ -4,26 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase/client';
 import { onAuthStateChanged } from 'firebase/auth';
 import Link from 'next/link';
-import CryptoJS from 'crypto-js';
-
-// We need user context to pass userId, assuming there's an auth store or we get it from an API.
-// For now, let's use a dummy userId if we can't find one, or we can fetch the user.
-import { useAuthStore } from '@/stores/auth-store';
+import { useWalletStore } from '@/stores/wallet-store';
+import { useRouter } from 'next/navigation';
 
 const PRESET_AMOUNTS = [50, 100, 500, 1000];
 
 export default function AddMoneyPage() {
-  const { user } = useAuthStore();
+  const { executeTransaction, balances } = useWalletStore();
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'add' | 'withdraw'>('add');
   
   const [amount, setAmount] = useState<string>('100');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  
-  // State for Mock Dialog
-  const [showMockDialog, setShowMockDialog] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
 
   useEffect(() => {
     // Sync login state properly using Firebase onAuthStateChanged
@@ -34,78 +28,28 @@ export default function AddMoneyPage() {
   }, []);
 
   const handleAction = async () => {
-    setIsProcessing(true);
-    try {
-      if (activeTab === 'add') {
-        // 1. Create Order via Backend for Add Money
-        const res = await fetch('/api/wallet/topup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'CREATE_ORDER',
-            amount: Number(amount),
-            currency: 'USD'
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to create order');
-
-        setCurrentOrder(data.order);
-        setShowMockDialog(true);
-      } else {
-        // Withdraw Mock
-        setTimeout(() => {
-          setIsProcessing(false);
-          setIsSuccess(true);
-        }, 1000);
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Failed to initiate action.');
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSimulatePayment = async (success: boolean) => {
-    setShowMockDialog(false);
+    if (!amount || Number(amount) <= 0) return;
     
-    if (!success) {
-      alert('Payment was cancelled or failed.');
+    // For withdrawal, check balance
+    if (activeTab === 'withdraw' && Number(amount) > balances.USD) {
+      alert("Insufficient USD balance to withdraw this amount.");
       return;
     }
 
     setIsProcessing(true);
     try {
-      const mockPaymentId = `pay_mock_${Math.random().toString(36).substring(2, 10)}`;
-      const mockSecret = 'mock_secret_123'; 
-      const signaturePayload = currentOrder.id + "|" + mockPaymentId;
-      const signature = CryptoJS.HmacSHA256(signaturePayload, mockSecret).toString(CryptoJS.enc.Hex);
-
-      const verifyRes = await fetch('/api/wallet/topup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'VERIFY_PAYMENT',
-          userId: currentUser?.uid || user?.id || 'demo-user-id',
-          orderId: currentOrder.id,
-          paymentId: mockPaymentId,
-          signature: signature,
-          amount: Number(amount),
-          currency: 'USD'
-        })
-      });
-
-      const verifyData = await verifyRes.json();
+      const txType = activeTab === 'add' ? 'credit' : 'debit';
+      const desc = activeTab === 'add' ? 'Wallet Top-up (Simulation)' : 'Wallet Withdrawal (Simulation)';
       
-      if (!verifyRes.ok) {
-        throw new Error(verifyData.error || 'Payment verification failed');
-      }
+      // Instantly generate a blockchain block for this action
+      await executeTransaction(txType, Number(amount), 'USD', desc, {
+        source: 'Bank Gateway Simulation'
+      });
 
       setIsSuccess(true);
     } catch (error: any) {
-      console.error('Payment Error:', error);
-      alert(`Payment Failed: ${error.message}`);
+      console.error(error);
+      alert(`Failed to process: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -138,8 +82,8 @@ export default function AddMoneyPage() {
                   Mock ${amount} {activeTab === 'add' ? 'added successfully to' : 'withdrawn successfully from'} wallet!
                 </p>
               </div>
-              <button onClick={() => { setIsSuccess(false); setAmount('100'); }} className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full">
-                Do another transaction
+              <button onClick={() => router.push('/explorer')} className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full">
+                View Block in Explorer
               </button>
             </div>
           ) : (
@@ -254,39 +198,7 @@ export default function AddMoneyPage() {
         </div>
       </div>
 
-      {/* Mock Payment Gateway Dialog (Add Money only) */}
-      {showMockDialog && currentOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white text-black w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="bg-blue-600 p-6 flex flex-col items-center justify-center text-white">
-              <h2 className="text-2xl font-black mb-1">Razorpay (Mock)</h2>
-              <p className="text-blue-100 text-sm opacity-80">Test Environment</p>
-            </div>
-            
-            <div className="p-6 flex flex-col items-center space-y-6">
-              <div className="text-center">
-                <p className="text-gray-500 text-sm mb-1">Amount Payable</p>
-                <h3 className="text-3xl font-bold">${Number(amount).toFixed(2)}</h3>
-              </div>
-              
-              <div className="w-full space-y-3">
-                <button 
-                  onClick={() => handleSimulatePayment(true)}
-                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition-colors shadow-md"
-                >
-                  Simulate Success
-                </button>
-                <button 
-                  onClick={() => handleSimulatePayment(false)}
-                  className="w-full py-3 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg font-bold transition-colors"
-                >
-                  Simulate Failure
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

@@ -1,17 +1,26 @@
+'use client';
+
 import React from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { slideInRight, staggerContainer } from '../../lib/animations/variants';
+import { useWalletStore } from '@/stores/wallet-store';
 
 const navItems = [
-  { id: 'dashboard', label: 'Overview', icon: '📊' },
-  { id: 'wallet', label: 'My Wallet', icon: '💼' },
-  { id: 'transactions', label: 'Transactions', icon: '🔄' },
-  { id: 'cards', label: 'Virtual Cards', icon: '💳' },
-  { id: 'investments', label: 'Staking', icon: '📈' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'dashboard', label: 'Overview', icon: '📊', path: '/dashboard' },
+  { id: 'wallet', label: 'My Wallet', icon: '💼', path: '/wallet' },
+  { id: 'explorer', label: 'Block Explorer', icon: '🔗', path: '/explorer' },
+  { id: 'transactions', label: 'Transactions', icon: '🔄', path: '/transactions' },
+  { id: 'trade', label: 'Trade Crypto', icon: '💱', path: '/trade' },
+  { id: 'settings', label: 'Settings', icon: '⚙️', path: '/settings' },
 ];
 
 export const Sidebar: React.FC = () => {
+  const pathname = usePathname();
+  const transactions = useWalletStore((state) => state.transactions);
+  const blockCount = transactions.length;
+
   const sidebarStyle: React.CSSProperties = {
     width: '280px',
     height: '100vh',
@@ -31,7 +40,7 @@ export const Sidebar: React.FC = () => {
   const logoStyle: React.CSSProperties = {
     fontSize: '22px',
     fontWeight: 800,
-    background: 'linear-gradient(135deg, #D4AF37 0%, #F3E5AB 100%)',
+    background: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     marginBottom: '56px',
@@ -65,32 +74,42 @@ export const Sidebar: React.FC = () => {
         <div style={{ 
           width: 32, 
           height: 32, 
-          background: 'linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%)', 
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
           borderRadius: '10px',
-          boxShadow: '0 4px 15px rgba(212, 175, 55, 0.3)'
+          boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
         }} />
         SecureChain Pay
       </motion.div>
       
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {navItems.map((item, index) => (
-          <motion.div
-            key={item.id}
-            variants={slideInRight}
-            style={{
-              ...itemStyle,
-              ...(index === 0 ? { background: 'rgba(212, 175, 55, 0.1)', color: '#D4AF37' } : {})
-            }}
-            whileHover={{ 
-              background: 'rgba(212, 175, 55, 0.05)', 
-              color: '#D4AF37',
-              x: 4
-            }}
-          >
-            <span style={{ fontSize: '20px' }}>{item.icon}</span>
-            {item.label}
-          </motion.div>
-        ))}
+        {navItems.map((item) => {
+          const isActive = pathname === item.path || (pathname === '/' && item.path === '/dashboard');
+          return (
+            <Link href={item.path} key={item.id} style={{ textDecoration: 'none' }}>
+              <motion.div
+                variants={slideInRight}
+                style={{
+                  ...itemStyle,
+                  ...(isActive ? { background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' } : {})
+                }}
+                whileHover={{ 
+                  background: 'rgba(16, 185, 129, 0.05)', 
+                  color: '#10b981',
+                  x: 4
+                }}
+                className="relative"
+              >
+                <span style={{ fontSize: '20px' }}>{item.icon}</span>
+                {item.label}
+                {item.id === 'explorer' && blockCount > 0 && (
+                  <span className="absolute right-4 px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/30">
+                    {blockCount} Blocks
+                  </span>
+                )}
+              </motion.div>
+            </Link>
+          );
+        })}
       </nav>
       
       <div style={{ marginTop: 'auto' }}>

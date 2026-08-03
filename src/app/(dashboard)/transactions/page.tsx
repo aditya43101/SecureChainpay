@@ -1,68 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import TransactionList, { Transaction } from '@/components/transactions/TransactionList';
-
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: 'tx_8d7f2b9a1e',
-    type: 'credit',
-    amount: 1500.00,
-    currency: 'USD',
-    status: 'completed',
-    date: '2026-07-14T10:30:00Z',
-    description: 'Added funds via Razorpay',
-    networkFee: 0,
-  },
-  {
-    id: 'tx_9e2a4c1f3d',
-    type: 'debit',
-    amount: 250.50,
-    currency: 'USD',
-    status: 'completed',
-    date: '2026-07-13T15:45:00Z',
-    recipient: '0x71C...976F',
-    description: 'Payment to Merchant',
-    networkFee: 0.05,
-  },
-  {
-    id: 'tx_3b1d9e8f4a',
-    type: 'credit',
-    amount: 850.00,
-    currency: 'USD',
-    status: 'pending',
-    date: '2026-07-12T09:15:00Z',
-    sender: 'alice@example.com',
-    description: 'Received from Alice',
-    networkFee: 0,
-  },
-  {
-    id: 'tx_4f5a6b7c8d',
-    type: 'debit',
-    amount: 100.00,
-    currency: 'USD',
-    status: 'failed',
-    date: '2026-07-10T14:20:00Z',
-    recipient: 'bob@example.com',
-    description: 'Transfer to Bob',
-    networkFee: 0.1,
-  },
-  {
-    id: 'tx_1a2b3c4d5e',
-    type: 'credit',
-    amount: 3200.00,
-    currency: 'USD',
-    status: 'completed',
-    date: '2026-07-05T11:00:00Z',
-    description: 'Salary Deposit',
-    networkFee: 0,
-  },
-];
+import TransactionList from '@/components/transactions/TransactionList';
+import { useWalletStore } from '@/stores/wallet-store';
 
 export default function TransactionsPage() {
-  const [filter, setFilter] = useState<'all' | 'credit' | 'debit'>('all');
+  const [filter, setFilter] = useState<'all' | 'credit' | 'debit' | 'trade'>('all');
+  const transactions = useWalletStore((state) => state.transactions);
 
-  const filteredTransactions = MOCK_TRANSACTIONS.filter((tx) => {
+  const filteredTransactions = transactions.filter((tx) => {
     if (filter === 'all') return true;
     return tx.type === filter;
   });
@@ -80,8 +26,8 @@ export default function TransactionsPage() {
             <p className="text-gray-400">View and manage all your SecureChain Pay activities.</p>
           </div>
           
-          <div className="flex items-center gap-2 p-1 bg-gray-900/80 backdrop-blur border border-gray-800 rounded-xl">
-            {(['all', 'credit', 'debit'] as const).map((f) => (
+          <div className="flex flex-wrap items-center gap-2 p-1 bg-gray-900/80 backdrop-blur border border-gray-800 rounded-xl">
+            {(['all', 'credit', 'debit', 'trade'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}

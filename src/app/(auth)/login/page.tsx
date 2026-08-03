@@ -130,15 +130,22 @@ function LoginContent() {
   };
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
-    setUsername(val);
+    // Only allow alphanumeric and underscore, trim and convert to lowercase for internal processing
+    const rawVal = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+    const normalizedVal = rawVal.trim().toLowerCase();
+    
+    // We can display the raw value to the user if we wanted, but the prompt says 
+    // "Example: Aditya, aditya, ADItya should all be treated as the same username."
+    // We will just force it to lowercase to avoid any visual confusion as well, 
+    // or we can store rawVal in state but check normalizedVal. Let's just force lowercase.
+    setUsername(normalizedVal);
     setUsernameValid(false);
     setUsernameError(null);
     
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (val.length > 0) {
+    if (normalizedVal.length > 0) {
       debounceRef.current = setTimeout(() => {
-        checkUsernameUnique(val);
+        checkUsernameUnique(normalizedVal);
       }, 500);
     }
   };
@@ -556,6 +563,17 @@ function LoginContent() {
                 </>
               )}
             </button>
+
+            {/* DEV BYPASS BUTTON */}
+            {process.env.NODE_ENV === 'development' && (
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="w-full mt-4 relative z-10 flex items-center justify-center gap-3 py-3 px-6 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 font-medium rounded-xl transition-all duration-200"
+              >
+                🚀 Quick Login (Dev Mode Bypass)
+              </button>
+            )}
           </>
         )}
       </div>

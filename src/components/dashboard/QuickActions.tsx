@@ -1,11 +1,12 @@
-import { Send, Download, RefreshCcw, CreditCard } from 'lucide-react';
+import { Send, Download, RefreshCcw, Database } from 'lucide-react';
+import Link from 'next/link';
 
 export function QuickActions() {
   const actions = [
-    { name: 'Send', icon: <Send size={24} />, color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
-    { name: 'Receive', icon: <Download size={24} />, color: 'from-blue-400 to-cyan-500', shadow: 'shadow-blue-500/20' },
-    { name: 'Swap', icon: <RefreshCcw size={24} />, color: 'from-purple-400 to-pink-500', shadow: 'shadow-purple-500/20' },
-    { name: 'Buy Crypto', icon: <CreditCard size={24} />, color: 'from-orange-400 to-rose-500', shadow: 'shadow-orange-500/20' },
+    { name: 'Send', href: '/wallet/transfer', icon: <Send size={24} />, color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
+    { name: 'Receive', href: '/wallet/receive', icon: <Download size={24} />, color: 'from-blue-400 to-cyan-500', shadow: 'shadow-blue-500/20' },
+    { name: 'Swap', href: '/trade', icon: <RefreshCcw size={24} />, color: 'from-purple-400 to-pink-500', shadow: 'shadow-purple-500/20' },
+    { name: 'Explorer', href: '/explorer', icon: <Database size={24} />, color: 'from-orange-400 to-rose-500', shadow: 'shadow-orange-500/20' },
   ];
 
   return (
@@ -16,8 +17,9 @@ export function QuickActions() {
       
       <div className="grid grid-cols-2 gap-4 flex-1">
         {actions.map((action) => (
-          <button 
+          <Link 
             key={action.name}
+            href={action.href}
             className="flex flex-col items-center justify-center gap-4 p-5 rounded-3xl bg-neutral-950/50 border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300 group relative overflow-hidden"
           >
             {/* Hover Glow Effect */}
@@ -32,7 +34,7 @@ export function QuickActions() {
             <span className="text-sm font-semibold text-neutral-300 group-hover:text-white transition-colors z-10">
               {action.name}
             </span>
-          </button>
+          </Link>
         ))}
       </div>
     </div>

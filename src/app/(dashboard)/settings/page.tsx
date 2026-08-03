@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard } from 'lucide-react';
+import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Eye, EyeOff, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase/client';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { useWalletStore } from '@/stores/wallet-store';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -13,6 +14,13 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState('USD');
   const [profileUsername, setProfileUsername] = useState('Loading...');
   const [profileContact, setProfileContact] = useState('Loading...');
+  
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [revealedKey, setRevealedKey] = useState('****************');
+  const [devClicks, setDevClicks] = useState(0);
+  const [isDevMode, setIsDevMode] = useState(false);
+
+  const wallet = useWalletStore();
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -33,10 +41,55 @@ export default function SettingsPage() {
     return () => unsub();
   }, []);
 
+  const handleHeaderClick = () => {
+    if (isDevMode) return;
+    setDevClicks(prev => {
+      if (prev + 1 >= 5) {
+        setIsDevMode(true);
+        alert('Developer Mode Unlocked! You can now reveal your private key.');
+        return 5;
+      }
+      return prev + 1;
+    });
+  };
+
+  const handleRevealKey = async () => {
+    if (showPrivateKey) {
+      setShowPrivateKey(false);
+      setRevealedKey('****************');
+      return;
+    }
+    const confirmReveal = window.confirm('WARNING: Never share your Private Key with anyone. Anyone with this key can steal your funds. Are you sure you want to reveal it?');
+    if (!confirmReveal) return;
+    
+    try {
+      if (!wallet.encryptedPrivateKey) {
+        alert('No private key found for this wallet.');
+        return;
+      }
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      
+      const { decryptPrivateKey } = await import('@/lib/crypto/client-aes');
+      const secret = `securechain_client_${uid}_secret`;
+      const decrypted = await decryptPrivateKey(wallet.encryptedPrivateKey, secret);
+      setRevealedKey(decrypted);
+      setShowPrivateKey(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to decrypt private key.');
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard');
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile Settings', icon: <User size={18} /> },
     { id: 'preferences', label: 'Preferences', icon: <Sun size={18} /> },
-    { id: 'security', label: 'Security', icon: <Lock size={18} /> },
+    { id: 'security', label: 'Security & Keys', icon: <Lock size={18} /> },
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={18} /> },
     { id: 'about', label: 'About Us', icon: <Info size={18} /> },
   ];
@@ -134,12 +187,67 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Security Section */}
+          {/* Security & Keys Section */}
           {activeTab === 'security' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">Security & Privacy</h2>
+              <h2 className="text-2xl font-bold text-white mb-6">Security & Keys</h2>
               
               <div className="space-y-4">
+                {/* Cryptographic Keys */}
+                <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-5">
+                  <div 
+                    className="flex items-center gap-3 mb-2 cursor-pointer select-none"
+                    onClick={handleHeaderClick}
+                  >
+                    <Key className="text-emerald-400" size={20} />
+                    <h3 className="font-medium text-white text-lg">Blockchain Keys</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Wallet Address</label>
+                      <div className="flex items-center mt-1">
+                        <input type="text" readOnly value={wallet.address || 'Loading...'} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono" />
+                        <button onClick={() => copyToClipboard(wallet.address || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Public Key</label>
+                      <div className="flex items-center mt-1">
+                        <input type="text" readOnly value={wallet.publicKey || 'Loading...'} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono truncate" />
+                        <button onClick={() => copyToClipboard(wallet.publicKey || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between items-end">
+                        <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Private Key</label>
+                        <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          {wallet.encryptedPrivateKey ? 'AES-256-GCM Encrypted' : 'Not Found'}
+                        </span>
+                      </div>
+                      <div className="flex items-center mt-1">
+                        <input type={showPrivateKey ? "text" : "password"} readOnly value={revealedKey} className={`w-full px-3 py-2 bg-[#121212] border border-neutral-800 ${isDevMode ? 'rounded-l-lg border-r-0' : 'rounded-lg'} text-sm text-neutral-300 font-mono tracking-widest`} />
+                        {isDevMode && (
+                          <button onClick={handleRevealKey} className="px-3 py-2 bg-neutral-800 border border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                            {showPrivateKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="pt-2 flex justify-between items-center text-xs text-neutral-500">
+                      <span>Generated: {wallet.keyGeneratedAt ? new Date(wallet.keyGeneratedAt).toLocaleString() : 'N/A'}</span>
+                      <span>{wallet.algorithm || 'ECDSA'} • v{wallet.walletVersion || '1.0'}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
                   <div className="flex gap-4">
                     <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">

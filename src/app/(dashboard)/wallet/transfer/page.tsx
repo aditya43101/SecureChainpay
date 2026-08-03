@@ -2,24 +2,37 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useWalletStore } from '@/stores/wallet-store';
+import { useRouter } from 'next/navigation';
 
 export default function TransferPage() {
+  const { executeTransaction, balances } = useWalletStore();
+  const router = useRouter();
+
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const availableBalance = 24500.50; // Mock balance
+  const availableBalance = balances.USD || 0;
 
-  const handleTransfer = (e: React.FormEvent) => {
+  const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (Number(amount) > availableBalance) return;
+    
     setIsProcessing(true);
-    // Mock blockchain transfer flow
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      await executeTransaction('debit', Number(amount), 'USD', note || `Transfer to ${recipient}`, {
+        receiverWallet: recipient
+      });
       setIsSuccess(true);
-    }, 2500);
+    } catch (error: any) {
+      console.error(error);
+      alert(`Transfer failed: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -60,9 +73,9 @@ export default function TransferPage() {
                 </div>
               </div>
 
-              <Link href="/wallet" className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full text-center">
-                Return to Wallet
-              </Link>
+              <button onClick={() => router.push('/explorer')} className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full text-center">
+                View Transaction Block in Explorer
+              </button>
             </div>
           ) : (
             <div className="relative z-10 space-y-8">

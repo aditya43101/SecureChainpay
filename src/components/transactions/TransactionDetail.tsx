@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import type { Transaction } from './TransactionList';
+import type { Transaction } from '@/stores/wallet-store';
 
 interface TransactionDetailProps {
   transaction: Transaction;
