@@ -243,13 +243,33 @@ export const useWalletStore = create<WalletState>()(
               let existingPublicKey = data.publicKey || currentState.publicKey;
               let existingEncryptedKey = data.encryptedPrivateKey || currentState.encryptedPrivateKey;
 
+              // If Firestore doc exists but has incomplete/invalid keys
               if (!isValidString(existingAddress) || !isValidString(existingEncryptedKey)) {
                 if (hasLocalKeys) {
                   existingAddress = currentState.address!;
                   existingEncryptedKey = currentState.encryptedPrivateKey!;
                   existingPublicKey = currentState.publicKey || null;
                 } else {
-                  throw new Error('Existing wallet keys could not be verified.');
+                  console.warn(`[WALLET ${getWElapsed()}] Firestore wallet record exists but is incomplete. Auto-generating fresh keys...`);
+                  const newWallet = ethers.Wallet.createRandom();
+                  const generatedAt = new Date().toISOString();
+                  existingEncryptedKey = await encryptPrivateKey(newWallet.privateKey, clientSecret);
+                  existingAddress = newWallet.address;
+                  existingPublicKey = newWallet.publicKey;
+
+                  // Save freshly healed keys to Firestore
+                  await setDoc(walletRef, {
+                    address: existingAddress,
+                    publicKey: existingPublicKey,
+                    encryptedPrivateKey: existingEncryptedKey,
+                    keyGeneratedAt: generatedAt,
+                    algorithm: 'ECDSA/secp256k1',
+                    walletVersion: '1.0',
+                    keyFingerprint: (await generateHash(existingPublicKey)).substring(0, 16),
+                    balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
+                    lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
+                    lastBlockHash: data.lastBlockHash || '0x0000000000000000000000000000000000000000000000000000000000000000'
+                  }, { merge: true });
                 }
               }
 
