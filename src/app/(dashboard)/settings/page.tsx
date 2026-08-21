@@ -21,6 +21,8 @@ export default function SettingsPage() {
   const keyGeneratedAt = useWalletStore((state) => state.keyGeneratedAt);
   const walletVersion = useWalletStore((state) => state.walletVersion);
   const identityStatus = useWalletStore((state) => state.identityStatus);
+  const initializationErrorCode = useWalletStore((state) => state.initializationErrorCode);
+  const initializationErrorMessage = useWalletStore((state) => state.initializationErrorMessage);
   const initializeWallet = useWalletStore((state) => state.initializeWallet);
   const [isRetryingWallet, setIsRetryingWallet] = useState(false);
 
@@ -159,16 +161,23 @@ export default function SettingsPage() {
                   </div>
                   {identityStatus === 'error' && (
                     <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                      <span className="text-xs text-amber-300">Wallet cloud verification failed. No wallet was changed.</span>
+                      <div className="min-w-0">
+                        <span className="block text-xs text-amber-300">Wallet cloud verification failed. No wallet was changed.</span>
+                        {initializationErrorCode && (
+                          <span className="mt-1 block truncate text-[11px] text-amber-200/70">
+                            {initializationErrorCode}: {initializationErrorMessage || 'Cloud verification unavailable'}
+                          </span>
+                        )}
+                      </div>
                       <Button
-                        type="button"
-                        onClick={retryWalletInitialization}
-                        disabled={isRetryingWallet}
-                        variant="outline"
-                        className="shrink-0 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
-                      >
-                        {isRetryingWallet ? 'Retrying...' : 'Retry'}
-                      </Button>
+                          type="button"
+                          onClick={retryWalletInitialization}
+                          disabled={isRetryingWallet}
+                          variant="outline"
+                          className="shrink-0 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                        >
+                          {isRetryingWallet ? 'Retrying...' : 'Retry'}
+                        </Button>
                     </div>
                   )}
                 </div>

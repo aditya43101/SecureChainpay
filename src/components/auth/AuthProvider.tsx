@@ -116,6 +116,21 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initializeWallet, disconnectWallet]);
 
+  useEffect(() => {
+    const retryWhenOnline = () => {
+      const uid = auth.currentUser?.uid;
+      const walletState = useWalletStore.getState();
+      if (!uid || walletState.identityStatus !== 'error') return;
+
+      initializeWallet(uid).catch((error) => {
+        console.warn('[AUTH] Automatic wallet retry after reconnect failed:', error);
+      });
+    };
+
+    window.addEventListener('online', retryWhenOnline);
+    return () => window.removeEventListener('online', retryWhenOnline);
+  }, [initializeWallet]);
+
   // Cached wallet fast-path: Only trust local wallet if ownership matches the current authenticated UID
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
   const hasLocalWallet = Boolean(isLocalWalletOwner && ownerUid === auth.currentUser?.uid && address && encryptedPrivateKey);

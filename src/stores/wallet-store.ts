@@ -45,6 +45,8 @@ interface WalletState {
   _isWalletReady: boolean;
   ownerUid: string | null;
   identityStatus: 'pending' | 'loaded' | 'verified' | 'error';
+  initializationErrorCode: string | null;
+  initializationErrorMessage: string | null;
   address: string | null;
   publicKey: string | null;
   encryptedPrivateKey: string | null;
@@ -135,6 +137,8 @@ export const useWalletStore = create<WalletState>()(
       _isWalletReady: false,
       ownerUid: null,
       identityStatus: 'pending',
+      initializationErrorCode: null,
+      initializationErrorMessage: null,
       address: null,
       publicKey: null,
       encryptedPrivateKey: null,
@@ -207,6 +211,8 @@ export const useWalletStore = create<WalletState>()(
               set({
                 ownerUid: uid,
                 identityStatus: 'loaded',
+                initializationErrorCode: null,
+                initializationErrorMessage: null,
                 address: data.address,
                 publicKey: data.publicKey,
                 encryptedPrivateKey: data.encryptedPrivateKey,
@@ -246,7 +252,7 @@ export const useWalletStore = create<WalletState>()(
                 }
               }
               if (hasLocalKeys) {
-                set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid, identityStatus: 'loaded' });
+                set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid, identityStatus: 'loaded', initializationErrorCode: null, initializationErrorMessage: null });
                 console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);
                 get().syncTransactions(uid);
                 return;
@@ -254,7 +260,17 @@ export const useWalletStore = create<WalletState>()(
               const reason = 'error' in readResult && readResult.error instanceof Error
                 ? readResult.error.message
                 : 'Unknown Firestore failure';
-              set({ _hasHydrated: true, _isWalletReady: false, ownerUid: uid, identityStatus: 'error' });
+              const errorCode = 'error' in readResult && typeof readResult.error?.code === 'string'
+                ? readResult.error.code
+                : 'unknown';
+              set({
+                _hasHydrated: true,
+                _isWalletReady: false,
+                ownerUid: uid,
+                identityStatus: 'error',
+                initializationErrorCode: errorCode,
+                initializationErrorMessage: reason,
+              });
               console.warn(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${reason}). No wallet was created or changed; retry is required.`);
               return;
             }
@@ -317,7 +333,13 @@ export const useWalletStore = create<WalletState>()(
             console.log(`[WALLET ${getWElapsed()}] New wallet and genesis persisted atomically.`);
           } catch (error: any) {
             console.error(`[WALLET ${getWElapsed()}] Critical wallet initialization failed:`, error);
-            set({ _hasHydrated: true, _isWalletReady: false, identityStatus: 'error' });
+            set({
+              _hasHydrated: true,
+              _isWalletReady: false,
+              identityStatus: 'error',
+              initializationErrorCode: typeof error?.code === 'string' ? error.code : 'initialization-failed',
+              initializationErrorMessage: error instanceof Error ? error.message : 'Wallet initialization failed',
+            });
             throw error;
           } finally {
             initPromises.delete(uid);
@@ -502,6 +524,8 @@ export const useWalletStore = create<WalletState>()(
           _isWalletReady: false,
           ownerUid: null,
           identityStatus: 'pending',
+          initializationErrorCode: null,
+          initializationErrorMessage: null,
           address: null, 
           publicKey: null,
           encryptedPrivateKey: null,
