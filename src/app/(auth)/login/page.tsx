@@ -112,7 +112,7 @@ function LoginContent() {
     
     try {
       const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-        size: 'normal',
+        size: 'invisible',
         callback: () => {
           if (isMountedRef.current) {
             setCaptchaSolved(true);
@@ -122,13 +122,14 @@ function LoginContent() {
         'expired-callback': () => {
           if (isMountedRef.current) {
             setCaptchaSolved(false);
-            setError('Captcha expired. Please complete the verification again.');
+            setError('Captcha expired. Please try again.');
           }
         }
       });
       
       verifierRef.current = verifier;
       (window as any).recaptchaVerifier = verifier;
+      setCaptchaSolved(true);
       
       verifier.render().catch((err: any) => {
         console.error('reCAPTCHA render error:', err);
@@ -326,11 +327,6 @@ function LoginContent() {
       return;
     }
 
-    if (!captchaSolved) {
-      setError('Please complete the reCAPTCHA verification before proceeding.');
-      return;
-    }
-
     setIsLoading(true);
     
     try {
@@ -440,9 +436,9 @@ function LoginContent() {
     const formatted = formatToE164(phone);
     const hasValidPhone = formatted.replace(/\D/g, '').length >= 10;
     if (mode === 'register') {
-      return hasValidPhone && captchaSolved && username.length >= 3 && !usernameError && usernameValid;
+      return hasValidPhone && username.length >= 3 && !usernameError && usernameValid;
     }
-    return hasValidPhone && captchaSolved;
+    return hasValidPhone;
   };
 
   return (

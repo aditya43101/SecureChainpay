@@ -85,16 +85,26 @@ export default function ExplorerPage() {
       // Signature check
       if (block.type !== 'genesis' && signaturesValid) {
         try {
-           if (!block.digitalSignature || !block.senderPublicKey || !block.payload?.signPayload) {
-             signaturesValid = false;
-           } else {
-             const recoveredKey = ethers.verifyMessage(block.payload.signPayload, block.digitalSignature);
-             if (recoveredKey !== block.senderPublicKey) {
-               signaturesValid = false;
-             }
-           }
+          if (!block.digitalSignature || !block.payload?.signPayload) {
+            signaturesValid = false;
+          } else {
+            const recoveredAddress = ethers.verifyMessage(block.payload.signPayload, block.digitalSignature);
+            let expectedAddress = block.walletAddress;
+            if (!expectedAddress && block.senderPublicKey) {
+              try {
+                expectedAddress = block.senderPublicKey.startsWith('0x04')
+                  ? ethers.computeAddress(block.senderPublicKey)
+                  : block.senderPublicKey;
+              } catch {
+                expectedAddress = block.senderPublicKey;
+              }
+            }
+            if (!expectedAddress || recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+              signaturesValid = false;
+            }
+          }
         } catch {
-           signaturesValid = false;
+          signaturesValid = false;
         }
       }
     }
@@ -148,20 +158,32 @@ export default function ExplorerPage() {
   const handleVerifySignature = useCallback(() => {
     if (!selectedBlock) return;
     try {
-      if (!selectedBlock.digitalSignature || !selectedBlock.senderPublicKey || !selectedBlock.payload?.signPayload) {
-         if (selectedBlock.type === 'genesis') {
-             setVerifyStatus('valid');
-             return;
-         }
-         throw new Error("Missing signature data");
+      if (selectedBlock.type === 'genesis') {
+        setVerifyStatus('valid');
+        return;
+      }
+
+      if (!selectedBlock.digitalSignature || !selectedBlock.payload?.signPayload) {
+        throw new Error("Missing signature data");
       }
       
-      const recoveredKey = ethers.verifyMessage(
+      const recoveredAddress = ethers.verifyMessage(
         selectedBlock.payload.signPayload,
         selectedBlock.digitalSignature
       );
       
-      if (recoveredKey === selectedBlock.senderPublicKey) {
+      let expectedAddress = selectedBlock.walletAddress;
+      if (!expectedAddress && selectedBlock.senderPublicKey) {
+        try {
+          expectedAddress = selectedBlock.senderPublicKey.startsWith('0x04')
+            ? ethers.computeAddress(selectedBlock.senderPublicKey)
+            : selectedBlock.senderPublicKey;
+        } catch {
+          expectedAddress = selectedBlock.senderPublicKey;
+        }
+      }
+
+      if (expectedAddress && recoveredAddress.toLowerCase() === expectedAddress.toLowerCase()) {
         setVerifyStatus('valid');
       } else {
         setVerifyStatus('invalid');
