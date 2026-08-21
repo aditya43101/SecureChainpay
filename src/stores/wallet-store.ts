@@ -195,29 +195,38 @@ export const useWalletStore = create<WalletState>()(
             const clientSecret = getClientSecret(uid);
             const walletRef = doc(db, 'users', uid, 'wallet', 'data');
             
-            // Check Firestore for existing wallet record
+            // Check Firestore for existing wallet record with a strict 3s timeout
             let walletSnap: any = null;
+            let readSuccess = false;
+            
             try {
-              walletSnap = await getDoc(walletRef);
-            } catch (err) {
-              console.warn('[SecureChain: Init] Firestore read error:', err);
+              const fetchWithTimeout = Promise.race([
+                getDoc(walletRef),
+                new Promise<null>((_, reject) => 
+                  setTimeout(() => reject(new Error('Firestore read timeout')), 3000)
+                )
+              ]);
+              walletSnap = await fetchWithTimeout;
+              readSuccess = true;
+            } catch (err: any) {
+              console.warn('[SecureChain: Init] Firestore read warning:', err?.message || err);
               walletSnap = null;
+              readSuccess = false;
             }
             
-            const docExists = walletSnap && typeof walletSnap.exists === 'function' && walletSnap.exists();
+            const docExists = readSuccess && walletSnap && typeof walletSnap.exists === 'function' && walletSnap.exists();
             const currentState = get();
             const hasLocalKeys = isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey);
 
             if (docExists) {
               // ═══════════════════════════════════════════════════════
-              // 1. EXISTING USER (Firestore Record Found)
+              // 1. EXISTING USER (Firestore Record Positively Found)
               // ═══════════════════════════════════════════════════════
               console.log(`[SecureChain: Init] ✓ Existing wallet record found in Firestore. Restoring existing keys...`);
               const data = walletSnap.data();
 
               // Strict preservation: MUST preserve existing keys
               if (!isValidString(data.address) || !isValidString(data.publicKey) || !isValidString(data.encryptedPrivateKey)) {
-                // If local storage has the valid keys, restore them to Firestore
                 if (hasLocalKeys) {
                   console.log(`[SecureChain: Init] Restoring valid local keys to Firestore...`);
                   await setDoc(walletRef, {
@@ -285,11 +294,11 @@ export const useWalletStore = create<WalletState>()(
 
               get().syncTransactions(uid);
 
-            } else {
+            } else if (readSuccess && !docExists) {
               // ═══════════════════════════════════════════════════════
-              // 3. GENUINE NEW USER (Generate Wallet Once)
+              // 3. GENUINE NEW USER (Firestore Positively Confirmed No Doc)
               // ═══════════════════════════════════════════════════════
-              console.log('[SecureChain: Init] Generating new non-custodial wallet for new user...');
+              console.log('[SecureChain: Init] Positively confirmed new user. Generating non-custodial wallet...');
               
               const newWallet = ethers.Wallet.createRandom();
               const generatedAt = new Date().toISOString();
@@ -355,14 +364,21 @@ export const useWalletStore = create<WalletState>()(
               });
 
               console.log('[SecureChain: Init] ✓ New user wallet created and persisted successfully.');
+
+            } else {
+              // ═══════════════════════════════════════════════════════
+              // 4. NETWORK FAILURE / TIMEOUT WITHOUT LOCAL CACHE
+              // ═══════════════════════════════════════════════════════
+              // We could not connect to Firestore, and no local wallet exists.
+              // CRITICAL RULE: NEVER assume new user or generate replacement keys.
+              console.error('[SecureChain: Init] Network unreachable and no local wallet found.');
+              throw new Error('Unable to connect to cloud to verify blockchain wallet. Please check your network and retry.');
             }
             
           } catch (error: any) {
             console.error("[SecureChain: Init] Critical wallet initialization failed:", error);
-            // Failure Rule: Do NOT mark wallet ready and do NOT create fake data
             const currentState = get();
             if (isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey)) {
-              // If local storage has existing valid keys, keep them
               set({ _hasHydrated: true, _isWalletReady: true });
             } else {
               set({ _hasHydrated: false, _isWalletReady: false });

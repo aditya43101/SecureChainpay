@@ -20,75 +20,81 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        localStorage.setItem('securechain_uid', user.uid);
+      try {
+        if (user) {
+          localStorage.setItem('securechain_uid', user.uid);
 
-        // 1. Parallel Task A: User profile retrieval
-        const fetchProfilePromise = (async () => {
-          try {
-            const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-            const userData = userDocSnap.exists() ? userDocSnap.data() : null;
-            const username = userData?.username || user.displayName;
-            const displayName = username || user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer';
-
-            setAuthUser({
-              id: user.uid,
-              name: displayName,
-              username: username || undefined,
-              email: user.email || undefined,
-              phoneNumber: user.phoneNumber || undefined,
-              role: (userData?.role === 'admin' ? 'admin' : 'user'),
-              avatar: user.photoURL || undefined,
-            });
-          } catch (profileErr) {
-            console.warn('[SecureChain: Auth] Firestore profile fetch error, using fallback:', profileErr);
-            setAuthUser({
-              id: user.uid,
-              name: user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer',
-              email: user.email || undefined,
-              phoneNumber: user.phoneNumber || undefined,
-              role: 'user',
-              avatar: user.photoURL || undefined,
-            });
-          }
-        })();
-
-        // 2. Parallel Task B: Critical wallet state verification (keys, address, balances)
-        const initWalletPromise = (async () => {
-          if (!initAttemptedRef.current || !_isWalletReady) {
-            initAttemptedRef.current = true;
+          // 1. Parallel Task A: User profile retrieval
+          const fetchProfilePromise = (async () => {
             try {
-              setWalletError(null);
-              await initializeWallet(user.uid);
-            } catch (error: any) {
-              console.error('[SecureChain: Auth] Critical wallet init error:', error);
-              setWalletError(error?.message || 'Failed to initialize cryptographic wallet.');
-            }
-          }
-        })();
+              const userDocSnap = await getDoc(doc(db, 'users', user.uid));
+              const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+              const username = userData?.username || user.displayName;
+              const displayName = username || user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer';
 
-        // Execute both critical tasks concurrently in parallel
-        await Promise.all([fetchProfilePromise, initWalletPromise]);
-      } else {
-        localStorage.removeItem('securechain_uid');
-        clearAuthUser();
-        disconnectWallet();
-        setWalletError(null);
-        initAttemptedRef.current = false;
-        
-        if (
-          pathname?.startsWith('/dashboard') || 
-          pathname?.startsWith('/wallet') || 
-          pathname?.startsWith('/explorer') || 
-          pathname?.startsWith('/transactions') || 
-          pathname?.startsWith('/trade') || 
-          pathname?.startsWith('/settings') ||
-          pathname?.startsWith('/kyc')
-        ) {
-          router.push('/login');
+              setAuthUser({
+                id: user.uid,
+                name: displayName,
+                username: username || undefined,
+                email: user.email || undefined,
+                phoneNumber: user.phoneNumber || undefined,
+                role: (userData?.role === 'admin' ? 'admin' : 'user'),
+                avatar: user.photoURL || undefined,
+              });
+            } catch (profileErr) {
+              console.warn('[SecureChain: Auth] Firestore profile fetch error, using fallback:', profileErr);
+              setAuthUser({
+                id: user.uid,
+                name: user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer',
+                email: user.email || undefined,
+                phoneNumber: user.phoneNumber || undefined,
+                role: 'user',
+                avatar: user.photoURL || undefined,
+              });
+            }
+          })();
+
+          // 2. Parallel Task B: Critical wallet state verification (keys, address, balances)
+          const initWalletPromise = (async () => {
+            if (!initAttemptedRef.current || !_isWalletReady) {
+              initAttemptedRef.current = true;
+              try {
+                setWalletError(null);
+                await initializeWallet(user.uid);
+              } catch (error: any) {
+                console.error('[SecureChain: Auth] Critical wallet init error:', error);
+                setWalletError(error?.message || 'Failed to initialize cryptographic wallet.');
+              }
+            }
+          })();
+
+          // Execute both critical tasks concurrently in parallel
+          await Promise.all([fetchProfilePromise, initWalletPromise]);
+        } else {
+          localStorage.removeItem('securechain_uid');
+          clearAuthUser();
+          disconnectWallet();
+          setWalletError(null);
+          initAttemptedRef.current = false;
+          
+          if (
+            pathname?.startsWith('/dashboard') || 
+            pathname?.startsWith('/wallet') || 
+            pathname?.startsWith('/explorer') || 
+            pathname?.startsWith('/transactions') || 
+            pathname?.startsWith('/trade') || 
+            pathname?.startsWith('/settings') ||
+            pathname?.startsWith('/kyc')
+          ) {
+            router.push('/login');
+          }
         }
+      } catch (authHandlerErr) {
+        console.error('[SecureChain: Auth] Uncaught auth handler exception:', authHandlerErr);
+      } finally {
+        // Guaranteed cleanup: isInitializing is ALWAYS set to false
+        setIsInitializing(false);
       }
-      setIsInitializing(false);
     });
 
     return () => unsubscribe();
@@ -117,8 +123,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // If we already have keys in memory/cache, allow rendering immediately without blocking
-  const hasLocalWallet = Boolean(address && encryptedPrivateKey);
+  // Cached wallet fast-path: Only trust local wallet if ownership matches the current authenticated UID
+  const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
+  const hasLocalWallet = Boolean(isLocalWalletOwner && address && encryptedPrivateKey);
   const isReady = _isWalletReady || hasLocalWallet;
 
   // Render initialization failure state clearly (never fake data)
@@ -152,8 +159,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     );
   }
 
-  // Render initial loading spinner ONLY for the few milliseconds critical state resolves
-  if (isInitializing || (auth.currentUser && !isReady)) {
+  // Render initial loading spinner ONLY if no local wallet exists and critical state is still resolving
+  if ((isInitializing && !hasLocalWallet) || (auth.currentUser && !isReady)) {
     return (
       <div className="flex justify-center items-center h-screen bg-[#0a0a0a] p-6">
         <div className="flex flex-col items-center gap-4 text-center">
