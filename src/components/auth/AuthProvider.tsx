@@ -17,7 +17,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const { user: authUser, login: setAuthUser, logout: clearAuthUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const initAttemptedRef = useRef(false);
+  const lastInitUidRef = useRef<string | null>(null);
 
   console.log(`[AUTH ${getElapsed()}] AuthProvider render - isInitializing: ${isInitializing}, _isWalletReady: ${_isWalletReady}, hasAddress: ${Boolean(address)}`);
 
@@ -72,8 +72,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
           // 2. Parallel Task B: Critical wallet state verification (keys, address, balances)
           const initWalletPromise = (async () => {
-            if (!initAttemptedRef.current || !_isWalletReady) {
-              initAttemptedRef.current = true;
+            const isDifferentUid = lastInitUidRef.current !== user.uid;
+            if (isDifferentUid || !_isWalletReady) {
+              lastInitUidRef.current = user.uid;
               try {
                 await initializeWallet(user.uid);
               } catch (error: any) {
@@ -88,7 +89,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           localStorage.removeItem('securechain_uid');
           clearAuthUser();
           disconnectWallet();
-          initAttemptedRef.current = false;
+          lastInitUidRef.current = null;
           
           if (
             pathname?.startsWith('/dashboard') || 

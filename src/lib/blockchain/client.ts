@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 
-const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || 'https://polygon-rpc.com';
-const PRIVATE_KEY = process.env.SYSTEM_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000000';
+const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:8545';
+const PRIVATE_KEY = process.env.SYSTEM_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
 export function getProvider(): ethers.JsonRpcProvider {
   return new ethers.JsonRpcProvider(RPC_URL);

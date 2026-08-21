@@ -1,0 +1,12 @@
+{
+  "firestore": [
+    {
+      "database": "securechainpay",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "(default)",
+      "rules": "firestore.rules"
+    }
+  ]
+}

@@ -86,7 +86,59 @@ contract SecureChainLedger {
         return transactions[_txId].timestamp != 0;
     }
 
-    function getTransactionCount() external view returns (uint256) {
-        return transactionIds.length;
+    // ═══════════════════════════════════════════════════════
+    // PHASE 4: MERKLE BATCH ANCHORING
+    // ═══════════════════════════════════════════════════════
+    struct MerkleBatchRecord {
+        bytes32 batchId;
+        bytes32 merkleRoot;
+        uint256 transactionCount;
+        uint256 timestamp;
+        uint256 blockNumber;
+    }
+
+    mapping(bytes32 => MerkleBatchRecord) public merkleBatches;
+    bytes32[] public batchIds;
+
+    event MerkleBatchAnchored(
+        bytes32 indexed batchId,
+        bytes32 indexed merkleRoot,
+        uint256 transactionCount,
+        uint256 timestamp
+    );
+
+    function recordMerkleBatch(
+        bytes32 _batchId,
+        bytes32 _merkleRoot,
+        uint256 _transactionCount
+    ) external onlyOwner {
+        require(merkleBatches[_batchId].timestamp == 0, "Batch already anchored");
+        require(_merkleRoot != bytes32(0), "Invalid Merkle root");
+
+        merkleBatches[_batchId] = MerkleBatchRecord({
+            batchId: _batchId,
+            merkleRoot: _merkleRoot,
+            transactionCount: _transactionCount,
+            timestamp: block.timestamp,
+            blockNumber: block.number
+        });
+
+        batchIds.push(_batchId);
+
+        emit MerkleBatchAnchored(_batchId, _merkleRoot, _transactionCount, block.timestamp);
+    }
+
+    function getMerkleBatch(bytes32 _batchId) external view returns (MerkleBatchRecord memory) {
+        require(merkleBatches[_batchId].timestamp != 0, "Batch not found");
+        return merkleBatches[_batchId];
+    }
+
+    function verifyMerkleBatch(bytes32 _batchId) external view returns (bool) {
+        return merkleBatches[_batchId].timestamp != 0;
+    }
+
+    function getMerkleBatchCount() external view returns (uint256) {
+        return batchIds.length;
     }
 }
+

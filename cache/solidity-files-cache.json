@@ -38,8 +38,8 @@
       ]
     },
     "/Users/adityasingh/Desktop/bloackchain/contracts/SecureChainLedger.sol": {
-      "lastModificationDate": 1784053328547,
-      "contentHash": "079946436a6dd03b7adf0c32d655bc64",
+      "lastModificationDate": 1787342424276,
+      "contentHash": "27c2ecc0ee871875f97091e022f721ac",
       "sourceName": "contracts/SecureChainLedger.sol",
       "solcConfig": {
         "version": "0.8.24",
