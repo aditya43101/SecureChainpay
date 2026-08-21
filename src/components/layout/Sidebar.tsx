@@ -7,6 +7,10 @@ import { usePathname } from 'next/navigation';
 import { slideInRight, staggerContainer } from '../../lib/animations/variants';
 import { useWalletStore } from '@/stores/wallet-store';
 
+import { auth } from '@/lib/firebase/client';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+
 const navItems = [
   { id: 'dashboard', label: 'Overview', icon: '📊', path: '/dashboard' },
   { id: 'wallet', label: 'My Wallet', icon: '💼', path: '/wallet' },
@@ -18,8 +22,18 @@ const navItems = [
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
+  const router = useRouter();
   const transactions = useWalletStore((state) => state.transactions);
   const blockCount = transactions.length;
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/');
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+  };
 
   const sidebarStyle: React.CSSProperties = {
     width: '280px',
@@ -114,6 +128,7 @@ export const Sidebar: React.FC = () => {
       
       <div style={{ marginTop: 'auto' }}>
         <motion.div
+          onClick={handleLogout}
           variants={slideInRight}
           style={{
             ...itemStyle,

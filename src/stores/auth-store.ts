@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 
-interface User {
+export interface User {
   id: string;
   name: string;
-  email: string;
+  username?: string;
+  email?: string;
+  phoneNumber?: string;
   role: 'admin' | 'user';
   avatar?: string;
 }

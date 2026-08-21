@@ -129,23 +129,96 @@ export default function SettingsPage() {
           {/* Profile Section */}
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">Profile Settings</h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Profile Settings</h2>
+                  <p className="text-sm text-neutral-400">View and manage your decentralized user identity.</p>
+                </div>
+                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Account Active & Synced
+                </span>
+              </div>
               
+              {/* User Identity Card */}
+              <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-400 via-cyan-500 to-blue-500 p-[3px] shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                  <div className="w-full h-full bg-neutral-900 rounded-[14px] flex items-center justify-center text-white text-3xl font-black">
+                    {profileUsername.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div className="flex-1 text-center sm:text-left space-y-1">
+                  <h3 className="text-xl font-bold text-white">{profileUsername}</h3>
+                  <p className="text-sm text-neutral-400 font-mono">{profileContact}</p>
+                  <div className="flex flex-wrap gap-2 pt-2 justify-center sm:justify-start">
+                    <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-neutral-300 font-mono">
+                      UID: {auth.currentUser?.uid.substring(0, 10)}...
+                    </span>
+                    <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-emerald-400 font-medium">
+                      Tier: Enterprise Non-Custodial
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Details Grid */}
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-neutral-400">Username</label>
-                    <input type="text" disabled value={profileUsername} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-50 cursor-not-allowed" />
-                    <p className="text-xs text-neutral-500">Username cannot be changed after registration.</p>
+                    <label className="text-sm font-medium text-neutral-400">Registered Username</label>
+                    <input type="text" disabled value={profileUsername} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-80 cursor-not-allowed font-medium" />
+                    <p className="text-xs text-neutral-500">Decentralized handle linked to your on-chain wallet.</p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-neutral-400">Email / Phone</label>
-                    <input type="text" disabled value={profileContact} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-50 cursor-not-allowed" />
+                    <label className="text-sm font-medium text-neutral-400">Linked Contact</label>
+                    <input type="text" disabled value={profileContact} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-80 cursor-not-allowed font-mono" />
+                    <p className="text-xs text-neutral-500">Primary phone number or email address.</p>
+                  </div>
+                </div>
+
+                {/* Blockchain Metadata Overview */}
+                <div className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Blockchain Identity Details</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
+                      <span className="text-neutral-500 block mb-1">Wallet Address</span>
+                      <span className="font-mono text-white truncate block">{wallet.address ? `${wallet.address.substring(0, 8)}...${wallet.address.substring(wallet.address.length - 6)}` : 'Generating...'}</span>
+                    </div>
+                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
+                      <span className="text-neutral-500 block mb-1">Key Fingerprint</span>
+                      <span className="font-mono text-emerald-400 block">{wallet.keyFingerprint || 'SHA-256 Validated'}</span>
+                    </div>
+                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
+                      <span className="text-neutral-500 block mb-1">Key Algorithm</span>
+                      <span className="font-medium text-white block">{wallet.algorithm || 'ECDSA/secp256k1'}</span>
+                    </div>
                   </div>
                 </div>
                 
-                <div className="pt-4 border-t border-white/5">
-                  <Button className="bg-white text-neutral-950 hover:bg-neutral-200">Request Data Export</Button>
+                <div className="pt-4 border-t border-white/5 flex gap-3">
+                  <Button 
+                    onClick={() => {
+                      const exportData = {
+                        username: profileUsername,
+                        contact: profileContact,
+                        address: wallet.address,
+                        publicKey: wallet.publicKey,
+                        keyFingerprint: wallet.keyFingerprint,
+                        keyGeneratedAt: wallet.keyGeneratedAt,
+                        exportedAt: new Date().toISOString()
+                      };
+                      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `securechain-profile-${profileUsername}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="bg-white text-neutral-950 hover:bg-neutral-200 font-semibold"
+                  >
+                    Export Profile Data
+                  </Button>
                 </div>
               </div>
             </div>

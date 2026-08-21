@@ -28,14 +28,19 @@ export async function POST(request: Request) {
     verifiedPhone = String(verifiedPhone).trim().toLowerCase();
 
     // Find or create the user in PostgreSQL
-    let user = await db.user.findUnique({
-      where: { email: verifiedPhone } // Using phone as unique identifier in email field for now
+    let user = await db.user.findFirst({
+      where: {
+        OR: [
+          { phone: verifiedPhone },
+          { email: verifiedPhone }
+        ]
+      }
     });
 
     if (!user) {
       user = await db.user.create({
         data: {
-          email: verifiedPhone,
+          phone: verifiedPhone,
           passwordHash: 'OAUTH_PROVIDER', // No password needed for Phone Auth
           isEmailVerified: true,
           role: 'USER',

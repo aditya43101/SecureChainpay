@@ -1,3 +1,5 @@
+'use client';
+
 import { WalletCard } from '@/components/dashboard/WalletCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { ArrowUpRight, ArrowDownLeft, RefreshCcw, MoreHorizontal, Info } from 'lucide-react';

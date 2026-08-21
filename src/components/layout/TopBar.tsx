@@ -1,10 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { fadeIn, slideUp } from '../../lib/animations/variants';
 import { useAuthStore } from '../../stores/auth-store';
 import { useWalletStore } from '../../stores/wallet-store';
 
 export const TopBar: React.FC = () => {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { address, balances } = useWalletStore();
   const isConnected = !!address;
@@ -64,6 +66,7 @@ export const TopBar: React.FC = () => {
           <motion.div 
             variants={slideUp} 
             style={walletBadgeStyle}
+            onClick={() => router.push('/wallet')}
             whileHover={{ background: 'rgba(212, 175, 55, 0.15)', borderColor: 'rgba(212, 175, 55, 0.4)' }}
           >
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4CAF50', boxShadow: '0 0 10px #4CAF50' }} />
@@ -74,6 +77,7 @@ export const TopBar: React.FC = () => {
         ) : (
           <motion.button
             variants={slideUp}
+            onClick={() => router.push('/login')}
             style={{
               ...walletBadgeStyle,
               background: 'rgba(255,255,255,0.05)',
@@ -106,6 +110,8 @@ export const TopBar: React.FC = () => {
 
         <motion.div 
           variants={slideUp}
+          onClick={() => router.push('/settings')}
+          title="Profile Settings"
           style={{
             width: 44,
             height: 44,

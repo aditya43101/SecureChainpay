@@ -4,11 +4,13 @@ service cloud.firestore {
     
     // Usernames collection: 
     // - Anyone can read a specific username to check availability
-    // - Only authenticated users can create a username
+    // - Authenticated users can create an unclaimed username
+    // - Only the owner can update or delete their username
     match /usernames/{username} {
       allow get: if true;
       allow list: if false;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
     
     // Users collection:

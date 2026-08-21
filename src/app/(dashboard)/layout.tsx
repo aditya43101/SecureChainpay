@@ -1,9 +1,14 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Home, Wallet, History, Settings, Bell, Search, Database } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <AuthProvider>
       <div className="min-h-screen bg-[#0a0a0a] text-white flex">
@@ -19,11 +24,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            <NavItem href="/dashboard" icon={<Home size={20} />} label="Overview" active />
-            <NavItem href="/wallet" icon={<Wallet size={20} />} label="Wallet" />
-            <NavItem href="/explorer" icon={<Database size={20} />} label="Block Explorer" />
-            <NavItem href="/history" icon={<History size={20} />} label="Transactions" />
-            <NavItem href="/settings" icon={<Settings size={20} />} label="Settings" />
+            <NavItem href="/dashboard" icon={<Home size={20} />} label="Overview" active={pathname === '/dashboard'} />
+            <NavItem href="/wallet" icon={<Wallet size={20} />} label="Wallet" active={pathname?.startsWith('/wallet')} />
+            <NavItem href="/explorer" icon={<Database size={20} />} label="Block Explorer" active={pathname?.startsWith('/explorer')} />
+            <NavItem href="/transactions" icon={<History size={20} />} label="Transactions" active={pathname?.startsWith('/transactions')} />
+            <NavItem href="/settings" icon={<Settings size={20} />} label="Settings" active={pathname?.startsWith('/settings')} />
           </nav>
 
           <UserProfile />
@@ -69,11 +74,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         
         {/* Mobile Nav (Bottom) */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-neutral-950 border-t border-white/10 flex items-center justify-around px-2 z-30 pb-safe">
-          <MobileNavItem href="/dashboard" icon={<Home size={20} />} active />
-          <MobileNavItem href="/wallet" icon={<Wallet size={20} />} />
-          <MobileNavItem href="/explorer" icon={<Database size={20} />} />
-          <MobileNavItem href="/history" icon={<History size={20} />} />
-          <MobileNavItem href="/settings" icon={<Settings size={20} />} />
+          <MobileNavItem href="/dashboard" icon={<Home size={20} />} active={pathname === '/dashboard'} />
+          <MobileNavItem href="/wallet" icon={<Wallet size={20} />} active={pathname?.startsWith('/wallet')} />
+          <MobileNavItem href="/explorer" icon={<Database size={20} />} active={pathname?.startsWith('/explorer')} />
+          <MobileNavItem href="/transactions" icon={<History size={20} />} active={pathname?.startsWith('/transactions')} />
+          <MobileNavItem href="/settings" icon={<Settings size={20} />} active={pathname?.startsWith('/settings')} />
         </nav>
       </div>
     </AuthProvider>
