@@ -3,11 +3,14 @@ import { db } from '@/lib/db';
 import { getContract } from '@/lib/blockchain/client';
 import SecureChainLedgerABI from '../../../../../artifacts/contracts/SecureChainLedger.sol/SecureChainLedger.json';
 import { dispatchNotification } from '@/lib/notifications';
+import { requireFirebaseUser } from '@/lib/auth/require-firebase-user';
 
 export async function POST(request: Request) {
   try {
+    const authenticatedUser = await requireFirebaseUser(request);
     const body = await request.json();
-    const { fromUserId, toUserId, amount, currency } = body;
+    const { toUserId, amount, currency } = body;
+    const fromUserId = authenticatedUser.uid;
 
     if (!fromUserId || !toUserId || !amount || !currency) {
       return NextResponse.json({ error: 'fromUserId, toUserId, amount, and currency are required' }, { status: 400 });
@@ -124,6 +127,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Real Transfer error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: error.status || 500 });
   }
 }

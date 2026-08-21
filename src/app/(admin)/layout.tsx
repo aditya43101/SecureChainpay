@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import AuthProvider from '@/components/auth/AuthProvider';
 
 export default function AdminLayout({
   children,
@@ -7,7 +8,8 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
@@ -61,6 +63,7 @@ export default function AdminLayout({
           </div>
         </main>
       </div>
-    </div>
+      </div>
+    </AuthProvider>
   );
 }

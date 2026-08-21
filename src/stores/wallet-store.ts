@@ -1,14 +1,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { db, auth } from '@/lib/firebase/client';
-import { doc, getDoc, setDoc, collection, getDocs, runTransaction, serverTimestamp, query, where, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, runTransaction, addDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
-import { encryptPrivateKey } from '@/lib/crypto/client-aes';
+import { decryptPrivateKey, encryptPrivateKey } from '@/lib/crypto/client-aes';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL INITIALIZATION LOCK (Idempotent)
 // ═══════════════════════════════════════════════════════════
-let initPromise: Promise<void> | null = null;
+const initPromises = new Map<string, Promise<void>>();
 
 // Helper for strict string validation
 const isValidString = (val: any): val is string => typeof val === 'string' && val.trim().length > 0;
@@ -42,6 +42,7 @@ interface Balances {
 interface WalletState {
   _hasHydrated: boolean;
   _isWalletReady: boolean;
+  ownerUid: string | null;
   address: string | null;
   publicKey: string | null;
   encryptedPrivateKey: string | null;
@@ -80,6 +81,44 @@ export async function generateHash(message: string): Promise<string> {
 
 const getClientSecret = (uid: string) => `securechain_client_${uid}_secret`;
 
+async function verifyWalletIdentity(
+  encryptedPrivateKey: string,
+  secret: string,
+  storedPublicKey: string,
+  storedAddress: string
+) {
+  const privateKey = await decryptPrivateKey(encryptedPrivateKey, secret);
+  const wallet = new ethers.Wallet(privateKey);
+  if (wallet.signingKey.publicKey !== storedPublicKey || wallet.address.toLowerCase() !== storedAddress.toLowerCase()) {
+    throw new Error('Wallet integrity verification failed. Stored keys do not match the wallet address.');
+  }
+  return wallet;
+}
+
+async function createGenesisBlock(uid: string, walletAddress: string, publicKey: string): Promise<Transaction> {
+  const genesisTimeISO = '1970-01-01T00:00:00.000Z';
+  const genesisHash = await generateHash(`genesis:${uid}:${walletAddress}:${publicKey}`);
+  return {
+    id: `tx_genesis_${uid}`,
+    blockNumber: 0,
+    hash: genesisHash,
+    previousHash: '0',
+    walletAddress,
+    senderPublicKey: publicKey,
+    digitalSignature: 'Genesis Block - System Generated',
+    type: 'genesis',
+    amount: 0,
+    currency: 'USD',
+    status: 'completed',
+    date: genesisTimeISO,
+    description: 'System Genesis Block Initialization',
+    payload: { message: 'SecureChain Genesis Block Created' },
+    difficulty: 1,
+    nonce: 0,
+    blockSize: 256,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════
 // AUDIT LOG HELPER
 // ═══════════════════════════════════════════════════════════
@@ -106,6 +145,7 @@ export const useWalletStore = create<WalletState>()(
     (set, get) => ({
       _hasHydrated: false,
       _isWalletReady: false,
+      ownerUid: null,
       address: null,
       publicKey: null,
       encryptedPrivateKey: null,
@@ -140,37 +180,8 @@ export const useWalletStore = create<WalletState>()(
             console.log(`[SecureChain: BackgroundSync] ✓ Loaded ${loadedTxs.length} transaction(s)`);
             set({ transactions: loadedTxs });
           } else {
-            // Check if genesis block is needed
-            const state = get();
-            if (state.publicKey && state.address) {
-              const genesisTimeISO = new Date().toISOString();
-              const payloadToHash = `00SystemSystem0${genesisTimeISO}genesis`;
-              const genesisHash = await generateHash(payloadToHash);
-              const genesisTxId = `tx_genesis_${uid}`;
-              
-              const genesisBlock: Transaction = {
-                id: genesisTxId,
-                blockNumber: 0,
-                hash: genesisHash,
-                previousHash: '0',
-                walletAddress: uid,
-                senderPublicKey: state.publicKey,
-                digitalSignature: 'Genesis Block - System Generated',
-                type: 'genesis',
-                amount: 0,
-                currency: 'USD',
-                status: 'completed',
-                date: genesisTimeISO,
-                description: 'System Genesis Block Initialization',
-                payload: { message: 'SecureChain Genesis Block Created' },
-                difficulty: 1,
-                nonce: 0,
-                blockSize: 256,
-              };
-              
-              setDoc(doc(db, 'users', uid, 'transactions', genesisTxId), genesisBlock).catch(console.warn);
-              set({ transactions: [genesisBlock] });
-            }
+            console.warn('[SecureChain: BackgroundSync] No transactions found; genesis is only created with a new wallet transaction.');
+            set({ transactions: [] });
           }
         } catch (txErr) {
           console.warn('[SecureChain: BackgroundSync] Non-fatal transaction sync warning:', txErr);
@@ -181,249 +192,114 @@ export const useWalletStore = create<WalletState>()(
       // INITIALIZE WALLET (Strict Existing vs New User Logic)
       // ═══════════════════════════════════════════════════════
       initializeWallet: async (uid: string) => {
-        // IDEMPOTENCY: If already running, wait for the existing promise
-        if (initPromise) {
-          console.log(`[WALLET] Already running, waiting for existing initialization...`);
-          await initPromise;
+        const existingPromise = initPromises.get(uid);
+        if (existingPromise) {
+          await existingPromise;
           return;
         }
 
-        initPromise = (async () => {
+        const initialization = (async () => {
           const wStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
           const getWElapsed = () => `+${Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - wStart)}ms`;
 
           console.log(`[WALLET ${getWElapsed()}] initializeWallet START for UID: ${uid}`);
-          
+
           try {
             const clientSecret = getClientSecret(uid);
             const walletRef = doc(db, 'users', uid, 'wallet', 'data');
             const currentState = get();
-            const hasLocalKeys = isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey);
-            console.log(`[WALLET ${getWElapsed()}] local wallet detected: ${hasLocalKeys} (address: ${currentState.address || 'none'})`);
+            const hasLocalKeys = currentState.ownerUid === uid && isValidString(currentState.address) && isValidString(currentState.publicKey) && isValidString(currentState.encryptedPrivateKey);
+            const readResult = await Promise.race([
+              getDoc(walletRef).then((snapshot) => ({ status: snapshot.exists() ? 'FOUND' as const : 'NOT_FOUND' as const, snapshot })),
+              new Promise<{ status: 'ERROR/TIMEOUT'; snapshot: null }>((_, reject) => setTimeout(() => reject(new Error('Firestore read timeout')), 5000))
+            ]).catch((error) => ({ status: 'ERROR/TIMEOUT' as const, snapshot: null, error }));
 
-            // Instant Fast-Path: If local keys already exist, unlock state immediately
-            if (hasLocalKeys) {
-              set({ _hasHydrated: true, _isWalletReady: true });
-              console.log(`[WALLET ${getWElapsed()}] ✓ Local keys fast-path applied. _isWalletReady: true`);
-            }
-
-            // Check Firestore for existing wallet record with a resilient 5s timeout
-            let walletSnap: any = null;
-            let readSuccess = false;
-            
-            console.log(`[WALLET ${getWElapsed()}] Firestore wallet lookup START`);
-            try {
-              const fetchWithTimeout = Promise.race([
-                getDoc(walletRef),
-                new Promise<null>((_, reject) => 
-                  setTimeout(() => reject(new Error('Firestore read timeout')), 5000)
-                )
-              ]);
-              walletSnap = await fetchWithTimeout;
-              readSuccess = true;
-              console.log(`[WALLET ${getWElapsed()}] Firestore wallet lookup END (success: true, exists: ${walletSnap?.exists?.()})`);
-            } catch (err: any) {
-              console.warn(`[WALLET ${getWElapsed()}] Firestore wallet lookup END (warning: ${err?.message || err})`);
-              walletSnap = null;
-              readSuccess = false;
-            }
-            
-            const docExists = readSuccess && walletSnap && typeof walletSnap.exists === 'function' && walletSnap.exists();
-            console.log(`[WALLET ${getWElapsed()}] existing/new user decision -> docExists: ${docExists}, hasLocalKeys: ${hasLocalKeys}, readSuccess: ${readSuccess}`);
-
-            if (docExists) {
-              // ═══════════════════════════════════════════════════════
-              // 1. EXISTING USER (Firestore Record Positively Found)
-              // ═══════════════════════════════════════════════════════
-              console.log(`[WALLET ${getWElapsed()}] key restoration START (from Firestore)`);
-              const data = walletSnap.data();
-
-              // Resolve existing keys with self-healing for secondary metadata
-              let existingAddress = data.address || currentState.address;
-              let existingPublicKey = data.publicKey || currentState.publicKey;
-              let existingEncryptedKey = data.encryptedPrivateKey || currentState.encryptedPrivateKey;
-
-              // If Firestore doc exists but has incomplete/invalid keys
-              if (!isValidString(existingAddress) || !isValidString(existingEncryptedKey)) {
-                if (hasLocalKeys) {
-                  existingAddress = currentState.address!;
-                  existingEncryptedKey = currentState.encryptedPrivateKey!;
-                  existingPublicKey = currentState.publicKey || null;
-                } else {
-                  console.warn(`[WALLET ${getWElapsed()}] Firestore wallet record exists but is incomplete. Auto-generating fresh keys...`);
-                  const newWallet = ethers.Wallet.createRandom();
-                  const generatedAt = new Date().toISOString();
-                  existingEncryptedKey = await encryptPrivateKey(newWallet.privateKey, clientSecret);
-                  existingAddress = newWallet.address;
-                  existingPublicKey = newWallet.publicKey;
-
-                  // Save freshly healed keys to Firestore
-                  await setDoc(walletRef, {
-                    address: existingAddress,
-                    publicKey: existingPublicKey,
-                    encryptedPrivateKey: existingEncryptedKey,
-                    keyGeneratedAt: generatedAt,
-                    algorithm: 'ECDSA/secp256k1',
-                    walletVersion: '1.0',
-                    keyFingerprint: (await generateHash(existingPublicKey)).substring(0, 16),
-                    balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
-                    lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
-                    lastBlockHash: data.lastBlockHash || '0x0000000000000000000000000000000000000000000000000000000000000000'
-                  }, { merge: true });
-                }
+            if (readResult.status === 'ERROR/TIMEOUT') {
+              if (hasLocalKeys) {
+                await verifyWalletIdentity(currentState.encryptedPrivateKey!, clientSecret, currentState.publicKey!, currentState.address!);
+                set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid });
+                console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);
+                get().syncTransactions(uid);
+                return;
               }
+              throw new Error('Unable to verify your wallet with the cloud. No wallet was created or changed. Please retry.');
+            }
 
-              const restoredAlgorithm = data.algorithm || currentState.algorithm || 'ECDSA/secp256k1';
-              const restoredVersion = data.walletVersion || currentState.walletVersion || '1.0';
-              const restoredFingerprint = data.keyFingerprint || currentState.keyFingerprint || (existingPublicKey ? (await generateHash(existingPublicKey)).substring(0, 16) : 'SHA-256 Validated');
-
-              // Load existing wallet state (NEVER generate new keys for existing user)
+            if (readResult.status === 'FOUND') {
+              const data = readResult.snapshot.data() ?? {};
+              const fields = [data.address, data.publicKey, data.encryptedPrivateKey];
+              if (!fields.every(isValidString)) {
+                throw new Error('Wallet integrity failure: existing wallet data is incomplete. No keys were changed.');
+              }
+              await verifyWalletIdentity(data.encryptedPrivateKey, clientSecret, data.publicKey, data.address);
+              const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
               set({
-                address: existingAddress,
-                publicKey: existingPublicKey,
-                encryptedPrivateKey: existingEncryptedKey,
-                keyGeneratedAt: data.keyGeneratedAt || currentState.keyGeneratedAt || new Date().toISOString(),
-                algorithm: restoredAlgorithm,
-                walletVersion: restoredVersion,
-                keyFingerprint: restoredFingerprint,
-                balances: data.balances || currentState.balances || { USD: 0, BTC: 0, ETH: 0 },
+                ownerUid: uid,
+                address: data.address,
+                publicKey: data.publicKey,
+                encryptedPrivateKey: data.encryptedPrivateKey,
+                keyGeneratedAt: data.keyGeneratedAt || null,
+                algorithm: data.algorithm || 'ECDSA/secp256k1',
+                walletVersion: data.walletVersion || '1.0',
+                keyFingerprint: fingerprint,
+                balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
                 lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
                 lastBlockHash: data.lastBlockHash || null,
                 _hasHydrated: true,
-                _isWalletReady: true
+                _isWalletReady: true,
               });
-
-              console.log(`[WALLET ${getWElapsed()}] key restoration END. Address: ${existingAddress}`);
-              console.log(`[WALLET ${getWElapsed()}] critical wallet state READY. _isWalletReady: true`);
-
-              // Trigger background non-critical synchronization
               get().syncTransactions(uid);
-
-            } else if (hasLocalKeys) {
-              // ═══════════════════════════════════════════════════════
-              // 2. EXISTING USER (Cached Local Wallet Found)
-              // ═══════════════════════════════════════════════════════
-              console.log(`[WALLET ${getWElapsed()}] key restoration START (from local storage)`);
-              
-              set({
-                _hasHydrated: true,
-                _isWalletReady: true
-              });
-
-              console.log(`[WALLET ${getWElapsed()}] key restoration END. Address: ${currentState.address}`);
-              console.log(`[WALLET ${getWElapsed()}] critical wallet state READY. _isWalletReady: true`);
-
-              // Sync existing local wallet to Firestore in background
-              setDoc(walletRef, {
-                address: currentState.address,
-                publicKey: currentState.publicKey,
-                encryptedPrivateKey: currentState.encryptedPrivateKey,
-                keyGeneratedAt: currentState.keyGeneratedAt || new Date().toISOString(),
-                algorithm: currentState.algorithm || 'ECDSA/secp256k1',
-                walletVersion: currentState.walletVersion || '1.0',
-                keyFingerprint: currentState.keyFingerprint,
-                balances: currentState.balances || { USD: 0, BTC: 0, ETH: 0 },
-                lastBlockNumber: currentState.lastBlockNumber || 0,
-                lastBlockHash: currentState.lastBlockHash || '0x0000000000000000000000000000000000000000000000000000000000000000'
-              }, { merge: true }).catch(err => console.warn('[WALLET] Background sync warning:', err));
-
-              get().syncTransactions(uid);
-
-            } else if (readSuccess && !docExists) {
-              // ═══════════════════════════════════════════════════════
-              // 3. GENUINE NEW USER (Firestore Positively Confirmed No Doc)
-              // ═══════════════════════════════════════════════════════
-              console.log(`[WALLET ${getWElapsed()}] Positively confirmed new user. Generating non-custodial wallet...`);
-              
-              const newWallet = ethers.Wallet.createRandom();
-              const generatedAt = new Date().toISOString();
-              const encryptedPrivKey = await encryptPrivateKey(newWallet.privateKey, clientSecret);
-              const fingerprint = (await generateHash(newWallet.publicKey)).substring(0, 16);
-              
-              const payloadToHash = `00SystemSystem0${generatedAt}genesis`;
-              const genesisHash = await generateHash(payloadToHash);
-              const genesisTxId = `tx_genesis_${uid}`;
-
-              const genesisBlock: Transaction = {
-                id: genesisTxId,
-                blockNumber: 0,
-                hash: genesisHash,
-                previousHash: '0',
-                walletAddress: uid,
-                senderPublicKey: newWallet.publicKey,
-                digitalSignature: 'Genesis Block - System Generated',
-                type: 'genesis',
-                amount: 0,
-                currency: 'USD',
-                status: 'completed',
-                date: generatedAt,
-                description: 'System Genesis Block Initialization',
-                payload: { message: 'SecureChain Genesis Block Created' },
-                difficulty: 1,
-                nonce: 0,
-                blockSize: 256,
-              };
-
-              const initData = { 
-                address: newWallet.address,
-                publicKey: newWallet.publicKey,
-                encryptedPrivateKey: encryptedPrivKey,
-                keyGeneratedAt: generatedAt,
-                algorithm: 'ECDSA/secp256k1',
-                walletVersion: '1.0',
-                keyFingerprint: fingerprint,
-                balances: { USD: 0, BTC: 0, ETH: 0 }, 
-                lastBlockNumber: 0,
-                lastBlockHash: genesisHash,
-              };
-
-              // Persist to Firestore atomically
-              const newTxRef = doc(db, 'users', uid, 'transactions', genesisTxId);
-              await Promise.all([
-                setDoc(newTxRef, genesisBlock),
-                setDoc(walletRef, initData)
-              ]);
-              
-              createAuditLog(uid, 'New user wallet created', [
-                'address', 'publicKey', 'encryptedPrivateKey', 'keyGeneratedAt',
-                'algorithm', 'walletVersion', 'keyFingerprint', 'genesisBlock'
-              ], 'SUCCESS');
-              
-              // Set critical state and unlock UI
-              set({ 
-                ...initData, 
-                lastBlockHash: genesisHash,
-                transactions: [genesisBlock],
-                _hasHydrated: true, 
-                _isWalletReady: true 
-              });
-
-              console.log(`[WALLET ${getWElapsed()}] New user wallet created and persisted successfully.`);
-              console.log(`[WALLET ${getWElapsed()}] critical wallet state READY. _isWalletReady: true`);
-
-            } else {
-              // ═══════════════════════════════════════════════════════
-              // 4. NETWORK FAILURE / TIMEOUT WITHOUT LOCAL CACHE
-              // ═══════════════════════════════════════════════════════
-              console.error(`[WALLET ${getWElapsed()}] Network unreachable and no local wallet found.`);
-              throw new Error('Unable to connect to cloud to verify blockchain wallet. Please check your network and retry.');
+              return;
             }
-            
+
+            if (hasLocalKeys) {
+              throw new Error('Wallet lookup returned no wallet, but a local wallet already exists. No replacement wallet was created.');
+            }
+
+            const newWallet = ethers.Wallet.createRandom();
+            const generatedAt = new Date().toISOString();
+            const encryptedPrivKey = await encryptPrivateKey(newWallet.privateKey, clientSecret);
+            const newPublicKey = newWallet.signingKey.publicKey;
+            const fingerprint = (await generateHash(newPublicKey)).substring(0, 16);
+            const genesisBlock = await createGenesisBlock(uid, newWallet.address, newPublicKey);
+            const initData = {
+              ownerUid: uid,
+              address: newWallet.address,
+              publicKey: newPublicKey,
+              encryptedPrivateKey: encryptedPrivKey,
+              keyGeneratedAt: generatedAt,
+              algorithm: 'ECDSA/secp256k1',
+              walletVersion: '1.0',
+              keyFingerprint: fingerprint,
+              balances: { USD: 0, BTC: 0, ETH: 0 },
+              lastBlockNumber: 0,
+              lastBlockHash: genesisBlock.hash,
+            };
+            const genesisRef = doc(db, 'users', uid, 'transactions', genesisBlock.id);
+            let created = false;
+            await runTransaction(db, async (transaction) => {
+              const existing = await transaction.get(walletRef);
+              if (existing.exists()) return;
+              transaction.set(walletRef, initData);
+              transaction.set(genesisRef, genesisBlock);
+              created = true;
+            });
+            if (!created) {
+              throw new Error('Wallet was created concurrently. Please retry to restore the existing wallet.');
+            }
+            createAuditLog(uid, 'New user wallet created', ['wallet', 'genesisBlock'], 'SUCCESS');
+            set({ ...initData, transactions: [genesisBlock], _hasHydrated: true, _isWalletReady: true });
+            console.log(`[WALLET ${getWElapsed()}] New wallet and genesis persisted atomically.`);
           } catch (error: any) {
             console.error(`[WALLET ${getWElapsed()}] Critical wallet initialization failed:`, error);
-            const currentState = get();
-            if (isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey)) {
-              set({ _hasHydrated: true, _isWalletReady: true });
-            } else {
-              set({ _hasHydrated: false, _isWalletReady: false });
-              throw error;
-            }
+            set({ _hasHydrated: true, _isWalletReady: false });
+            throw error;
           } finally {
-            initPromise = null;
+            initPromises.delete(uid);
           }
         })();
-
-        await initPromise;
+        initPromises.set(uid, initialization);
+        await initialization;
       },
       
       // ═══════════════════════════════════════════════════════
@@ -553,7 +429,7 @@ export const useWalletStore = create<WalletState>()(
             blockNumber: newBlockNumber,
             hash,
             previousHash: prevHash,
-            walletAddress: uid,
+          walletAddress: senderWallet,
             senderPublicKey: state.publicKey || tempWallet.address,
             digitalSignature: digitalSignature,
             type,
@@ -595,6 +471,7 @@ export const useWalletStore = create<WalletState>()(
         set({ 
           _hasHydrated: false,
           _isWalletReady: false,
+          ownerUid: null,
           address: null, 
           publicKey: null,
           encryptedPrivateKey: null,

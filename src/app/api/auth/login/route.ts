@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { auth as firebaseAuth } from '@/lib/firebase/admin';
 import { db } from '@/lib/db';
 import { generateTokens } from '@/lib/auth/jwt';
-import { ethers } from 'ethers';
 
 export async function POST(request: Request) {
   try {
@@ -47,22 +46,8 @@ export async function POST(request: Request) {
         }
       });
       
-      try {
-        const newWalletAddress = ethers.Wallet.createRandom().address;
-        if (newWalletAddress) {
-          await db.wallet.create({
-            data: {
-              userId: user.id,
-              address: newWalletAddress,
-              balance: 0,
-              currency: 'USD'
-            }
-          });
-        }
-      } catch (walletErr) {
-        console.error('Wallet generation failed during user creation:', walletErr);
-        // Continue, wallet can be generated later
-      }
+      // Wallet creation belongs to the verified Firebase/Firestore wallet flow.
+      // This legacy PostgreSQL login route must not create an unrelated wallet.
     }
 
     // Generate our own system JWT

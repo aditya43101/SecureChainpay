@@ -3,7 +3,6 @@ import { auth as adminAuth } from '@/lib/firebase/admin';
 import { db as prisma } from '@/lib/db';
 import { generateTokens } from '@/lib/auth/jwt';
 import { cookies } from 'next/headers';
-import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -46,27 +45,9 @@ export async function POST(request: Request) {
       console.log(`New user created: ${user.id} for phone ${phoneNumber}`);
     }
 
-    // 3. (Optional) Check/Create Wallet if needed
-    // In a real scenario, WalletFactory would be called here or via an async worker.
-    let wallet = await prisma.wallet.findFirst({
-      where: { userId: user.id }
-    });
+    // Wallet creation belongs to the verified Firebase/Firestore wallet flow.
 
-    if (!wallet) {
-      // Mock Wallet Creation for Demo purposes
-      // In production, you'd deploy a Wallet smart contract and save its address here.
-      wallet = await prisma.wallet.create({
-        data: {
-          userId: user.id,
-          address: '0x' + crypto.randomBytes(20).toString('hex'), // Mock EVM address
-          balance: 0,
-          isActive: true
-        }
-      });
-      console.log(`Mock Wallet created: ${wallet.address} for user ${user.id}`);
-    }
-
-    // 4. Generate JWT Tokens
+    // 3. Generate JWT Tokens
     const { accessToken, refreshToken } = generateTokens({ 
       userId: user.id, 
       role: user.role 

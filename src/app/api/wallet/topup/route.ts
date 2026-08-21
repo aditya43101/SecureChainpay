@@ -7,11 +7,14 @@ import { dispatchNotification } from '@/lib/notifications';
 
 // Important: Read ABI using require so it can be packaged by Next.js or use fs
 import SecureChainLedgerArtifact from '../../../../../artifacts/contracts/SecureChainLedger.sol/SecureChainLedger.json';
+import { requireFirebaseUser } from '@/lib/auth/require-firebase-user';
 
 export async function POST(request: Request) {
   try {
+    const authenticatedUser = await requireFirebaseUser(request);
     const body = await request.json();
-    const { amount, currency = 'USD', userId, action, paymentId, orderId, signature } = body;
+    const { amount, currency = 'USD', action, paymentId, orderId, signature } = body;
+    const userId = authenticatedUser.uid;
     const gateway = getPaymentGateway();
 
     // Create a new Order
@@ -126,6 +129,6 @@ export async function POST(request: Request) {
     console.error('Payment gateway error:', error);
     return NextResponse.json({ 
       error: 'Gateway interaction failed. Check gateway configuration.' 
-    }, { status: 500 });
+    }, { status: error.status || 500 });
   }
 }

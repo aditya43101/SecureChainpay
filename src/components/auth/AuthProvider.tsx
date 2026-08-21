@@ -15,8 +15,8 @@ const getElapsed = () => `+${Math.round((typeof performance !== 'undefined' ? pe
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [walletError, setWalletError] = useState<string | null>(null);
-  const { initializeWallet, disconnectWallet, _isWalletReady, address, encryptedPrivateKey } = useWalletStore();
-  const { login: setAuthUser, logout: clearAuthUser } = useAuthStore();
+  const { initializeWallet, disconnectWallet, _isWalletReady, ownerUid, address, encryptedPrivateKey } = useWalletStore();
+  const { user: authUser, login: setAuthUser, logout: clearAuthUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const initAttemptedRef = useRef(false);
@@ -53,7 +53,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 username: username || undefined,
                 email: user.email || undefined,
                 phoneNumber: user.phoneNumber || undefined,
-                role: (userData?.role === 'admin' ? 'admin' : 'user'),
+                role: (String(userData?.role || '').toLowerCase() === 'admin' ? 'admin' : 'user'),
                 avatar: user.photoURL || undefined,
               });
               console.log(`[AUTH ${getElapsed()}] Profile fetch END (took ${Math.round(performance.now() - pStart)}ms)`);
@@ -101,6 +101,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             pathname?.startsWith('/trade') || 
             pathname?.startsWith('/settings') ||
             pathname?.startsWith('/kyc')
+            || pathname?.startsWith('/admin-dashboard')
+            || pathname?.startsWith('/audit-logs')
           ) {
             router.push('/login');
           }
@@ -141,9 +143,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // Cached wallet fast-path: Only trust local wallet if ownership matches the current authenticated UID
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
-  const hasLocalWallet = Boolean(isLocalWalletOwner && address && encryptedPrivateKey);
+  const hasLocalWallet = Boolean(isLocalWalletOwner && ownerUid === auth.currentUser?.uid && address && encryptedPrivateKey);
   const isReady = _isWalletReady || hasLocalWallet;
   const isBlocked = isInitializing && !hasLocalWallet && !_isWalletReady;
+
+  if (!isInitializing && pathname?.startsWith('/admin-dashboard') && authUser && authUser.role !== 'admin') {
+    router.replace('/dashboard');
+    return null;
+  }
+
+  if (!isInitializing && pathname?.startsWith('/audit-logs') && authUser && authUser.role !== 'admin') {
+    router.replace('/dashboard');
+    return null;
+  }
 
   console.log(`[AUTH ${getElapsed()}] Render Gate -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}, isReady: ${isReady}, AUTH GATE RESULT: ${isBlocked ? 'BLOCKED' : 'UNBLOCKED'}`);
 
@@ -192,5 +204,3 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   return <>{children}</>;
 }
-
-

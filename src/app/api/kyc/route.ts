@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { db } from '@/lib/db';
 
 import { features } from '@/lib/config/features';
+import { requireFirebaseUser } from '@/lib/auth/require-firebase-user';
 
 if (features.KYC_ENABLED) {
   cloudinary.config({
@@ -18,8 +19,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const authenticatedUser = await requireFirebaseUser(request);
     const formData = await request.formData();
-    const userId = formData.get('userId') as string;
+    const userId = authenticatedUser.uid;
     const documentType = formData.get('documentType') as string;
     const file = formData.get('file') as File;
 
@@ -69,6 +71,6 @@ export async function POST(request: Request) {
     console.error('Real KYC upload error:', error);
     return NextResponse.json({ 
       error: 'Upload failed. Check Cloudinary API keys and DB connection.' 
-    }, { status: 500 });
+    }, { status: error.status || 500 });
   }
 }
