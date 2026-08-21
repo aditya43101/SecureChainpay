@@ -44,6 +44,7 @@ interface WalletState {
   _hasHydrated: boolean;
   _isWalletReady: boolean;
   ownerUid: string | null;
+  identityStatus: 'pending' | 'loaded' | 'verified' | 'error';
   address: string | null;
   publicKey: string | null;
   encryptedPrivateKey: string | null;
@@ -133,6 +134,7 @@ export const useWalletStore = create<WalletState>()(
       _hasHydrated: false,
       _isWalletReady: false,
       ownerUid: null,
+      identityStatus: 'pending',
       address: null,
       publicKey: null,
       encryptedPrivateKey: null,
@@ -196,14 +198,17 @@ export const useWalletStore = create<WalletState>()(
             const walletRef = doc(db, 'users', uid, 'wallet', 'data');
             const currentState = get();
             const hasLocalKeys = currentState.ownerUid === uid && isValidString(currentState.address) && isValidString(currentState.publicKey) && isValidString(currentState.encryptedPrivateKey);
+            console.info(`[WalletInit] UID: ${uid}`);
+            console.info(`[WalletInit] Wallet path: users/${uid}/wallet/data`);
             const readResult = await Promise.race([
               getDoc(walletRef).then((snapshot) => ({ status: snapshot.exists() ? 'FOUND' as const : 'NOT_FOUND' as const, snapshot })),
               new Promise<{ status: 'ERROR/TIMEOUT'; snapshot: null }>((_, reject) => setTimeout(() => reject(new Error('Firestore read timeout')), 5000))
             ]).catch((error) => ({ status: 'ERROR/TIMEOUT' as const, snapshot: null, error }));
+            console.info(`[WalletInit] Wallet document exists: ${readResult.status === 'FOUND'}`);
 
             if (readResult.status === 'ERROR/TIMEOUT') {
               if (hasLocalKeys) {
-                set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid });
+                set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid, identityStatus: 'loaded' });
                 console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);
                 get().syncTransactions(uid);
                 return;
@@ -211,20 +216,24 @@ export const useWalletStore = create<WalletState>()(
               const reason = 'error' in readResult && readResult.error instanceof Error
                 ? readResult.error.message
                 : 'Unknown Firestore failure';
-              set({ _hasHydrated: true, _isWalletReady: false, ownerUid: uid });
+              set({ _hasHydrated: true, _isWalletReady: false, ownerUid: uid, identityStatus: 'error' });
               console.error(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${reason}). No wallet was created or changed; retry is required.`);
               return;
             }
 
             if (readResult.status === 'FOUND') {
+              console.info('[WalletInit] Existing wallet detected: true');
               const data = readResult.snapshot.data() ?? {};
               const fields = [data.address, data.publicKey, data.encryptedPrivateKey];
               if (!fields.every(isValidString)) {
                 throw new Error('Wallet integrity failure: existing wallet data is incomplete. No keys were changed.');
               }
               const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
+              console.info(`[WalletInit] Address available: ${isValidString(data.address)}`);
+              console.info(`[WalletInit] Public key available: ${isValidString(data.publicKey)}`);
               set({
                 ownerUid: uid,
+                identityStatus: 'loaded',
                 address: data.address,
                 publicKey: data.publicKey,
                 encryptedPrivateKey: data.encryptedPrivateKey,
@@ -238,6 +247,7 @@ export const useWalletStore = create<WalletState>()(
                 _hasHydrated: true,
                 _isWalletReady: true,
               });
+              console.info('[WalletInit] Zustand wallet state updated: true');
               get().syncTransactions(uid);
               return;
             }
@@ -278,11 +288,11 @@ export const useWalletStore = create<WalletState>()(
               throw new Error('Wallet was created concurrently. Please retry to restore the existing wallet.');
             }
             createAuditLog(uid, 'New user wallet created', ['wallet', 'genesisBlock'], 'SUCCESS');
-            set({ ...initData, transactions: [genesisBlock], _hasHydrated: true, _isWalletReady: true });
+            set({ ...initData, identityStatus: 'verified', transactions: [genesisBlock], _hasHydrated: true, _isWalletReady: true });
             console.log(`[WALLET ${getWElapsed()}] New wallet and genesis persisted atomically.`);
           } catch (error: any) {
             console.error(`[WALLET ${getWElapsed()}] Critical wallet initialization failed:`, error);
-            set({ _hasHydrated: true, _isWalletReady: false });
+            set({ _hasHydrated: true, _isWalletReady: false, identityStatus: 'error' });
             throw error;
           } finally {
             initPromises.delete(uid);
@@ -353,6 +363,7 @@ export const useWalletStore = create<WalletState>()(
              address: state.address!,
              publicKey: state.publicKey!,
            });
+           set({ identityStatus: 'verified' });
         } catch (e) {
            console.error("[SecureChain: Tx] ✗ Failed to decrypt private key:", e);
            throw new Error("Failed to decrypt private key for signing");
@@ -465,6 +476,7 @@ export const useWalletStore = create<WalletState>()(
           _hasHydrated: false,
           _isWalletReady: false,
           ownerUid: null,
+          identityStatus: 'pending',
           address: null, 
           publicKey: null,
           encryptedPrivateKey: null,

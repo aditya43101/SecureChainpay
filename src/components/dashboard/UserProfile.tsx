@@ -1,48 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, User as UserIcon } from 'lucide-react';
-import { auth, db } from '@/lib/firebase/client';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth } from '@/lib/firebase/client';
+import { signOut } from 'firebase/auth';
+import { useAuthStore } from '@/stores/auth-store';
 
 export default function UserProfile() {
-  const [user, setUser] = useState<User | null>(null);
-  const [displayUsername, setDisplayUsername] = useState<string>('Loading...');
+  const displayUser = useAuthStore((state) => state.user);
+  const displayUsername = displayUser?.username || displayUser?.name || 'Loading...';
   const router = useRouter();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Priority: Firestore username > displayName > email prefix > phone > Guest
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (userDoc.exists() && userDoc.data().username) {
-            setDisplayUsername(userDoc.data().username);
-          } else {
-            setDisplayUsername(
-              currentUser.displayName || 
-              currentUser.email?.split('@')[0] || 
-              currentUser.phoneNumber || 
-              'Guest'
-            );
-          }
-        } catch {
-          setDisplayUsername(
-            currentUser.displayName || 
-            currentUser.email?.split('@')[0] || 
-            currentUser.phoneNumber || 
-            'Guest'
-          );
-        }
-      } else {
-        setDisplayUsername('Guest');
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   const handleLogout = async () => {
     try {

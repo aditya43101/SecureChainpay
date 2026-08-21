@@ -6,6 +6,7 @@ export interface User {
   username?: string;
   email?: string;
   phoneNumber?: string;
+  accountTier?: string;
   role: 'admin' | 'user';
   avatar?: string;
 }

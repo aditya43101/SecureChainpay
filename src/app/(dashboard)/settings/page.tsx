@@ -3,38 +3,31 @@
 import { useState, useEffect } from 'react';
 import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { auth, db } from '@/lib/firebase/client';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { useAuthStore } from '@/stores/auth-store';
 import { useWalletStore } from '@/stores/wallet-store';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [theme, setTheme] = useState('dark');
   const [currency, setCurrency] = useState('USD');
-  const [profileUsername, setProfileUsername] = useState('Loading...');
-  const [profileContact, setProfileContact] = useState('Loading...');
+  const profileUser = useAuthStore((state) => state.user);
   
-  const wallet = useWalletStore();
+  const address = useWalletStore((state) => state.address);
+  const publicKey = useWalletStore((state) => state.publicKey);
+  const encryptedPrivateKey = useWalletStore((state) => state.encryptedPrivateKey);
+  const keyFingerprint = useWalletStore((state) => state.keyFingerprint);
+  const algorithm = useWalletStore((state) => state.algorithm);
+  const keyGeneratedAt = useWalletStore((state) => state.keyGeneratedAt);
+  const walletVersion = useWalletStore((state) => state.walletVersion);
+  const identityStatus = useWalletStore((state) => state.identityStatus);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists() && userDoc.data().username) {
-            setProfileUsername(userDoc.data().username);
-          } else {
-            setProfileUsername(user.displayName || 'Not set');
-          }
-        } catch {
-          setProfileUsername(user.displayName || 'Not set');
-        }
-        setProfileContact(user.email || user.phoneNumber || 'Not linked');
-      }
-    });
-    return () => unsub();
-  }, []);
+    console.info(`[Profile] Address received: ${Boolean(address)}`);
+    console.info(`[Profile] Public key received: ${Boolean(publicKey)}`);
+  }, [address, publicKey]);
+
+  const profileUsername = profileUser?.username || profileUser?.name || 'Loading...';
+  const profileContact = profileUser?.email || profileUser?.phoneNumber || 'Loading...';
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -91,7 +84,7 @@ export default function SettingsPage() {
                 </div>
                 <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Account Active & Synced
+                  Account Active
                 </span>
               </div>
               
@@ -107,10 +100,10 @@ export default function SettingsPage() {
                   <p className="text-sm text-neutral-400 font-mono">{profileContact}</p>
                   <div className="flex flex-wrap gap-2 pt-2 justify-center sm:justify-start">
                     <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-neutral-300 font-mono">
-                      UID: {auth.currentUser?.uid.substring(0, 10)}...
+                      UID: {profileUser?.id ? `${profileUser.id.substring(0, 10)}...` : 'Loading...'}
                     </span>
                     <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-emerald-400 font-medium">
-                      Tier: Enterprise Non-Custodial
+                      Tier: {profileUser?.accountTier || 'Not specified'}
                     </span>
                   </div>
                 </div>
@@ -137,15 +130,15 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
                       <span className="text-neutral-500 block mb-1">Wallet Address</span>
-                      <span className="font-mono text-white truncate block">{wallet.address ? `${wallet.address.substring(0, 8)}...${wallet.address.substring(wallet.address.length - 6)}` : 'Generating...'}</span>
+                      <span className="font-mono text-white truncate block">{address ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : identityStatus === 'error' ? 'Wallet unavailable' : 'Loading wallet...'}</span>
                     </div>
                     <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
                       <span className="text-neutral-500 block mb-1">Key Fingerprint</span>
-                      <span className="font-mono text-emerald-400 block">{wallet.keyFingerprint || 'SHA-256 Validated'}</span>
+                      <span className="font-mono text-emerald-400 block">{keyFingerprint || 'Pending'}</span>
                     </div>
                     <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
                       <span className="text-neutral-500 block mb-1">Key Algorithm</span>
-                      <span className="font-medium text-white block">{wallet.algorithm || 'ECDSA/secp256k1'}</span>
+                      <span className="font-medium text-white block">{algorithm || 'Pending'}</span>
                     </div>
                   </div>
                 </div>
@@ -156,10 +149,10 @@ export default function SettingsPage() {
                       const exportData = {
                         username: profileUsername,
                         contact: profileContact,
-                        address: wallet.address,
-                        publicKey: wallet.publicKey,
-                        keyFingerprint: wallet.keyFingerprint,
-                        keyGeneratedAt: wallet.keyGeneratedAt,
+                        address,
+                        publicKey,
+                        keyFingerprint,
+                        keyGeneratedAt,
                         exportedAt: new Date().toISOString()
                       };
                       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -234,8 +227,8 @@ export default function SettingsPage() {
                     <div>
                       <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Wallet Address</label>
                       <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={wallet.address || 'Loading...'} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono" />
-                        <button onClick={() => copyToClipboard(wallet.address || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                        <input type="text" readOnly value={address || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono" />
+                        <button onClick={() => copyToClipboard(address || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
                           <Copy size={16} />
                         </button>
                       </div>
@@ -244,8 +237,8 @@ export default function SettingsPage() {
                     <div>
                       <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Public Key</label>
                       <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={wallet.publicKey || 'Loading...'} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono truncate" />
-                        <button onClick={() => copyToClipboard(wallet.publicKey || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                        <input type="text" readOnly value={publicKey || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono truncate" />
+                        <button onClick={() => copyToClipboard(publicKey || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
                           <Copy size={16} />
                         </button>
                       </div>
@@ -255,7 +248,7 @@ export default function SettingsPage() {
                       <div className="flex justify-between items-end">
                         <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Private Key</label>
                         <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {wallet.encryptedPrivateKey ? 'AES-256-GCM Encrypted • On-demand access' : 'Not Found'}
+                          {encryptedPrivateKey ? 'AES-256-GCM Encrypted • On-demand access' : 'Not Found'}
                         </span>
                       </div>
                       <div className="flex items-center mt-1">
@@ -264,8 +257,8 @@ export default function SettingsPage() {
                     </div>
                     
                     <div className="pt-2 flex justify-between items-center text-xs text-neutral-500">
-                      <span>Generated: {wallet.keyGeneratedAt ? new Date(wallet.keyGeneratedAt).toLocaleString() : 'N/A'}</span>
-                      <span>{wallet.algorithm || 'ECDSA'} • v{wallet.walletVersion || '1.0'}</span>
+                      <span>Generated: {keyGeneratedAt ? new Date(keyGeneratedAt).toLocaleString() : 'N/A'}</span>
+                      <span>{algorithm || 'Pending'} • v{walletVersion || 'N/A'}</span>
                     </div>
                   </div>
                 </div>

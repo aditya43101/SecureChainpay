@@ -51,6 +51,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 username: username || undefined,
                 email: user.email || undefined,
                 phoneNumber: user.phoneNumber || undefined,
+                accountTier: userData?.accountTier || undefined,
                 role: (String(userData?.role || '').toLowerCase() === 'admin' ? 'admin' : 'user'),
                 avatar: user.photoURL || undefined,
               });
@@ -62,6 +63,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 name: user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer',
                 email: user.email || undefined,
                 phoneNumber: user.phoneNumber || undefined,
+                accountTier: undefined,
                 role: 'user',
                 avatar: user.photoURL || undefined,
               });
