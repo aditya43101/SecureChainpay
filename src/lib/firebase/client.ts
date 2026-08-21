@@ -20,19 +20,25 @@ if (!firebaseConfig.apiKey) {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
+const databaseId = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || 'securechainpay';
+
 // Enable offline persistence only in browser environments
 let db: Firestore;
 if (typeof window !== 'undefined') {
   try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
+    db = initializeFirestore(
+      app,
+      {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      },
+      databaseId
+    );
   } catch (e) {
     // Fallback if already initialized or error occurs
-    db = getFirestore(app);
+    db = getFirestore(app, databaseId);
   }
 } else {
-  db = getFirestore(app);
+  db = getFirestore(app, databaseId);
 }
 
 export { app, auth, db };
