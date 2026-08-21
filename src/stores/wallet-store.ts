@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { db, auth } from '@/lib/firebase/client';
-import { doc, getDoc, collection, getDocs, runTransaction, addDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromCache, collection, getDocs, runTransaction, addDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
 import { encryptPrivateKey } from '@/lib/crypto/client-aes';
 import { getWalletSigner } from '@/lib/wallet/key-access';
@@ -237,6 +237,14 @@ export const useWalletStore = create<WalletState>()(
             console.info(`[WalletInit] Wallet document exists: ${readResult.status === 'FOUND'}`);
 
             if (readResult.status === 'ERROR') {
+              if (readResult.error?.code === 'unavailable') {
+                const cachedSnapshot = await getDocFromCache(walletRef).catch(() => null);
+                if (cachedSnapshot?.exists()) {
+                  await restoreWalletState(cachedSnapshot.data() ?? {});
+                  console.warn(`[WALLET ${getWElapsed()}] Cloud unavailable; restored the UID-owned wallet from Firestore's local cache. No cloud write performed.`);
+                  return;
+                }
+              }
               if (hasLocalKeys) {
                 set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid, identityStatus: 'loaded' });
                 console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);
@@ -247,7 +255,7 @@ export const useWalletStore = create<WalletState>()(
                 ? readResult.error.message
                 : 'Unknown Firestore failure';
               set({ _hasHydrated: true, _isWalletReady: false, ownerUid: uid, identityStatus: 'error' });
-              console.error(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${reason}). No wallet was created or changed; retry is required.`);
+              console.warn(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${reason}). No wallet was created or changed; retry is required.`);
               return;
             }
 
