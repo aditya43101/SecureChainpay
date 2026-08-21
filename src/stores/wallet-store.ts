@@ -208,7 +208,12 @@ export const useWalletStore = create<WalletState>()(
                 get().syncTransactions(uid);
                 return;
               }
-              throw new Error('Unable to verify your wallet with the cloud. No wallet was created or changed. Please retry.');
+              const reason = 'error' in readResult && readResult.error instanceof Error
+                ? readResult.error.message
+                : 'Unknown Firestore failure';
+              set({ _hasHydrated: true, _isWalletReady: false, ownerUid: uid });
+              console.error(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${reason}). No wallet was created or changed; retry is required.`);
+              return;
             }
 
             if (readResult.status === 'FOUND') {
