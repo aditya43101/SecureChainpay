@@ -219,53 +219,29 @@ function LoginContent() {
 
   // Post-auth logic — save user data or validate existing account
   const handleAuthSuccess = async (user: any, chosenUsername?: string) => {
-    try {
-      localStorage.setItem('securechain_uid', user.uid);
-      
-      const userDocRef = doc(db, 'users', user.uid);
-      let userDocSnap: any = null;
+    // Authentication has succeeded and Firebase has supplied the UID. Start navigation
+    // immediately; profile provisioning is non-critical and must not delay the dashboard.
+    localStorage.setItem('securechain_uid', user.uid);
+    router.push('/dashboard');
+
+    void (async () => {
       try {
-        userDocSnap = await getDoc(userDocRef);
-      } catch (e) {
-        console.warn('User document read warning:', e);
-      }
+        const userDocRef = doc(db, 'users', user.uid);
+        let userDocSnap: any = null;
+        try {
+          userDocSnap = await getDoc(userDocRef);
+        } catch (e) {
+          console.warn('User document read warning:', e);
+        }
 
-      const effectiveUsername = chosenUsername || username || user.displayName || `user_${user.uid.substring(0, 6)}`;
-      const normalizedUsername = effectiveUsername.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '');
-
-      if (mode === 'register') {
-        if (!userDocSnap || !userDocSnap.exists()) {
+        const effectiveUsername = chosenUsername || username || user.displayName || `user_${user.uid.substring(0, 6)}`;
+        const normalizedUsername = effectiveUsername.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '');
+        if (!userDocSnap?.exists()) {
           try {
             await setDoc(doc(db, 'usernames', normalizedUsername), { uid: user.uid });
           } catch (unameErr) {
             console.warn('Username reservation warning:', unameErr);
           }
-          
-          try {
-            await setDoc(userDocRef, {
-              username: normalizedUsername,
-              phoneNumber: user.phoneNumber || null,
-              email: user.email || null,
-              role: 'USER',
-              createdAt: new Date().toISOString()
-            }, { merge: true });
-          } catch (docErr) {
-            console.warn('User profile document save warning:', docErr);
-          }
-          
-          try {
-            await updateProfile(user, { displayName: normalizedUsername });
-          } catch (profileErr) {
-            console.warn('Firebase profile update warning:', profileErr);
-          }
-        }
-      } else {
-        if (!userDocSnap || !userDocSnap.exists()) {
-          console.log('[SecureChain: Auth] New user on login flow, auto-provisioning profile...');
-          try {
-            await setDoc(doc(db, 'usernames', normalizedUsername), { uid: user.uid });
-          } catch {}
-
           try {
             await setDoc(userDocRef, {
               username: normalizedUsername,
@@ -277,15 +253,18 @@ function LoginContent() {
           } catch (docErr) {
             console.warn('User profile auto-provision warning:', docErr);
           }
+          if (mode === 'register') {
+            try {
+              await updateProfile(user, { displayName: normalizedUsername });
+            } catch (profileErr) {
+              console.warn('Firebase profile update warning:', profileErr);
+            }
+          }
         }
+      } catch (err: any) {
+        console.warn('Post-auth background tasks caught warning:', err);
       }
-    } catch (err: any) {
-      console.warn('Post-auth background tasks caught warning:', err);
-    } finally {
-      // Ensure redirect ALWAYS completes once user authentication is verified
-      localStorage.setItem('securechain_uid', user.uid);
-      router.push('/dashboard');
-    }
+    })();
   };
 
   // Google Sign-In
