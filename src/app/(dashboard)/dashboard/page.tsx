@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { WalletCard } from '@/components/dashboard/WalletCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { ArrowUpRight, ArrowDownLeft, RefreshCcw, MoreHorizontal, Info } from 'lucide-react';
@@ -8,6 +9,10 @@ import { useWalletStore } from '@/stores/wallet-store';
 export default function DashboardPage() {
   const { transactions } = useWalletStore();
   const realTransactions = transactions.filter(t => t.type !== 'genesis');
+
+  useEffect(() => {
+    console.log('[DASHBOARD] mounted in DOM - rendering Overview, WalletCard, QuickActions');
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0">

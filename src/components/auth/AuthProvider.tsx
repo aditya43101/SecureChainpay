@@ -9,6 +9,9 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useRouter, usePathname } from 'next/navigation';
 import { AlertCircle, RefreshCw, LogOut } from 'lucide-react';
 
+const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+const getElapsed = () => `+${Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)}ms`;
+
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -18,14 +21,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const initAttemptedRef = useRef(false);
 
+  console.log(`[AUTH ${getElapsed()}] AuthProvider render - isInitializing: ${isInitializing}, _isWalletReady: ${_isWalletReady}, hasAddress: ${Boolean(address)}`);
+
   useEffect(() => {
+    console.log(`[AUTH ${getElapsed()}] AuthProvider mounted in DOM`);
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log(`[AUTH ${getElapsed()}] Firebase auth callback START - UID: ${user?.uid || 'NONE'}`);
       try {
         if (user) {
           localStorage.setItem('securechain_uid', user.uid);
 
           // 1. Parallel Task A: User profile retrieval
           const fetchProfilePromise = (async () => {
+            const pStart = performance.now();
+            console.log(`[AUTH ${getElapsed()}] Profile fetch START`);
             try {
               const userDocSnap = await getDoc(doc(db, 'users', user.uid));
               const userData = userDocSnap.exists() ? userDocSnap.data() : null;
@@ -41,8 +50,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 role: (userData?.role === 'admin' ? 'admin' : 'user'),
                 avatar: user.photoURL || undefined,
               });
+              console.log(`[AUTH ${getElapsed()}] Profile fetch END (took ${Math.round(performance.now() - pStart)}ms)`);
             } catch (profileErr) {
-              console.warn('[SecureChain: Auth] Firestore profile fetch error, using fallback:', profileErr);
+              console.warn(`[AUTH ${getElapsed()}] Firestore profile fetch error, using fallback:`, profileErr);
               setAuthUser({
                 id: user.uid,
                 name: user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer',
@@ -62,7 +72,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 setWalletError(null);
                 await initializeWallet(user.uid);
               } catch (error: any) {
-                console.error('[SecureChain: Auth] Critical wallet init error:', error);
+                console.error(`[AUTH ${getElapsed()}] Critical wallet init error:`, error);
                 setWalletError(error?.message || 'Failed to initialize cryptographic wallet.');
               }
             }
@@ -90,9 +100,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           }
         }
       } catch (authHandlerErr) {
-        console.error('[SecureChain: Auth] Uncaught auth handler exception:', authHandlerErr);
+        console.error(`[AUTH ${getElapsed()}] Uncaught auth handler exception:`, authHandlerErr);
       } finally {
-        // Guaranteed cleanup: isInitializing is ALWAYS set to false
+        console.log(`[AUTH ${getElapsed()}] setIsInitializing(false)`);
         setIsInitializing(false);
       }
     });
@@ -127,6 +137,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
   const hasLocalWallet = Boolean(isLocalWalletOwner && address && encryptedPrivateKey);
   const isReady = _isWalletReady || hasLocalWallet;
+  const isBlocked = (isInitializing && !hasLocalWallet) || (auth.currentUser && !isReady);
+
+  console.log(`[AUTH ${getElapsed()}] Render Gate -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}, isReady: ${isReady}, AUTH GATE RESULT: ${isBlocked ? 'BLOCKED' : 'UNBLOCKED'}`);
 
   // Render initialization failure state clearly (never fake data)
   if (walletError && !isReady) {
@@ -160,7 +173,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }
 
   // Render initial loading spinner ONLY if no local wallet exists and critical state is still resolving
-  if ((isInitializing && !hasLocalWallet) || (auth.currentUser && !isReady)) {
+  if (isBlocked) {
     return (
       <div className="flex justify-center items-center h-screen bg-[#0a0a0a] p-6">
         <div className="flex flex-col items-center gap-4 text-center">
