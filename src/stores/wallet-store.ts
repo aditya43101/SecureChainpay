@@ -198,6 +198,30 @@ export const useWalletStore = create<WalletState>()(
             const walletRef = doc(db, 'users', uid, 'wallet', 'data');
             const currentState = get();
             const hasLocalKeys = currentState.ownerUid === uid && isValidString(currentState.address) && isValidString(currentState.publicKey) && isValidString(currentState.encryptedPrivateKey);
+            const restoreWalletState = async (data: any) => {
+              const fields = [data.address, data.publicKey, data.encryptedPrivateKey];
+              if (!fields.every(isValidString)) {
+                throw new Error('Wallet integrity failure: wallet data is incomplete. No keys were changed.');
+              }
+              const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
+              set({
+                ownerUid: uid,
+                identityStatus: 'loaded',
+                address: data.address,
+                publicKey: data.publicKey,
+                encryptedPrivateKey: data.encryptedPrivateKey,
+                keyGeneratedAt: data.keyGeneratedAt || null,
+                algorithm: data.algorithm || 'ECDSA/secp256k1',
+                walletVersion: data.walletVersion || '1.0',
+                keyFingerprint: fingerprint,
+                balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
+                lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
+                lastBlockHash: data.lastBlockHash || null,
+                _hasHydrated: true,
+                _isWalletReady: true,
+              });
+              get().syncTransactions(uid);
+            };
             console.info(`[WalletInit] UID: ${uid}`);
             console.info(`[WalletInit] Wallet path: users/${uid}/wallet/data`);
             const readResult = await getDoc(walletRef)
@@ -230,36 +254,17 @@ export const useWalletStore = create<WalletState>()(
             if (readResult.status === 'FOUND') {
               console.info('[WalletInit] Existing wallet detected: true');
               const data = readResult.snapshot.data() ?? {};
-              const fields = [data.address, data.publicKey, data.encryptedPrivateKey];
-              if (!fields.every(isValidString)) {
-                throw new Error('Wallet integrity failure: existing wallet data is incomplete. No keys were changed.');
-              }
-              const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
+              await restoreWalletState(data);
               console.info(`[WalletInit] Address available: ${isValidString(data.address)}`);
               console.info(`[WalletInit] Public key available: ${isValidString(data.publicKey)}`);
-              set({
-                ownerUid: uid,
-                identityStatus: 'loaded',
-                address: data.address,
-                publicKey: data.publicKey,
-                encryptedPrivateKey: data.encryptedPrivateKey,
-                keyGeneratedAt: data.keyGeneratedAt || null,
-                algorithm: data.algorithm || 'ECDSA/secp256k1',
-                walletVersion: data.walletVersion || '1.0',
-                keyFingerprint: fingerprint,
-                balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
-                lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
-                lastBlockHash: data.lastBlockHash || null,
-                _hasHydrated: true,
-                _isWalletReady: true,
-              });
               console.info('[WalletInit] Zustand wallet state updated: true');
-              get().syncTransactions(uid);
               return;
             }
 
             if (hasLocalKeys) {
-              throw new Error('Wallet lookup returned no wallet, but a local wallet already exists. No replacement wallet was created.');
+              await restoreWalletState(currentState);
+              console.warn(`[WALLET ${getWElapsed()}] Firestore returned NOT_FOUND, but a valid wallet for this UID exists locally. Restored local identity without generating or writing a replacement wallet.`);
+              return;
             }
 
             const newWallet = ethers.Wallet.createRandom();
@@ -291,7 +296,13 @@ export const useWalletStore = create<WalletState>()(
               created = true;
             });
             if (!created) {
-              throw new Error('Wallet was created concurrently. Please retry to restore the existing wallet.');
+              const concurrentWallet = await getDoc(walletRef);
+              if (!concurrentWallet.exists()) {
+                throw new Error('Wallet creation was not committed. No wallet was generated again. Please retry.');
+              }
+              await restoreWalletState(concurrentWallet.data() ?? {});
+              console.info('[WalletInit] Concurrent wallet creation detected; restored the existing wallet.');
+              return;
             }
             createAuditLog(uid, 'New user wallet created', ['wallet', 'genesisBlock'], 'SUCCESS');
             set({ ...initData, identityStatus: 'verified', transactions: [genesisBlock], _hasHydrated: true, _isWalletReady: true });
