@@ -201,7 +201,13 @@ export const useWalletStore = create<WalletState>()(
             const hasLocalKeys = isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey);
             console.log(`[WALLET ${getWElapsed()}] local wallet detected: ${hasLocalKeys} (address: ${currentState.address || 'none'})`);
 
-            // Check Firestore for existing wallet record with a strict 3s timeout
+            // Instant Fast-Path: If local keys already exist, unlock state immediately
+            if (hasLocalKeys) {
+              set({ _hasHydrated: true, _isWalletReady: true });
+              console.log(`[WALLET ${getWElapsed()}] ✓ Local keys fast-path applied. _isWalletReady: true`);
+            }
+
+            // Check Firestore for existing wallet record with a resilient 5s timeout
             let walletSnap: any = null;
             let readSuccess = false;
             
@@ -210,7 +216,7 @@ export const useWalletStore = create<WalletState>()(
               const fetchWithTimeout = Promise.race([
                 getDoc(walletRef),
                 new Promise<null>((_, reject) => 
-                  setTimeout(() => reject(new Error('Firestore read timeout')), 3000)
+                  setTimeout(() => reject(new Error('Firestore read timeout')), 5000)
                 )
               ]);
               walletSnap = await fetchWithTimeout;
@@ -232,44 +238,42 @@ export const useWalletStore = create<WalletState>()(
               console.log(`[WALLET ${getWElapsed()}] key restoration START (from Firestore)`);
               const data = walletSnap.data();
 
-              // Strict preservation: MUST preserve existing keys
-              if (!isValidString(data.address) || !isValidString(data.publicKey) || !isValidString(data.encryptedPrivateKey)) {
+              // Resolve existing keys with self-healing for secondary metadata
+              let existingAddress = data.address || currentState.address;
+              let existingPublicKey = data.publicKey || currentState.publicKey;
+              let existingEncryptedKey = data.encryptedPrivateKey || currentState.encryptedPrivateKey;
+
+              if (!isValidString(existingAddress) || !isValidString(existingEncryptedKey)) {
                 if (hasLocalKeys) {
-                  console.log(`[WALLET ${getWElapsed()}] Restoring valid local keys to Firestore...`);
-                  await setDoc(walletRef, {
-                    address: currentState.address,
-                    publicKey: currentState.publicKey,
-                    encryptedPrivateKey: currentState.encryptedPrivateKey,
-                    keyGeneratedAt: currentState.keyGeneratedAt || new Date().toISOString(),
-                    algorithm: currentState.algorithm || 'ECDSA/secp256k1',
-                    walletVersion: currentState.walletVersion || '1.0',
-                    keyFingerprint: currentState.keyFingerprint || (await generateHash(currentState.publicKey!)).substring(0, 16),
-                    balances: data.balances || currentState.balances || { USD: 0, BTC: 0, ETH: 0 },
-                    lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
-                    lastBlockHash: data.lastBlockHash || '0x0000000000000000000000000000000000000000000000000000000000000000'
-                  }, { merge: true });
+                  existingAddress = currentState.address!;
+                  existingEncryptedKey = currentState.encryptedPrivateKey!;
+                  existingPublicKey = currentState.publicKey || null;
                 } else {
                   throw new Error('Existing wallet keys could not be verified.');
                 }
               }
 
+              const restoredAlgorithm = data.algorithm || currentState.algorithm || 'ECDSA/secp256k1';
+              const restoredVersion = data.walletVersion || currentState.walletVersion || '1.0';
+              const restoredFingerprint = data.keyFingerprint || currentState.keyFingerprint || (existingPublicKey ? (await generateHash(existingPublicKey)).substring(0, 16) : 'SHA-256 Validated');
+
               // Load existing wallet state (NEVER generate new keys for existing user)
               set({
-                address: data.address || currentState.address,
-                publicKey: data.publicKey || currentState.publicKey,
-                encryptedPrivateKey: data.encryptedPrivateKey || currentState.encryptedPrivateKey,
-                keyGeneratedAt: data.keyGeneratedAt || currentState.keyGeneratedAt,
-                algorithm: data.algorithm || 'ECDSA/secp256k1',
-                walletVersion: data.walletVersion || '1.0',
-                keyFingerprint: data.keyFingerprint || currentState.keyFingerprint,
-                balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
+                address: existingAddress,
+                publicKey: existingPublicKey,
+                encryptedPrivateKey: existingEncryptedKey,
+                keyGeneratedAt: data.keyGeneratedAt || currentState.keyGeneratedAt || new Date().toISOString(),
+                algorithm: restoredAlgorithm,
+                walletVersion: restoredVersion,
+                keyFingerprint: restoredFingerprint,
+                balances: data.balances || currentState.balances || { USD: 0, BTC: 0, ETH: 0 },
                 lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
                 lastBlockHash: data.lastBlockHash || null,
                 _hasHydrated: true,
                 _isWalletReady: true
               });
 
-              console.log(`[WALLET ${getWElapsed()}] key restoration END. Address: ${data.address || currentState.address}`);
+              console.log(`[WALLET ${getWElapsed()}] key restoration END. Address: ${existingAddress}`);
               console.log(`[WALLET ${getWElapsed()}] critical wallet state READY. _isWalletReady: true`);
 
               // Trigger background non-critical synchronization

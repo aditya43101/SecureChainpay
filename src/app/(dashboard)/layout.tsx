@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Wallet, History, Settings, Bell, Search, Database } from 'lucide-react';
+import { Home, Wallet, History, Settings, Bell, Search, Database, User } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
 
@@ -55,12 +55,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <button className="p-2 relative text-neutral-400 hover:text-white transition-colors rounded-full hover:bg-white/5">
                 <Bell size={20} />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border border-[#0a0a0a]" />
               </button>
-              <div className="sm:hidden w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500" />
+              <Link 
+                href="/profile" 
+                title="View Profile Settings"
+                className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-400 to-cyan-500 p-[1.5px] shadow-[0_0_12px_rgba(52,211,153,0.3)] hover:scale-105 transition-transform flex items-center justify-center cursor-pointer"
+              >
+                <div className="w-full h-full bg-neutral-900 rounded-[10px] flex items-center justify-center text-emerald-400">
+                  <User size={16} />
+                </div>
+              </Link>
             </div>
           </header>
 
