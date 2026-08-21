@@ -12,6 +12,7 @@ import {
   updateProfile, 
   signOut,
   signInAnonymously,
+  onAuthStateChanged,
   ConfirmationResult
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -57,10 +58,21 @@ function LoginContent() {
 
   useEffect(() => {
     isMountedRef.current = true;
+    
+    // Auto-redirect if user already has an active authenticated session
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && isMountedRef.current) {
+        localStorage.setItem('securechain_uid', user.uid);
+        console.log('[SecureChain: Auth] Authenticated user detected on login page. Redirecting to dashboard...');
+        router.push('/dashboard');
+      }
+    });
+
     return () => {
       isMountedRef.current = false;
+      unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   // Cooldown timer for resend OTP
   useEffect(() => {
@@ -208,35 +220,38 @@ function LoginContent() {
   // Post-auth logic — save user data or validate existing account
   const handleAuthSuccess = async (user: any, chosenUsername?: string) => {
     try {
+      localStorage.setItem('securechain_uid', user.uid);
+      
       const userDocRef = doc(db, 'users', user.uid);
-      let userDocSnap = await getDoc(userDocRef).catch((e) => {
+      let userDocSnap: any = null;
+      try {
+        userDocSnap = await getDoc(userDocRef);
+      } catch (e) {
         console.warn('User document read warning:', e);
-        return { exists: () => false, data: () => ({}) } as any;
-      });
+      }
 
       const effectiveUsername = chosenUsername || username || user.displayName || `user_${user.uid.substring(0, 6)}`;
       const normalizedUsername = effectiveUsername.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '');
 
       if (mode === 'register') {
-        if (userDocSnap.exists()) {
-          // If already registered, update local state and proceed
-          console.log('[SecureChain: Auth] Account already exists, proceeding to dashboard.');
-        } else {
-          // Save username registry document
+        if (!userDocSnap || !userDocSnap.exists()) {
           try {
             await setDoc(doc(db, 'usernames', normalizedUsername), { uid: user.uid });
           } catch (unameErr) {
             console.warn('Username reservation warning:', unameErr);
           }
           
-          // Save user profile document
-          await setDoc(userDocRef, {
-            username: normalizedUsername,
-            phoneNumber: user.phoneNumber || null,
-            email: user.email || null,
-            role: 'USER',
-            createdAt: new Date().toISOString()
-          }, { merge: true });
+          try {
+            await setDoc(userDocRef, {
+              username: normalizedUsername,
+              phoneNumber: user.phoneNumber || null,
+              email: user.email || null,
+              role: 'USER',
+              createdAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (docErr) {
+            console.warn('User profile document save warning:', docErr);
+          }
           
           try {
             await updateProfile(user, { displayName: normalizedUsername });
@@ -245,27 +260,31 @@ function LoginContent() {
           }
         }
       } else {
-        // Login mode — if no document exists yet, auto-provision profile so user is not blocked
-        if (!userDocSnap.exists()) {
+        if (!userDocSnap || !userDocSnap.exists()) {
           console.log('[SecureChain: Auth] New user on login flow, auto-provisioning profile...');
           try {
             await setDoc(doc(db, 'usernames', normalizedUsername), { uid: user.uid });
           } catch {}
 
-          await setDoc(userDocRef, {
-            username: normalizedUsername,
-            phoneNumber: user.phoneNumber || null,
-            email: user.email || null,
-            role: 'USER',
-            createdAt: new Date().toISOString()
-          }, { merge: true });
+          try {
+            await setDoc(userDocRef, {
+              username: normalizedUsername,
+              phoneNumber: user.phoneNumber || null,
+              email: user.email || null,
+              role: 'USER',
+              createdAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (docErr) {
+            console.warn('User profile auto-provision warning:', docErr);
+          }
         }
       }
-      
-      router.push('/dashboard');
     } catch (err: any) {
-      console.error('Post-auth error:', err);
-      throw err;
+      console.warn('Post-auth background tasks caught warning:', err);
+    } finally {
+      // Ensure redirect ALWAYS completes once user authentication is verified
+      localStorage.setItem('securechain_uid', user.uid);
+      router.push('/dashboard');
     }
   };
 
