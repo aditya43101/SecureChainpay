@@ -143,7 +143,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
   const hasLocalWallet = Boolean(isLocalWalletOwner && address && encryptedPrivateKey);
   const isReady = _isWalletReady || hasLocalWallet;
-  const isBlocked = (isInitializing && !hasLocalWallet) || (auth.currentUser && !isReady);
+  const isBlocked = isInitializing && !hasLocalWallet && !_isWalletReady;
 
   console.log(`[AUTH ${getElapsed()}] Render Gate -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}, isReady: ${isReady}, AUTH GATE RESULT: ${isBlocked ? 'BLOCKED' : 'UNBLOCKED'}`);
 
