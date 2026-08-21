@@ -31,13 +31,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (user) {
           localStorage.setItem('securechain_uid', user.uid);
 
-          // 1. Parallel Task A: User profile retrieval
+          // 1. Parallel Task A: User profile retrieval (with 1.5s fast-path timeout)
           const fetchProfilePromise = (async () => {
             const pStart = performance.now();
             console.log(`[AUTH ${getElapsed()}] Profile fetch START`);
             try {
-              const userDocSnap = await getDoc(doc(db, 'users', user.uid));
-              const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+              const fetchWithTimeout = Promise.race([
+                getDoc(doc(db, 'users', user.uid)),
+                new Promise<null>((_, reject) => 
+                  setTimeout(() => reject(new Error('Profile read timeout')), 1500)
+                )
+              ]);
+              const userDocSnap = await fetchWithTimeout;
+              const userData = userDocSnap && typeof userDocSnap.exists === 'function' && userDocSnap.exists() ? userDocSnap.data() : null;
               const username = userData?.username || user.displayName;
               const displayName = username || user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer';
 
@@ -52,7 +58,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
               });
               console.log(`[AUTH ${getElapsed()}] Profile fetch END (took ${Math.round(performance.now() - pStart)}ms)`);
             } catch (profileErr) {
-              console.warn(`[AUTH ${getElapsed()}] Firestore profile fetch error, using fallback:`, profileErr);
+              console.warn(`[AUTH ${getElapsed()}] Firestore profile fetch warning (using fallback):`, profileErr);
               setAuthUser({
                 id: user.uid,
                 name: user.displayName || user.email?.split('@')[0] || user.phoneNumber || 'Explorer',
