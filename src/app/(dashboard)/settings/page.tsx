@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Eye, EyeOff, Copy } from 'lucide-react';
+import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase/client';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -15,11 +15,6 @@ export default function SettingsPage() {
   const [profileUsername, setProfileUsername] = useState('Loading...');
   const [profileContact, setProfileContact] = useState('Loading...');
   
-  const [showPrivateKey, setShowPrivateKey] = useState(false);
-  const [revealedKey, setRevealedKey] = useState('****************');
-  const [devClicks, setDevClicks] = useState(0);
-  const [isDevMode, setIsDevMode] = useState(false);
-
   const wallet = useWalletStore();
 
   useEffect(() => {
@@ -40,46 +35,6 @@ export default function SettingsPage() {
     });
     return () => unsub();
   }, []);
-
-  const handleHeaderClick = () => {
-    if (isDevMode) return;
-    setDevClicks(prev => {
-      if (prev + 1 >= 5) {
-        setIsDevMode(true);
-        alert('Developer Mode Unlocked! You can now reveal your private key.');
-        return 5;
-      }
-      return prev + 1;
-    });
-  };
-
-  const handleRevealKey = async () => {
-    if (showPrivateKey) {
-      setShowPrivateKey(false);
-      setRevealedKey('****************');
-      return;
-    }
-    const confirmReveal = window.confirm('WARNING: Never share your Private Key with anyone. Anyone with this key can steal your funds. Are you sure you want to reveal it?');
-    if (!confirmReveal) return;
-    
-    try {
-      if (!wallet.encryptedPrivateKey) {
-        alert('No private key found for this wallet.');
-        return;
-      }
-      const uid = auth.currentUser?.uid;
-      if (!uid) return;
-      
-      const { decryptPrivateKey } = await import('@/lib/crypto/client-aes');
-      const secret = `securechain_client_${uid}_secret`;
-      const decrypted = await decryptPrivateKey(wallet.encryptedPrivateKey, secret);
-      setRevealedKey(decrypted);
-      setShowPrivateKey(true);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to decrypt private key.');
-    }
-  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -270,7 +225,6 @@ export default function SettingsPage() {
                 <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-5">
                   <div 
                     className="flex items-center gap-3 mb-2 cursor-pointer select-none"
-                    onClick={handleHeaderClick}
                   >
                     <Key className="text-emerald-400" size={20} />
                     <h3 className="font-medium text-white text-lg">Blockchain Keys</h3>
@@ -301,16 +255,11 @@ export default function SettingsPage() {
                       <div className="flex justify-between items-end">
                         <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Private Key</label>
                         <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {wallet.encryptedPrivateKey ? 'AES-256-GCM Encrypted' : 'Not Found'}
+                          {wallet.encryptedPrivateKey ? 'AES-256-GCM Encrypted • On-demand access' : 'Not Found'}
                         </span>
                       </div>
                       <div className="flex items-center mt-1">
-                        <input type={showPrivateKey ? "text" : "password"} readOnly value={revealedKey} className={`w-full px-3 py-2 bg-[#121212] border border-neutral-800 ${isDevMode ? 'rounded-l-lg border-r-0' : 'rounded-lg'} text-sm text-neutral-300 font-mono tracking-widest`} />
-                        {isDevMode && (
-                          <button onClick={handleRevealKey} className="px-3 py-2 bg-neutral-800 border border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
-                            {showPrivateKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        )}
+                        <input type="text" readOnly value="Protected — accessed only when required for signing" className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-lg text-sm text-emerald-400 font-mono" />
                       </div>
                     </div>
                     

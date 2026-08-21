@@ -3,7 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { db, auth } from '@/lib/firebase/client';
 import { doc, getDoc, collection, getDocs, runTransaction, addDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
-import { decryptPrivateKey, encryptPrivateKey } from '@/lib/crypto/client-aes';
+import { encryptPrivateKey } from '@/lib/crypto/client-aes';
+import { getWalletSigner } from '@/lib/wallet/key-access';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL INITIALIZATION LOCK (Idempotent)
@@ -80,20 +81,6 @@ export async function generateHash(message: string): Promise<string> {
 }
 
 const getClientSecret = (uid: string) => `securechain_client_${uid}_secret`;
-
-async function verifyWalletIdentity(
-  encryptedPrivateKey: string,
-  secret: string,
-  storedPublicKey: string,
-  storedAddress: string
-) {
-  const privateKey = await decryptPrivateKey(encryptedPrivateKey, secret);
-  const wallet = new ethers.Wallet(privateKey);
-  if (wallet.signingKey.publicKey !== storedPublicKey || wallet.address.toLowerCase() !== storedAddress.toLowerCase()) {
-    throw new Error('Wallet integrity verification failed. Stored keys do not match the wallet address.');
-  }
-  return wallet;
-}
 
 async function createGenesisBlock(uid: string, walletAddress: string, publicKey: string): Promise<Transaction> {
   const genesisTimeISO = '1970-01-01T00:00:00.000Z';
@@ -216,7 +203,6 @@ export const useWalletStore = create<WalletState>()(
 
             if (readResult.status === 'ERROR/TIMEOUT') {
               if (hasLocalKeys) {
-                await verifyWalletIdentity(currentState.encryptedPrivateKey!, clientSecret, currentState.publicKey!, currentState.address!);
                 set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid });
                 console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);
                 get().syncTransactions(uid);
@@ -231,7 +217,6 @@ export const useWalletStore = create<WalletState>()(
               if (!fields.every(isValidString)) {
                 throw new Error('Wallet integrity failure: existing wallet data is incomplete. No keys were changed.');
               }
-              await verifyWalletIdentity(data.encryptedPrivateKey, clientSecret, data.publicKey, data.address);
               const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
               set({
                 ownerUid: uid,
@@ -355,11 +340,14 @@ export const useWalletStore = create<WalletState>()(
         let newBlockHash = '';
         
         // Decrypt key in memory for signing ONLY
-        const { decryptPrivateKey } = await import('@/lib/crypto/client-aes');
         let tempWallet: ethers.Wallet;
         try {
-           const decryptedKey = await decryptPrivateKey(state.encryptedPrivateKey!, getClientSecret(uid));
-           tempWallet = new ethers.Wallet(decryptedKey);
+           tempWallet = await getWalletSigner({
+             uid,
+             encryptedPrivateKey: state.encryptedPrivateKey!,
+             address: state.address!,
+             publicKey: state.publicKey!,
+           });
         } catch (e) {
            console.error("[SecureChain: Tx] ✗ Failed to decrypt private key:", e);
            throw new Error("Failed to decrypt private key for signing");

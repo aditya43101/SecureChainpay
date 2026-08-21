@@ -1,20 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/client';
 import { doc, getDoc } from 'firebase/firestore';
 import { useWalletStore } from '@/stores/wallet-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRouter, usePathname } from 'next/navigation';
-import { AlertCircle, RefreshCw, LogOut } from 'lucide-react';
 
 const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 const getElapsed = () => `+${Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)}ms`;
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isInitializing, setIsInitializing] = useState(true);
-  const [walletError, setWalletError] = useState<string | null>(null);
   const { initializeWallet, disconnectWallet, _isWalletReady, ownerUid, address, encryptedPrivateKey } = useWalletStore();
   const { user: authUser, login: setAuthUser, logout: clearAuthUser } = useAuthStore();
   const router = useRouter();
@@ -75,11 +73,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             if (!initAttemptedRef.current || !_isWalletReady) {
               initAttemptedRef.current = true;
               try {
-                setWalletError(null);
                 await initializeWallet(user.uid);
               } catch (error: any) {
                 console.error(`[AUTH ${getElapsed()}] Critical wallet init error:`, error);
-                setWalletError(error?.message || 'Failed to initialize cryptographic wallet.');
               }
             }
           })();
@@ -90,7 +86,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           localStorage.removeItem('securechain_uid');
           clearAuthUser();
           disconnectWallet();
-          setWalletError(null);
           initAttemptedRef.current = false;
           
           if (
@@ -119,34 +114,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initializeWallet, disconnectWallet]);
 
-  const handleRetry = async () => {
-    if (!auth.currentUser) return;
-    setWalletError(null);
-    setIsInitializing(true);
-    try {
-      await initializeWallet(auth.currentUser.uid);
-    } catch (e: any) {
-      setWalletError(e?.message || 'Wallet setup failed again.');
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      router.push('/login');
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   // Cached wallet fast-path: Only trust local wallet if ownership matches the current authenticated UID
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
   const hasLocalWallet = Boolean(isLocalWalletOwner && ownerUid === auth.currentUser?.uid && address && encryptedPrivateKey);
-  const isReady = _isWalletReady || hasLocalWallet;
-  const isBlocked = isInitializing && !hasLocalWallet && !_isWalletReady;
-
   if (!isInitializing && pathname?.startsWith('/admin-dashboard') && authUser && authUser.role !== 'admin') {
     router.replace('/dashboard');
     return null;
@@ -157,50 +127,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     return null;
   }
 
-  console.log(`[AUTH ${getElapsed()}] Render Gate -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}, isReady: ${isReady}, AUTH GATE RESULT: ${isBlocked ? 'BLOCKED' : 'UNBLOCKED'}`);
-
-  // Render initialization failure state clearly (never fake data)
-  if (walletError && !isReady) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen bg-[#0a0a0a] text-white p-6">
-        <div className="max-w-md w-full bg-neutral-900/90 border border-red-500/20 p-8 rounded-3xl backdrop-blur-xl text-center space-y-5 shadow-2xl">
-          <div className="w-14 h-14 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center mx-auto border border-red-500/20">
-            <AlertCircle size={28} />
-          </div>
-          <h2 className="text-xl font-bold text-white">Wallet Setup Failed</h2>
-          <p className="text-sm text-neutral-400">
-            {walletError || 'SecureChain could not initialize your cryptographic keys or genesis block.'}
-          </p>
-          <div className="space-y-3 pt-2">
-            <button
-              onClick={handleRetry}
-              className="w-full py-3.5 px-6 bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
-            >
-              <RefreshCw size={16} /> Retry Setup
-            </button>
-            <button
-              onClick={handleSignOut}
-              className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all border border-white/10"
-            >
-              <LogOut size={14} /> Return to Login
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render initial loading spinner ONLY if no local wallet exists and critical state is still resolving
-  if (isBlocked) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-[#0a0a0a] p-6">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <span className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-          <span className="text-emerald-500/80 text-sm font-medium animate-pulse">Initializing SecureChain wallet...</span>
-        </div>
-      </div>
-    );
-  }
+  console.log(`[AUTH ${getElapsed()}] Authenticated app render -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}`);
 
   return <>{children}</>;
 }
