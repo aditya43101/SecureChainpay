@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { db, auth } from '@/lib/firebase/client';
-import { doc, getDoc, getDocFromCache, collection, getDocs, runTransaction, addDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromCache, collection, getDocs, runTransaction, addDoc, setDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
-import { encryptPrivateKey } from '@/lib/crypto/client-aes';
+import { encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto/client-aes';
 import { getWalletSigner } from '@/lib/wallet/key-access';
 
 // ═══════════════════════════════════════════════════════════
@@ -203,24 +203,47 @@ export const useWalletStore = create<WalletState>()(
             const currentState = get();
             const hasLocalKeys = currentState.ownerUid === uid && isValidString(currentState.address) && isValidString(currentState.publicKey) && isValidString(currentState.encryptedPrivateKey);
             const restoreWalletState = async (data: any) => {
-              const fields = [data.address, data.publicKey, data.encryptedPrivateKey];
-              if (!fields.every(isValidString)) {
-                throw new Error('Wallet integrity failure: wallet data is incomplete. No keys were changed.');
+              // Support existing field variations if any
+              const resolvedAddress = data.address || data.walletAddress || (currentState.ownerUid === uid ? currentState.address : null);
+              const resolvedEncryptedKey = data.encryptedPrivateKey || data.encryptedKey || (currentState.ownerUid === uid ? currentState.encryptedPrivateKey : null);
+              let resolvedPublicKey = data.publicKey || data.senderPublicKey || (currentState.ownerUid === uid ? currentState.publicKey : null);
+
+              if (!isValidString(resolvedAddress) || !isValidString(resolvedEncryptedKey)) {
+                throw new Error('Wallet integrity failure: wallet address or encrypted key is missing. No keys were changed.');
               }
-              const fingerprint = data.keyFingerprint || (await generateHash(data.publicKey)).substring(0, 16);
+
+              // If publicKey is missing from Firestore document, derive it from the existing encrypted private key
+              if (!isValidString(resolvedPublicKey)) {
+                try {
+                  console.info('[WalletInit] Deriving public key from existing encrypted private key...');
+                  const decryptedPrivKey = await decryptPrivateKey(resolvedEncryptedKey, clientSecret);
+                  const signer = new ethers.Wallet(decryptedPrivKey);
+                  resolvedPublicKey = signer.signingKey.publicKey;
+                  
+                  // Backfill the derived public key to Firestore in background without blocking
+                  setDoc(walletRef, { publicKey: resolvedPublicKey }, { merge: true }).catch((err) => {
+                    console.warn('[WalletInit] Non-fatal public key backfill warning:', err);
+                  });
+                } catch (derivErr) {
+                  console.warn('[WalletInit] Could not derive public key from encrypted key:', derivErr);
+                }
+              }
+
+              const fingerprint = data.keyFingerprint || (resolvedPublicKey ? (await generateHash(resolvedPublicKey)).substring(0, 16) : 'Pending');
+              
               set({
                 ownerUid: uid,
                 identityStatus: 'loaded',
                 initializationErrorCode: null,
                 initializationErrorMessage: null,
-                address: data.address,
-                publicKey: data.publicKey,
-                encryptedPrivateKey: data.encryptedPrivateKey,
-                keyGeneratedAt: data.keyGeneratedAt || null,
+                address: resolvedAddress,
+                publicKey: resolvedPublicKey || null,
+                encryptedPrivateKey: resolvedEncryptedKey,
+                keyGeneratedAt: data.keyGeneratedAt || currentState.keyGeneratedAt || null,
                 algorithm: data.algorithm || 'ECDSA/secp256k1',
                 walletVersion: data.walletVersion || '1.0',
                 keyFingerprint: fingerprint,
-                balances: data.balances || { USD: 0, BTC: 0, ETH: 0 },
+                balances: data.balances || currentState.balances || { USD: 0, BTC: 0, ETH: 0 },
                 lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
                 lastBlockHash: data.lastBlockHash || null,
                 _hasHydrated: true,
