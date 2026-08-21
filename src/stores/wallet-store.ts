@@ -200,13 +200,19 @@ export const useWalletStore = create<WalletState>()(
             const hasLocalKeys = currentState.ownerUid === uid && isValidString(currentState.address) && isValidString(currentState.publicKey) && isValidString(currentState.encryptedPrivateKey);
             console.info(`[WalletInit] UID: ${uid}`);
             console.info(`[WalletInit] Wallet path: users/${uid}/wallet/data`);
-            const readResult = await Promise.race([
-              getDoc(walletRef).then((snapshot) => ({ status: snapshot.exists() ? 'FOUND' as const : 'NOT_FOUND' as const, snapshot })),
-              new Promise<{ status: 'ERROR/TIMEOUT'; snapshot: null }>((_, reject) => setTimeout(() => reject(new Error('Firestore read timeout')), 5000))
-            ]).catch((error) => ({ status: 'ERROR/TIMEOUT' as const, snapshot: null, error }));
+            const readResult = await getDoc(walletRef)
+              .then((snapshot) => ({
+                status: snapshot.exists() ? 'FOUND' as const : 'NOT_FOUND' as const,
+                snapshot,
+              }))
+              .catch((error) => ({
+                status: 'ERROR' as const,
+                snapshot: null,
+                error,
+              }));
             console.info(`[WalletInit] Wallet document exists: ${readResult.status === 'FOUND'}`);
 
-            if (readResult.status === 'ERROR/TIMEOUT') {
+            if (readResult.status === 'ERROR') {
               if (hasLocalKeys) {
                 set({ _hasHydrated: true, _isWalletReady: true, ownerUid: uid, identityStatus: 'loaded' });
                 console.warn(`[WALLET ${getWElapsed()}] Firestore lookup unavailable; verified local wallet is being used offline. No cloud write performed.`);

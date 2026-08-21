@@ -5,6 +5,7 @@ import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, M
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
 import { useWalletStore } from '@/stores/wallet-store';
+import { auth } from '@/lib/firebase/client';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -20,6 +21,8 @@ export default function SettingsPage() {
   const keyGeneratedAt = useWalletStore((state) => state.keyGeneratedAt);
   const walletVersion = useWalletStore((state) => state.walletVersion);
   const identityStatus = useWalletStore((state) => state.identityStatus);
+  const initializeWallet = useWalletStore((state) => state.initializeWallet);
+  const [isRetryingWallet, setIsRetryingWallet] = useState(false);
 
   useEffect(() => {
     console.info(`[Profile] Address received: ${Boolean(address)}`);
@@ -32,6 +35,19 @@ export default function SettingsPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Copied to clipboard');
+  };
+
+  const retryWalletInitialization = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || isRetryingWallet) return;
+    setIsRetryingWallet(true);
+    try {
+      await initializeWallet(uid);
+    } catch (error) {
+      console.error('[Profile] Wallet retry failed:', error);
+    } finally {
+      setIsRetryingWallet(false);
+    }
   };
 
   const tabs = [
@@ -141,6 +157,20 @@ export default function SettingsPage() {
                       <span className="font-medium text-white block">{algorithm || 'Pending'}</span>
                     </div>
                   </div>
+                  {identityStatus === 'error' && (
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                      <span className="text-xs text-amber-300">Wallet cloud verification failed. No wallet was changed.</span>
+                      <Button
+                        type="button"
+                        onClick={retryWalletInitialization}
+                        disabled={isRetryingWallet}
+                        variant="outline"
+                        className="shrink-0 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                      >
+                        {isRetryingWallet ? 'Retrying...' : 'Retry'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="pt-4 border-t border-white/5 flex gap-3">
