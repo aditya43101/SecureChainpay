@@ -63,8 +63,8 @@ function LoginContent() {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && isMountedRef.current) {
         localStorage.setItem('securechain_uid', user.uid);
-        console.log('[SecureChain: Auth] Authenticated user detected on login page. Redirecting to dashboard...');
-        router.push('/dashboard');
+        console.log('[SecureChain: Auth] Authenticated user detected on login page. Redirecting to settings...');
+        router.replace('/settings');
       }
     });
 
@@ -220,9 +220,9 @@ function LoginContent() {
   // Post-auth logic — save user data or validate existing account
   const handleAuthSuccess = async (user: any, chosenUsername?: string) => {
     // Authentication has succeeded and Firebase has supplied the UID. Start navigation
-    // immediately; profile provisioning is non-critical and must not delay the dashboard.
+    // immediately; profile provisioning is non-critical and must not delay settings.
     localStorage.setItem('securechain_uid', user.uid);
-    router.push('/dashboard');
+    router.replace('/settings');
 
     void (async () => {
       try {
