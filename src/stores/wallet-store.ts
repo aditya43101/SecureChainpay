@@ -56,6 +56,7 @@ interface WalletState {
   lastBlockHash: string | null;
   setHasHydrated: (state: boolean) => void;
   initializeWallet: (uid: string) => Promise<void>;
+  syncTransactions: (uid: string) => Promise<void>;
   
   executeTransaction: (
     type: Transaction['type'],
@@ -122,7 +123,62 @@ export const useWalletStore = create<WalletState>()(
       
       // ═══════════════════════════════════════════════════════
       // ═══════════════════════════════════════════════════════
-      // INITIALIZE WALLET (Idempotent + Resilient Fallback)
+      // SYNC TRANSACTIONS (Background Non-Blocking)
+      // ═══════════════════════════════════════════════════════
+      syncTransactions: async (uid: string) => {
+        try {
+          console.log('[SecureChain: BackgroundSync] Syncing blockchain transactions...');
+          const txsRef = collection(db, 'users', uid, 'transactions');
+          const txsSnap = await getDocs(txsRef);
+          
+          if (txsSnap && !txsSnap.empty) {
+            const loadedTxs: Transaction[] = [];
+            txsSnap.forEach((d: any) => {
+              loadedTxs.push(d.data() as Transaction);
+            });
+            loadedTxs.sort((a: Transaction, b: Transaction) => b.blockNumber - a.blockNumber);
+            console.log(`[SecureChain: BackgroundSync] ✓ Loaded ${loadedTxs.length} transaction(s)`);
+            set({ transactions: loadedTxs });
+          } else {
+            // Check if genesis block is needed
+            const state = get();
+            if (state.publicKey && state.address) {
+              const genesisTimeISO = new Date().toISOString();
+              const payloadToHash = `00SystemSystem0${genesisTimeISO}genesis`;
+              const genesisHash = await generateHash(payloadToHash);
+              const genesisTxId = `tx_genesis_${uid}`;
+              
+              const genesisBlock: Transaction = {
+                id: genesisTxId,
+                blockNumber: 0,
+                hash: genesisHash,
+                previousHash: '0',
+                walletAddress: uid,
+                senderPublicKey: state.publicKey,
+                digitalSignature: 'Genesis Block - System Generated',
+                type: 'genesis',
+                amount: 0,
+                currency: 'USD',
+                status: 'completed',
+                date: genesisTimeISO,
+                description: 'System Genesis Block Initialization',
+                payload: { message: 'SecureChain Genesis Block Created' },
+                difficulty: 1,
+                nonce: 0,
+                blockSize: 256,
+              };
+              
+              setDoc(doc(db, 'users', uid, 'transactions', genesisTxId), genesisBlock).catch(console.warn);
+              set({ transactions: [genesisBlock] });
+            }
+          }
+        } catch (txErr) {
+          console.warn('[SecureChain: BackgroundSync] Non-fatal transaction sync warning:', txErr);
+        }
+      },
+
+      // ═══════════════════════════════════════════════════════
+      // INITIALIZE WALLET (Critical State First, Fast Unlock)
       // ═══════════════════════════════════════════════════════
       initializeWallet: async (uid: string) => {
         // IDEMPOTENCY: If already running, wait for the existing promise
@@ -133,26 +189,16 @@ export const useWalletStore = create<WalletState>()(
         }
 
         initPromise = (async () => {
-          console.log(`[SecureChain: Init] ▶ Wallet initialization started for UID: ${uid}`);
+          console.log(`[SecureChain: Init] ▶ Critical wallet initialization started for UID: ${uid}`);
           
-          const timeoutPromise = <T>(p: Promise<T>, ms: number, fallbackVal: T): Promise<T> => {
-            return Promise.race([
-              p,
-              new Promise<T>((resolve) => setTimeout(() => {
-                console.warn(`[SecureChain: Init] Operation timed out after ${ms}ms, using fallback.`);
-                resolve(fallbackVal);
-              }, ms))
-            ]);
-          };
-
           try {
             const clientSecret = getClientSecret(uid);
             const walletRef = doc(db, 'users', uid, 'wallet', 'data');
             
-            // Try fetching from Firestore with a 4s timeout
+            // Critical Read: Fetch primary wallet record
             let walletSnap: any = null;
             try {
-              walletSnap = await timeoutPromise(getDoc(walletRef), 4000, null);
+              walletSnap = await getDoc(walletRef);
             } catch (err) {
               console.warn('[SecureChain: Init] Firestore read error (using fallback):', err);
               walletSnap = null;
@@ -162,7 +208,7 @@ export const useWalletStore = create<WalletState>()(
             console.log(`[SecureChain: Init] Firestore wallet doc exists: ${exists}`);
             
             if (exists) {
-              // ─── EXISTING WALLET: Validate + Self-Heal ───
+              // ─── EXISTING WALLET: Validate + Apply Critical State ───
               const data = walletSnap.data();
               let finalData = { ...data };
               let needsHealing = false;
@@ -231,50 +277,9 @@ export const useWalletStore = create<WalletState>()(
                 createAuditLog(uid, 'Wallet self-healing: missing or invalid fields repaired', repairedFields, 'SUCCESS');
               }
               
-              // ─── Ensure Genesis Block Exists ───
-              try {
-                const genesisQ = query(collection(db, 'users', uid, 'transactions'), where('type', '==', 'genesis'));
-                const genesisSnap = await timeoutPromise(getDocs(genesisQ), 3000, { empty: true, docs: [] } as any);
-                
-                if (genesisSnap.empty) {
-                  console.warn('[SecureChain: Self-Healing] Genesis block missing. Creating...');
-                  const genesisTimeISO = new Date().toISOString();
-                  const payloadToHash = `00SystemSystem0${genesisTimeISO}genesis`;
-                  const genesisHash = await generateHash(payloadToHash);
-                  const genesisTxId = `tx_genesis_${uid}`;
-                  
-                  const genesisBlock: Transaction = {
-                    id: genesisTxId,
-                    blockNumber: 0,
-                    hash: genesisHash,
-                    previousHash: '0',
-                    walletAddress: uid,
-                    senderPublicKey: finalData.publicKey,
-                    digitalSignature: 'Genesis Block - System Generated',
-                    type: 'genesis',
-                    amount: 0,
-                    currency: 'USD',
-                    status: 'completed',
-                    date: genesisTimeISO,
-                    description: 'System Genesis Block Initialization',
-                    payload: { message: 'SecureChain Genesis Block Created' },
-                    difficulty: 1,
-                    nonce: 0,
-                    blockSize: 256,
-                  };
-                  
-                  setDoc(doc(db, 'users', uid, 'transactions', genesisTxId), genesisBlock).catch(console.warn);
-                  finalData.lastBlockHash = genesisHash;
-                  finalData.lastBlockNumber = 0;
-                  setDoc(walletRef, { lastBlockHash: genesisHash, lastBlockNumber: 0 }, { merge: true }).catch(console.warn);
-                  createAuditLog(uid, 'Genesis block was missing — created automatically', ['genesisBlock', 'lastBlockHash'], 'SUCCESS');
-                }
-              } catch (genErr) {
-                console.warn('[SecureChain: Init] Genesis check warning (non-fatal):', genErr);
-              }
-
-              console.log(`[SecureChain: Init] ✓ Wallet loaded from Firestore`);
+              console.log(`[SecureChain: Init] ✓ Critical wallet state verified`);
               
+              // Set critical state and unlock UI immediately
               set({ 
                 address: finalData.address,
                 publicKey: finalData.publicKey,
@@ -286,11 +291,16 @@ export const useWalletStore = create<WalletState>()(
                 balances: finalData.balances || { USD: 0, BTC: 0, ETH: 0 },
                 lastBlockNumber: typeof finalData.lastBlockNumber === 'number' ? finalData.lastBlockNumber : 0,
                 lastBlockHash: finalData.lastBlockHash || null,
+                _hasHydrated: true,
+                _isWalletReady: true
               });
+
+              // Kick off non-critical transaction metadata synchronization in the background
+              get().syncTransactions(uid);
               
             } else {
-              // ─── NEW WALLET / EXISTING ACCOUNT MIGRATION ───
-              console.log('[SecureChain: Init] Generating fresh or migrated wallet...');
+              // ─── NEW WALLET / FIRST TIME CREATION ───
+              console.log('[SecureChain: Init] Generating fresh non-custodial wallet...');
               
               const newWallet = ethers.Wallet.createRandom();
               const generatedAt = new Date().toISOString();
@@ -334,52 +344,34 @@ export const useWalletStore = create<WalletState>()(
                 lastBlockHash: genesisHash,
               };
 
-              // Resilient batch/parallel write so offline & multi-tab persistence works cleanly
-              try {
-                const newTxRef = doc(db, 'users', uid, 'transactions', genesisTxId);
-                await Promise.all([
-                  setDoc(newTxRef, genesisBlock),
-                  setDoc(walletRef, initData)
-                ]);
-                console.log('[SecureChain: Init] ✓ Wallet & Genesis block saved to Firestore');
-              } catch (fsWriteErr) {
-                console.warn('[SecureChain: Init] Firestore write warning (proceeding with local state):', fsWriteErr);
-              }
+              // Resilient batch/parallel write
+              const newTxRef = doc(db, 'users', uid, 'transactions', genesisTxId);
+              Promise.all([
+                setDoc(newTxRef, genesisBlock),
+                setDoc(walletRef, initData)
+              ]).catch(fsWriteErr => {
+                console.warn('[SecureChain: Init] Firestore write warning:', fsWriteErr);
+              });
               
-              createAuditLog(uid, 'New wallet created (fresh account or account migration)', [
+              createAuditLog(uid, 'New wallet created', [
                 'address', 'publicKey', 'encryptedPrivateKey', 'keyGeneratedAt',
                 'algorithm', 'walletVersion', 'keyFingerprint', 'genesisBlock'
               ], 'SUCCESS');
               
-              set({ ...initData, lastBlockHash: genesisHash });
+              // Set critical state and unlock UI immediately
+              set({ 
+                ...initData, 
+                lastBlockHash: genesisHash,
+                transactions: [genesisBlock],
+                _hasHydrated: true, 
+                _isWalletReady: true 
+              });
             }
             
-            // ─── LOAD TRANSACTIONS ───
-            try {
-              console.log('[SecureChain: Init] Loading transactions from Firestore...');
-              const txsRef = collection(db, 'users', uid, 'transactions');
-              const txsSnap = await timeoutPromise(getDocs(txsRef), 3000, null);
-              
-              if (txsSnap && txsSnap.docs) {
-                const loadedTxs: Transaction[] = [];
-                txsSnap.forEach((d: any) => {
-                  loadedTxs.push(d.data() as Transaction);
-                });
-                loadedTxs.sort((a: Transaction, b: Transaction) => b.blockNumber - a.blockNumber);
-                console.log(`[SecureChain: Init] ✓ Loaded ${loadedTxs.length} transaction(s)`);
-                set({ transactions: loadedTxs });
-              }
-            } catch (txErr) {
-              console.warn('[SecureChain: Init] Failed to load transactions, using cached store:', txErr);
-            }
-            
-            // ─── MARK WALLET READY ───
-            set({ _hasHydrated: true, _isWalletReady: true });
-            console.log('[SecureChain: Init] ✓ Wallet hydration complete. _isWalletReady = true');
+            console.log('[SecureChain: Init] ✓ Critical wallet hydration complete. _isWalletReady = true');
             
           } catch (error) {
             console.error("[SecureChain: Init] Handled error in wallet init:", error);
-            // Fallback: If anything failed, mark ready if we have valid state or generate emergency state
             const currentState = get();
             if (isValidString(currentState.address) && isValidString(currentState.encryptedPrivateKey)) {
               set({ _hasHydrated: true, _isWalletReady: true });
