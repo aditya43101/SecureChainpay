@@ -90,6 +90,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     const initialWidth = container.clientWidth > 0 ? container.clientWidth : 800;
 
     const chart = createChart(container, {
+      autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#A3A3A3',
@@ -98,13 +99,11 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
         vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
         horzLines: { color: 'rgba(255, 255, 255, 0.04)' },
       },
-      width: initialWidth,
-      height: height,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 6,
-        barSpacing: 8,
+        barSpacing: 10,
         minBarSpacing: 3,
       }
     });
@@ -127,7 +126,12 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     // If candles already exist in state, populate them immediately
     if (candles.length > 0) {
       series.setData(candles);
-      chart.timeScale().fitContent();
+      setTimeout(() => {
+        chart.timeScale().fitContent();
+      }, 50);
+      setTimeout(() => {
+        chart.timeScale().fitContent();
+      }, 250);
     }
 
     // Use ResizeObserver for responsive resizing
@@ -136,6 +140,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       const { width } = entries[0].contentRect;
       if (width > 0) {
         chartRef.current.applyOptions({ width });
+        chartRef.current.timeScale().fitContent();
       }
     });
 
@@ -144,6 +149,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     const handleWindowResize = () => {
       if (container && chartRef.current && container.clientWidth > 0) {
         chartRef.current.applyOptions({ width: container.clientWidth });
+        chartRef.current.timeScale().fitContent();
       }
     };
     window.addEventListener('resize', handleWindowResize);
@@ -164,7 +170,9 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     if (seriesRef.current && candles.length > 0) {
       seriesRef.current.setData(candles);
       lastCandleRef.current = { ...candles[candles.length - 1] };
-      chartRef.current?.timeScale().fitContent();
+      setTimeout(() => {
+        chartRef.current?.timeScale().fitContent();
+      }, 50);
     }
   }, [candles]);
 
