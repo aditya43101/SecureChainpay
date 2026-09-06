@@ -19,26 +19,31 @@ export async function POST(request: Request) {
     // Resolve or fallback user
     let userId = explicitUserId;
     if (!userId) {
-      let user = await db.user.findFirst({
-        include: { wallets: true },
-      });
-      if (!user) {
-        user = await db.user.create({
-          data: {
-            email: 'demo@securechain.pay',
-            firstName: 'Aditya',
-            lastName: 'Singh',
-            wallets: {
-              create: [
-                { address: '0x71C8363837F881234567890abcdef1234567890a', balance: 5000.0, currency: 'USD' },
-                { address: '0x71C8363837F881234567890abcdef1234567890b', balance: 10000.0, currency: 'HSCT' },
-              ],
-            },
-          },
+      try {
+        let user = await db.user.findFirst({
           include: { wallets: true },
         });
+        if (!user) {
+          user = await db.user.create({
+            data: {
+              email: 'demo@securechain.pay',
+              firstName: 'Aditya',
+              lastName: 'Singh',
+              wallets: {
+                create: [
+                  { address: '0x71C8363837F881234567890abcdef1234567890a', balance: 5000.0, currency: 'USD' },
+                  { address: '0x71C8363837F881234567890abcdef1234567890b', balance: 10000.0, currency: 'HSCT' },
+                ],
+              },
+            },
+            include: { wallets: true },
+          });
+        }
+        if (user) userId = user.id;
+      } catch (dbErr) {
+        console.warn('[Copilot API] Prisma DB unreachable, using fallback demo user ID:', dbErr);
+        userId = 'demo-user-id';
       }
-      userId = user.id;
     }
 
     const response = await PaymentCopilot.handleMessage({
