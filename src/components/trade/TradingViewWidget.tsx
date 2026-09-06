@@ -26,8 +26,16 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
   const updateTradingContext = useAIStore(s => s.updateTradingContext);
   const latestKlineData = useWalletStore(s => s.latestKlineData);
 
-  const formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
-  const cleanSymbol = symbol.replace('USDT', '').toUpperCase();
+  const rawClean = symbol ? symbol.toUpperCase().replace(/[\/\-_]/g, '') : 'BTC';
+  let formattedSymbol = rawClean;
+  if (rawClean.endsWith('USDT')) {
+    formattedSymbol = rawClean;
+  } else if (rawClean.endsWith('USD')) {
+    formattedSymbol = rawClean.replace(/USD$/, 'USDT');
+  } else {
+    formattedSymbol = `${rawClean}USDT`;
+  }
+  const cleanSymbol = formattedSymbol.replace('USDT', '');
   const assetKey = cleanSymbol === 'BTC' ? 'BTC' : (cleanSymbol === 'ETH' ? 'ETH' : cleanSymbol);
 
   useEffect(() => {
