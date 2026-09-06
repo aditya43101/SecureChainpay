@@ -92,6 +92,52 @@ Aap bataiye — trading setup chahiye, market analysis, ya SecureChain wallet ke
 How can I help you today? Whether it's market analysis, a trade setup, technical indicators, or SecureChain wallet questions — I'm ready!`;
   }
 
+  // 2a. LLM / MODEL / TECH STACK QUESTIONS
+  if (
+    lower.includes('konsa llm') || lower.includes('kaunsa llm') || lower.includes('which llm') ||
+    lower.includes('konsa model') || lower.includes('kaunsa model') || lower.includes('which model') ||
+    lower.includes('konsa ai') || lower.includes('which ai') ||
+    lower.includes('llm use') || lower.includes('model use') ||
+    lower.includes('kis llm') || lower.includes('kya llm') ||
+    (lower.includes('gemini') && (lower.includes('use') || lower.includes('kya') || lower.includes('konsa')))
+  ) {
+    if (isHindi) {
+      return `Main **Google Gemini API** pe chalta hoon! 🤖
+
+Jab Gemini available hota hai, main live AI responses deta hoon. Agar API key set nahi hai ya request fail ho jaaye, toh main apne built-in trading knowledge engine se answer karta hoon.
+
+**Tech stack:**
+- 🧠 **LLM:** Google Gemini 2.0 Flash (primary)
+- ⚡ **Fallback:** Built-in SecureChain intelligent engine
+- 🔐 **Platform:** Next.js + Vercel`;
+    }
+    return `I run on the **Google Gemini API**! 🤖
+
+When the Gemini API is available, I generate live AI responses. If unavailable, I fall back to my built-in SecureChain trading knowledge engine.
+
+**Tech stack:**
+- 🧠 **LLM:** Google Gemini 2.0 Flash (primary)
+- ⚡ **Fallback:** Built-in SecureChain intelligent engine
+- 🔐 **Platform:** Next.js + Vercel`;
+  }
+
+  // 2b. PERSONAL QUESTIONS ("mera naam batao", "mujhe jaanta ho", "meri age")
+  if (
+    lower.includes('mera naam') || lower.includes('meri age') || lower.includes('mujhe jaanta') ||
+    lower.includes('my name') || lower.includes('do you know me') || lower.includes('who am i') ||
+    lower.includes('naam batao') || lower.includes('kaun hoon') || lower.includes('meri info') ||
+    lower.includes('meri detail')
+  ) {
+    if (isHindi) {
+      return `Bhai, mujhe aapka naam nahi pata — main sirf AI hoon aur aapki personal info mere paas nahi hai! 😄
+
+Aap khud batao toh sahi, main aapko naam se baat kar sakta hoon. Waise, trading ya market ke baare mein kuch poochna hai?`;
+    }
+    return `I don't have access to your personal information — I'm just an AI! 😄
+
+Feel free to tell me your name and I'll use it. Is there anything about trading, markets, or SecureChain I can help you with?`;
+  }
+
   // 2. IDENTITY / ABOUT ("who are you", "tum kaun ho", "kya kar sakte ho")
   if (lower.includes('who are you') || lower.includes('tum kaun') || lower.includes('aap kaun') || lower.includes('kya kar sakte') || lower.includes('what can you do')) {
     if (isHindi) {
@@ -421,8 +467,18 @@ How can I help you today? Whether it's market analysis, a trade setup, technical
   }
 
   // 10. OPEN-ENDED CASUAL / CONVERSATIONAL FALLBACK
-  // Detect if it looks like casual conversation (short, no financial keyword)
-  const isCasualChat = cleanMsg.split(' ').length <= 6 && !lower.includes('price') && !lower.includes('coin') && !lower.includes('crypto') && !lower.includes('trade') && !lower.includes('market') && !lower.includes('wallet') && !lower.includes('btc') && !lower.includes('eth');
+  // Only trigger for truly casual short messages — NOT for actual questions/requests
+  const hasQuestionIntent = lower.includes('batao') || lower.includes('konsa') || lower.includes('kaunsa') ||
+    lower.includes('naam') || lower.includes('kaun') || lower.includes('kab') || lower.includes('kyun') ||
+    lower.includes('kyunki') || lower.includes('kaise') || lower.includes('kya') || lower.includes('what') ||
+    lower.includes('how') || lower.includes('why') || lower.includes('when') || lower.includes('which') ||
+    lower.includes('who') || lower.includes('where') || lower.includes('tell me') || lower.includes('explain');
+
+  const isCasualChat = cleanMsg.split(' ').length <= 6 &&
+    !hasQuestionIntent &&
+    !lower.includes('price') && !lower.includes('coin') && !lower.includes('crypto') &&
+    !lower.includes('trade') && !lower.includes('market') && !lower.includes('wallet') &&
+    !lower.includes('btc') && !lower.includes('eth');
 
   if (isCasualChat) {
     if (isHindi) {
