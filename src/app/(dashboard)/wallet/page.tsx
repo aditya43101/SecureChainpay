@@ -46,80 +46,83 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans">
-      <div className="max-w-5xl mx-auto space-y-10">
+    <div className="min-h-screen bg-black text-white p-4 sm:p-6 md:p-12 font-sans pb-28 md:pb-12">
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-10">
         
         {/* Header */}
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 mb-2">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 mb-1 sm:mb-2">
             My Wallet
           </h1>
-          <p className="text-gray-400">Manage your SecureChain Pay assets and quick actions in HSCT.</p>
+          <p className="text-gray-400 text-sm sm:text-base">Manage your SecureChain Pay assets and quick actions in HSCT.</p>
         </div>
 
         {/* Balance Card */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-gray-900 to-black border border-gray-800/80 p-8 md:p-12 shadow-2xl">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-gray-900 to-black border border-gray-800/80 p-6 sm:p-8 md:p-12 shadow-2xl">
           <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
              <svg className="w-64 h-64" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.64-2.25 1.64-1.74 0-2.23-.97-2.33-1.84h-1.7c.1 1.74 1.25 2.92 2.93 3.3V19h2.33v-1.6c1.61-.31 2.89-1.35 2.89-2.99 0-2.35-1.99-2.85-3.74-3.27z"/>
             </svg>
           </div>
           
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-8">
-            <div className="space-y-2">
-              <span className="text-gray-400 font-medium tracking-wide uppercase text-sm">Available Balance</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-black tracking-tight text-white">{(balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span className="text-2xl text-gray-400 font-bold ml-1">HSCT</span>
+          <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 sm:gap-8">
+            <div className="space-y-2 min-w-0">
+              <span className="text-gray-400 font-medium tracking-wide uppercase text-xs sm:text-sm">Available Balance</span>
+              <div className="flex items-baseline flex-wrap gap-1">
+                <span className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-white break-all">
+                  {(balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-xl sm:text-2xl text-gray-400 font-bold ml-1">HSCT</span>
               </div>
-              <div className="inline-flex items-center gap-2 mt-4 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-sm font-medium">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+              <div className="inline-flex items-center gap-2 mt-2 sm:mt-4 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs sm:text-sm font-medium">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                 Casino Tokens - Fixed Supply
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto items-end">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full md:w-auto items-stretch sm:items-end">
               
               {!showDepositInput ? (
                 <button 
                   onClick={() => setShowDepositInput(true)} 
-                  className="flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-black rounded-xl font-bold transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] w-full md:w-auto"
+                  className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 bg-white hover:bg-gray-100 text-black rounded-xl font-bold transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] w-full sm:w-auto min-h-[44px]"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                   Deposit HSCT
                 </button>
               ) : (
                 <div className="flex flex-col gap-2 w-full md:w-auto">
-                  <div className="flex bg-black/40 border border-white/20 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-within:border-emerald-500/50 transition-colors">
+                  <div className="flex bg-black/40 border border-white/20 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-within:border-emerald-500/50 transition-colors w-full sm:w-auto">
                     <input 
                       type="text" 
                       value={depositAmount}
                       onChange={(e) => setDepositAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                       placeholder="HSCT Amount" 
-                      className="bg-transparent border-none focus:outline-none focus:ring-0 text-white font-semibold py-4 px-4 w-40"
+                      className="bg-transparent border-none focus:outline-none focus:ring-0 text-white font-semibold py-3 sm:py-4 px-3 sm:px-4 w-full sm:w-40 text-sm"
                       disabled={isDepositing}
                       autoFocus
                     />
                     <button 
                       onClick={handleSimulateDeposit}
                       disabled={isDepositing || !depositAmount}
-                      className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-400 text-white font-bold px-6 py-4 transition-colors"
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-400 text-white font-bold px-4 sm:px-6 py-3 sm:py-4 transition-colors text-sm min-h-[44px]"
                     >
                       {isDepositing ? <span className="w-5 h-5 block border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Confirm'}
                     </button>
                     <button 
                       onClick={() => { setShowDepositInput(false); setError(null); setDepositAmount(''); }}
                       disabled={isDepositing}
-                      className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 text-white font-bold px-4 py-4 transition-colors"
+                      className="bg-red-600 hover:bg-red-500 disabled:bg-gray-700 text-white font-bold px-3 sm:px-4 py-3 sm:py-4 transition-colors min-h-[44px]"
+                      aria-label="Cancel deposit"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
-                  {error && <span className="text-red-400 text-sm font-medium animate-in fade-in">{error}</span>}
+                  {error && <span className="text-red-400 text-xs sm:text-sm font-medium animate-in fade-in">{error}</span>}
                 </div>
               )}
-              <Link href="/trade" className="flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all duration-300 shadow-lg w-full md:w-auto">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+              <Link href="/trade" className="flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 sm:py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all duration-300 shadow-lg w-full sm:w-auto min-h-[44px]">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                 Trade Crypto
               </Link>
               

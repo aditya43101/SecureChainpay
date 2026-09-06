@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { ExecutionSafetyEngine, PreTradeValidationResult } from './execution-safety';
 import { SimulatedExchangeAdapter, ExecutionResult } from './exchange-adapter';
 import { RecommendationObject } from './recommendation-engine';
+import { tradingFallbackStore } from './trading-fallback-store';
 
 export interface AutoTradeExecutionSummary {
   executed: boolean;
@@ -34,9 +35,18 @@ export class ExecutionEngine {
     }
 
     // 2. Retrieve User Auto-Trading Settings
-    const settings = await prisma.autoTradingSettings.findUnique({
-      where: { userId }
-    });
+    let settings: any = null;
+    try {
+      settings = await prisma.autoTradingSettings.findUnique({
+        where: { userId }
+      });
+    } catch {
+      settings = tradingFallbackStore.getSettings(userId);
+    }
+
+    if (!settings) {
+      settings = tradingFallbackStore.getSettings(userId);
+    }
 
     if (!settings || !settings.enabled || settings.status !== 'ENABLED') {
       return {
@@ -60,11 +70,11 @@ export class ExecutionEngine {
       requestedPrice: entryPrice,
       stopLoss: recommendation.stopLoss,
       takeProfit: recommendation.takeProfit,
-      strategyVersion: settings.strategyVersion,
-      modelVersion: recModelVersion || settings.modelVersion,
+      strategyVersion: settings.strategyVersion || 'HYBRID_v1',
+      modelVersion: recModelVersion || settings.modelVersion || 'LOG_v1',
       signalId: recommendation.id || `${symbol}_${Date.now()}`,
       idempotencyKey: validation.idempotencyKey,
-      maxSlippage: settings.maxSlippage
+      maxSlippage: settings.maxSlippage || 0.005
     };
 
     // 4. Submit Order via Exchange Adapter
@@ -82,14 +92,23 @@ export class ExecutionEngine {
     }
 
     if (!orderResult.success) {
-      await prisma.safetyEvent.create({
-        data: {
+      try {
+        await prisma.safetyEvent.create({
+          data: {
+            userId,
+            eventType: 'RECONCILIATION_MISMATCH',
+            severity: 'WARNING',
+            details: `Order submission returned failure: ${orderResult.reason || 'Unknown execution error'}`
+          }
+        });
+      } catch {
+        tradingFallbackStore.addSafetyEvent({
           userId,
           eventType: 'RECONCILIATION_MISMATCH',
           severity: 'WARNING',
           details: `Order submission returned failure: ${orderResult.reason || 'Unknown execution error'}`
-        }
-      });
+        });
+      }
 
       return {
         executed: false,
@@ -100,19 +119,23 @@ export class ExecutionEngine {
     }
 
     // 5. Create Trading Journal Entry for Audit
-    await prisma.tradingJournalEntry.create({
-      data: {
-        userId,
-        symbol,
-        strategy: settings.strategyVersion,
-        side: recommendation.action === 'BUY' ? 'LONG' : 'SHORT',
-        entryPrice: orderResult.executedPrice,
-        exitPrice: 0,
-        pnl: 0,
-        pnlPercentage: 0,
-        exitReason: 'OPEN_POSITION'
-      }
-    });
+    const journalData = {
+      userId,
+      symbol,
+      strategy: settings.strategyVersion || 'HYBRID_v1',
+      side: recommendation.action === 'BUY' ? 'LONG' : 'SHORT',
+      entryPrice: orderResult.executedPrice,
+      exitPrice: 0,
+      pnl: 0,
+      pnlPercentage: 0,
+      exitReason: 'OPEN_POSITION'
+    };
+
+    try {
+      await prisma.tradingJournalEntry.create({ data: journalData });
+    } catch {
+      tradingFallbackStore.addJournalEntry(journalData);
+    }
 
     return {
       executed: true,
@@ -126,12 +149,17 @@ export class ExecutionEngine {
    * Monitor and reconcile active positions against stop-loss and take-profit targets.
    */
   static async monitorPositionsAndExits(userId: string): Promise<{ closedPositionsCount: number }> {
-    const paperAccount = await prisma.paperAccount.findUnique({
-      where: { userId },
-      include: { positions: true }
-    });
+    let paperAccount: any = null;
+    try {
+      paperAccount = await prisma.paperAccount.findUnique({
+        where: { userId },
+        include: { positions: true }
+      });
+    } catch {
+      paperAccount = tradingFallbackStore.getPaperAccount(userId);
+    }
 
-    if (!paperAccount || paperAccount.positions.length === 0) {
+    if (!paperAccount || !paperAccount.positions || paperAccount.positions.length === 0) {
       return { closedPositionsCount: 0 };
     }
 
@@ -145,21 +173,21 @@ export class ExecutionEngine {
       let exitPrice = price;
 
       if (pos.side === 'LONG') {
-        if (price <= pos.stopLoss) {
+        if (pos.stopLoss && price <= pos.stopLoss) {
           shouldExit = true;
           exitReason = 'STOP_LOSS';
           exitPrice = pos.stopLoss;
-        } else if (price >= pos.takeProfit) {
+        } else if (pos.takeProfit && price >= pos.takeProfit) {
           shouldExit = true;
           exitReason = 'TAKE_PROFIT';
           exitPrice = pos.takeProfit;
         }
       } else if (pos.side === 'SHORT') {
-        if (price >= pos.stopLoss) {
+        if (pos.stopLoss && price >= pos.stopLoss) {
           shouldExit = true;
           exitReason = 'STOP_LOSS';
           exitPrice = pos.stopLoss;
-        } else if (price <= pos.takeProfit) {
+        } else if (pos.takeProfit && price <= pos.takeProfit) {
           shouldExit = true;
           exitReason = 'TAKE_PROFIT';
           exitPrice = pos.takeProfit;
@@ -174,22 +202,40 @@ export class ExecutionEngine {
 
         // Return capital to cash balance
         const returnedCash = paperAccount.cashBalance + (pos.quantity * exitPrice) + pnl;
-        await prisma.paperAccount.update({
-          where: { userId },
-          data: {
+
+        try {
+          await prisma.paperAccount.update({
+            where: { userId },
+            data: {
+              cashBalance: returnedCash,
+              realizedPnL: (paperAccount.realizedPnL || 0) + pnl
+            }
+          });
+
+          await prisma.paperPosition.delete({
+            where: { id: pos.id }
+          });
+
+          await prisma.tradingJournalEntry.create({
+            data: {
+              userId,
+              symbol: pos.symbol,
+              strategy: 'HYBRID_v1',
+              side: pos.side,
+              entryPrice: pos.averageEntry,
+              exitPrice,
+              pnl,
+              pnlPercentage: (pnl / (pos.averageEntry * pos.quantity)) * 100,
+              exitReason
+            }
+          });
+        } catch {
+          tradingFallbackStore.updatePaperAccount(userId, {
             cashBalance: returnedCash,
-            realizedPnL: paperAccount.realizedPnL + pnl
-          }
-        });
-
-        // Delete open position
-        await prisma.paperPosition.delete({
-          where: { id: pos.id }
-        });
-
-        // Log close trade in Journal
-        await prisma.tradingJournalEntry.create({
-          data: {
+            realizedPnL: (paperAccount.realizedPnL || 0) + pnl
+          });
+          tradingFallbackStore.removePosition(userId, pos.id);
+          tradingFallbackStore.addJournalEntry({
             userId,
             symbol: pos.symbol,
             strategy: 'HYBRID_v1',
@@ -199,44 +245,66 @@ export class ExecutionEngine {
             pnl,
             pnlPercentage: (pnl / (pos.averageEntry * pos.quantity)) * 100,
             exitReason
-          }
-        });
-
-        // Update Daily Risk State
-        const todayStr = new Date().toISOString().split('T')[0];
-        let dailyState = await prisma.dailyRiskState.findUnique({
-          where: { userId_date: { userId, date: todayStr } }
-        });
-
-        if (!dailyState) {
-          dailyState = await prisma.dailyRiskState.create({
-            data: {
-              userId,
-              date: todayStr,
-              startingBalance: paperAccount.equity
-            }
           });
         }
 
-        const newDailyPnL = dailyState.realizedPnL + pnl;
-        const isLossLimitHit = newDailyPnL < 0 && Math.abs(newDailyPnL) >= (dailyState.startingBalance * 0.03); // 3% max daily loss
+        // Update Daily Risk State
+        const todayStr = new Date().toISOString().split('T')[0];
+        let dailyState: any = null;
+        try {
+          dailyState = await prisma.dailyRiskState.findUnique({
+            where: { userId_date: { userId, date: todayStr } }
+          });
 
-        await prisma.dailyRiskState.update({
-          where: { id: dailyState.id },
-          data: {
-            realizedPnL: newDailyPnL,
-            totalTrades: dailyState.totalTrades + 1,
-            winningTrades: pnl > 0 ? dailyState.winningTrades + 1 : dailyState.winningTrades,
-            losingTrades: pnl < 0 ? dailyState.losingTrades + 1 : dailyState.losingTrades,
-            dailyLossLimitReached: isLossLimitHit
+          if (!dailyState) {
+            dailyState = await prisma.dailyRiskState.create({
+              data: {
+                userId,
+                date: todayStr,
+                startingBalance: paperAccount.equity || 100000
+              }
+            });
           }
-        });
 
-        if (isLossLimitHit) {
-          await ExecutionSafetyEngine.triggerCircuitBreaker(
-            userId,
-            `Daily loss limit of 3% reached (${newDailyPnL.toFixed(2)} USD). Auto-trading paused.`
-          );
+          const newDailyPnL = (dailyState.realizedPnL || 0) + pnl;
+          const isLossLimitHit = newDailyPnL < 0 && Math.abs(newDailyPnL) >= (dailyState.startingBalance * 0.03);
+
+          await prisma.dailyRiskState.update({
+            where: { id: dailyState.id },
+            data: {
+              realizedPnL: newDailyPnL,
+              totalTrades: dailyState.totalTrades + 1,
+              winningTrades: pnl > 0 ? dailyState.winningTrades + 1 : dailyState.winningTrades,
+              losingTrades: pnl < 0 ? dailyState.losingTrades + 1 : dailyState.losingTrades,
+              dailyLossLimitReached: isLossLimitHit
+            }
+          });
+
+          if (isLossLimitHit) {
+            await ExecutionSafetyEngine.triggerCircuitBreaker(
+              userId,
+              `Daily loss limit of 3% reached (${newDailyPnL.toFixed(2)} USD). Auto-trading paused.`
+            );
+          }
+        } catch {
+          const currentDaily = tradingFallbackStore.getDailyState(userId, todayStr);
+          const newDailyPnL = currentDaily.realizedPnL + pnl;
+          const isLossLimitHit = newDailyPnL < 0 && Math.abs(newDailyPnL) >= (currentDaily.startingBalance * 0.03);
+
+          tradingFallbackStore.updateDailyState(userId, todayStr, {
+            realizedPnL: newDailyPnL,
+            totalTrades: currentDaily.totalTrades + 1,
+            winningTrades: pnl > 0 ? currentDaily.winningTrades + 1 : currentDaily.winningTrades,
+            losingTrades: pnl < 0 ? currentDaily.losingTrades + 1 : currentDaily.losingTrades,
+            dailyLossLimitReached: isLossLimitHit
+          });
+
+          if (isLossLimitHit) {
+            await ExecutionSafetyEngine.triggerCircuitBreaker(
+              userId,
+              `Daily loss limit of 3% reached (${newDailyPnL.toFixed(2)} USD). Auto-trading paused.`
+            );
+          }
         }
 
         closedCount++;

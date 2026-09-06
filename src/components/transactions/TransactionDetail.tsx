@@ -470,12 +470,12 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
           )}
 
           {/* Action Buttons */}
-          <div className="space-y-2 pt-2">
-            <div className="flex gap-2">
+          <div className="space-y-2.5 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleVerifyIntegrity}
                 disabled={verifying}
-                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 min-h-[44px]"
               >
                 {verifying ? (
                   <>Verifying Integrity...</>
@@ -491,7 +491,7 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
 
               <button
                 onClick={handleExportProof}
-                className="py-3 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 border border-white/5"
+                className="py-3 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 border border-white/5 min-h-[44px]"
                 title="Export cryptographic proof report JSON"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -501,18 +501,18 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
               </button>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleRunReconciliation}
                 disabled={reconciling}
-                className="flex-1 py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
               >
                 {reconciling ? <>Reconciling...</> : <>Run Reconciliation</>}
               </button>
 
               <button 
                 onClick={onClose}
-                className="py-2.5 px-5 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-medium text-xs transition-colors"
+                className="py-2.5 px-5 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-medium text-xs transition-colors min-h-[44px]"
               >
                 Close
               </button>

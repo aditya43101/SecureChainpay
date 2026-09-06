@@ -41,7 +41,6 @@ export function QRScannerModal({ isOpen, onClose, onScanSuccess }: QRScannerModa
       const result = resolveRecipientFromQR(rawText);
       if (result.success && result.recipient) {
         stopCamera();
-        setScannedResult(result.recipient);
         setErrorMsg(null);
 
         // Haptic feedback if available
@@ -50,11 +49,15 @@ export function QRScannerModal({ isOpen, onClose, onScanSuccess }: QRScannerModa
             navigator.vibrate(100);
           } catch (e) {}
         }
+
+        // Instantly transition to transfer amount step without extra taps
+        onScanSuccess(result.recipient);
+        onClose();
       } else {
         setErrorMsg(result.error || 'Invalid QR code. Please scan a SecureChain Pay QR.');
       }
     },
-    [stopCamera]
+    [stopCamera, onScanSuccess, onClose]
   );
 
   // Scan frame-by-frame loop using Canvas + jsQR / BarcodeDetector

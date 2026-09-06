@@ -8,6 +8,7 @@ import { getAdminDb } from '@/lib/firebase/admin';
 import { ContextDomain } from './intent-classifier';
 import { convertHsctToUsd } from '@/lib/currency/currency-service';
 import { marketDataService } from '@/lib/market/market-data-service';
+import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 
 export interface LiveContextPayload {
   contextGeneratedAt: string;
@@ -107,19 +108,29 @@ export async function fetchLiveContextForDomains(
   // 3. TRADING, RISK & SAFETY CONTEXT
   if (domainSet.has('TRADING_CONTEXT') || domainSet.has('RISK_CONTEXT') || domainSet.has('SAFETY_CONTEXT')) {
     try {
-      const autoSettings = await prisma.autoTradingSettings.findUnique({
-        where: { userId }
-      });
+      let autoSettings: any = null;
+      let dailyRisk: any = null;
+      let paperAccount: any = null;
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const dailyRisk = await prisma.dailyRiskState.findUnique({
-        where: { userId_date: { userId, date: todayStr } }
-      });
+      try {
+        autoSettings = await prisma.autoTradingSettings.findUnique({
+          where: { userId }
+        });
 
-      const paperAccount = await prisma.paperAccount.findUnique({
-        where: { userId },
-        include: { positions: true }
-      });
+        const todayStr = new Date().toISOString().split('T')[0];
+        dailyRisk = await prisma.dailyRiskState.findUnique({
+          where: { userId_date: { userId, date: todayStr } }
+        });
+
+        paperAccount = await prisma.paperAccount.findUnique({
+          where: { userId },
+          include: { positions: true }
+        });
+      } catch {
+        autoSettings = tradingFallbackStore.getSettings(userId);
+        dailyRisk = tradingFallbackStore.getDailyState(userId);
+        paperAccount = tradingFallbackStore.getPaperAccount(userId);
+      }
 
       payload.tradingContext = {
         autoTradingEnabled: autoSettings?.enabled || false,

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['firebase-admin', 'jwks-rsa', 'jose'],
   reactStrictMode: true,
   allowedDevOrigins: ['172.20.164.130', '10.34.135.133'],
   images: {

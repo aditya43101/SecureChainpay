@@ -41,27 +41,30 @@ export function parseQRPayload(rawText: string): { isValid: boolean; payload: QR
 
   const trimmed = rawText.trim();
 
-  // 1. Structured URI format: securechainpay://pay?...
+  // 1. Structured URI format: securechainpay://pay?... or securechainpay://...
   if (trimmed.startsWith(SECURECHAIN_SCHEME) || trimmed.startsWith('securechainpay://')) {
     try {
-      const urlStr = trimmed.replace('securechainpay://pay', 'https://securechainpay.internal/pay');
+      const urlStr = trimmed.replace('securechainpay://pay', 'https://securechainpay.internal/pay').replace('securechainpay://', 'https://securechainpay.internal/');
       const url = new URL(urlStr);
-      const address = url.searchParams.get('address') || '';
+      const address = url.searchParams.get('address') || url.searchParams.get('wallet') || url.searchParams.get('to') || '';
       const uid = url.searchParams.get('uid') || undefined;
       const username = url.searchParams.get('username') || undefined;
-      const displayName = url.searchParams.get('displayName') || undefined;
-      const amountStr = url.searchParams.get('amount');
+      const displayName = url.searchParams.get('displayName') || url.searchParams.get('name') || undefined;
+      const amountStr = url.searchParams.get('amount') || url.searchParams.get('value');
       const amount = amountStr ? Number(amountStr) : undefined;
-      const currency = url.searchParams.get('currency') || undefined;
+      const currency = url.searchParams.get('currency') || 'HSCT';
 
-      if (!address || !address.startsWith('0x') || address.length < 10) {
+      const hexMatch = address.match(/0x[a-fA-F0-9]{40}/i) || trimmed.match(/0x[a-fA-F0-9]{40}/i);
+      const resolvedAddress = hexMatch ? hexMatch[0] : address;
+
+      if (!resolvedAddress || !resolvedAddress.startsWith('0x') || resolvedAddress.length < 10) {
         return { isValid: false, payload: null, error: 'QR URI contains an invalid wallet address.' };
       }
 
       return {
         isValid: true,
         payload: {
-          address,
+          address: resolvedAddress,
           uid,
           username,
           displayName,
@@ -70,7 +73,7 @@ export function parseQRPayload(rawText: string): { isValid: boolean; payload: QR
         },
       };
     } catch (err) {
-      return { isValid: false, payload: null, error: 'Malformed SecureChain Pay QR URI.' };
+      // Fall through
     }
   }
 
@@ -78,17 +81,18 @@ export function parseQRPayload(rawText: string): { isValid: boolean; payload: QR
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     try {
       const json = JSON.parse(trimmed);
-      const address = json.address || json.walletAddress || json.wallet;
-      if (address && typeof address === 'string' && address.startsWith('0x') && address.length >= 10) {
+      const address = json.address || json.walletAddress || json.wallet || json.to;
+      const hexMatch = typeof address === 'string' ? (address.match(/0x[a-fA-F0-9]{40}/i) || [address])[0] : null;
+      if (hexMatch && hexMatch.startsWith('0x') && hexMatch.length >= 10) {
         return {
           isValid: true,
           payload: {
-            address,
+            address: hexMatch,
             uid: json.uid || json.userId,
             username: json.username,
             displayName: json.displayName || json.name,
             amount: json.amount ? Number(json.amount) : undefined,
-            currency: json.currency,
+            currency: json.currency || 'HSCT',
           },
         };
       }
@@ -97,13 +101,49 @@ export function parseQRPayload(rawText: string): { isValid: boolean; payload: QR
     }
   }
 
-  // 3. Raw Ethereum 0x Wallet Address format
-  const rawAddressMatch = trimmed.match(/0x[a-fA-F0-9]{40}/);
+  // 3. Ethereum URI (e.g. ethereum:0x1234...?value=1) or Web URL
+  if (trimmed.toLowerCase().startsWith('ethereum:') || trimmed.toLowerCase().startsWith('web3:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const hexMatch = trimmed.match(/0x[a-fA-F0-9]{40}/i);
+      if (hexMatch) {
+        let amount: number | undefined;
+        let currency: string | undefined = 'HSCT';
+        let username: string | undefined;
+        let displayName: string | undefined;
+
+        if (trimmed.includes('?')) {
+          const params = new URLSearchParams(trimmed.split('?')[1]);
+          if (params.get('amount')) amount = Number(params.get('amount'));
+          if (params.get('value')) amount = Number(params.get('value'));
+          if (params.get('currency')) currency = params.get('currency') || 'HSCT';
+          if (params.get('username')) username = params.get('username') || undefined;
+          if (params.get('displayName')) displayName = params.get('displayName') || undefined;
+        }
+
+        return {
+          isValid: true,
+          payload: {
+            address: hexMatch[0],
+            amount,
+            currency,
+            username,
+            displayName,
+          },
+        };
+      }
+    } catch (err) {
+      // Fallthrough
+    }
+  }
+
+  // 4. Raw Ethereum 0x Wallet Address format
+  const rawAddressMatch = trimmed.match(/0x[a-fA-F0-9]{40}/i);
   if (rawAddressMatch) {
     return {
       isValid: true,
       payload: {
         address: rawAddressMatch[0],
+        currency: 'HSCT',
       },
     };
   }
@@ -113,6 +153,7 @@ export function parseQRPayload(rawText: string): { isValid: boolean; payload: QR
       isValid: true,
       payload: {
         address: trimmed,
+        currency: 'HSCT',
       },
     };
   }

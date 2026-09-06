@@ -45,14 +45,14 @@ export default function DashboardPage() {
   }, [fetchPrices]);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0">
+    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0 px-2 sm:px-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">Overview</h1>
-          <p className="text-neutral-400 text-base">Welcome to your SecureChain Pay Dashboard.</p>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-1 sm:mb-2">Overview</h1>
+          <p className="text-neutral-400 text-sm sm:text-base">Welcome to your SecureChain Pay Dashboard.</p>
         </div>
-        <div className="flex items-center gap-2 text-sm bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-full border border-emerald-500/20 w-fit backdrop-blur-md shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+        <div className="flex items-center gap-2 text-xs sm:text-sm bg-emerald-500/10 text-emerald-400 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-emerald-500/20 w-fit backdrop-blur-md shadow-[0_0_15px_rgba(16,185,129,0.1)]">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -72,16 +72,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Markets Section */}
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white tracking-tight">Market Overview</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Market Overview</h2>
           <div className="flex items-center gap-2 text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-neutral-400 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Live Prices
           </div>
         </div>
 
-        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl p-6">
+        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl p-4 sm:p-6">
           {loadingMarkets ? (
             <div className="space-y-4 py-4">
               {[1, 2, 3, 4].map((n) => (
@@ -89,15 +89,15 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[600px]">
+            <div className="overflow-x-auto custom-scrollbar -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="w-full text-left border-collapse min-w-[540px]">
                 <thead>
-                  <tr className="border-b border-white/5 text-neutral-400 text-sm font-semibold pb-4">
-                    <th className="py-4 font-medium">Asset</th>
-                    <th className="py-4 font-medium">Price (HSCT)</th>
-                    <th className="py-4 font-medium">24h Change</th>
-                    <th className="py-4 font-medium">Market Cap (HSCT)</th>
-                    <th className="py-4 text-right font-medium">Action</th>
+                  <tr className="border-b border-white/5 text-neutral-400 text-xs sm:text-sm font-semibold pb-4">
+                    <th className="py-3 sm:py-4 font-medium">Asset</th>
+                    <th className="py-3 sm:py-4 font-medium">Price (HSCT)</th>
+                    <th className="py-3 sm:py-4 font-medium">24h Change</th>
+                    <th className="py-3 sm:py-4 font-medium">Market Cap</th>
+                    <th className="py-3 sm:py-4 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">

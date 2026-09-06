@@ -70,7 +70,11 @@ export default function TransferPage() {
   const [transferError, setTransferError] = useState<string | null>(null);
   const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
 
-  const availableBalanceHsct = Number(balances.USD || 0) * USD_TO_HSCT;
+  const availableBalanceHsct = Number(
+    (balances.HSCT && balances.HSCT > 0)
+      ? balances.HSCT
+      : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000)
+  );
   const numericAmount = Number(amount || 0);
 
   // ─── RECENT RECIPIENTS (from real transaction history) ───
@@ -108,6 +112,20 @@ export default function TransferPage() {
     return Array.from(recipientsMap.values()).slice(0, 6);
   }, [transactions, currentWalletAddress]);
 
+async function safeParseJson(res: Response): Promise<any> {
+  try {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.warn(`[safeParseJson] Endpoint returned non-JSON (${res.status})`);
+      return { success: false, error: res.ok ? 'Invalid JSON response' : `Server error (${res.status})` };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Request failed' };
+  }
+}
+
   // ─── DEBOUNCED USER SEARCH ───
   useEffect(() => {
     if (!searchQuery || searchQuery.trim().length < 2) {
@@ -124,57 +142,49 @@ export default function TransferPage() {
       try {
         const cleanQ = searchQuery.trim();
         const res = await fetch(`/api/users/search?q=${encodeURIComponent(cleanQ)}&currentUid=${ownerUid || ''}`);
-        const data = await res.json();
+        const data = await safeParseJson(res);
 
-        if (data.success) {
+        if (data && data.success) {
           setSearchResults(data.results || []);
           if (data.results?.length === 0) {
             setSearchError('No registered users found matching your query.');
           }
         } else {
-          setSearchError(data.error || 'Search query failed');
+          setSearchError(data?.error || 'Search query failed');
         }
       } catch (err: any) {
-        console.warn('Search error:', err);
-        setSearchError('Search service currently unavailable');
+        setSearchError(err.message || 'Error fetching user directory');
       } finally {
         setIsSearching(false);
       }
-    }, 350);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [searchQuery, ownerUid]);
 
   // ─── HANDLE SELECT RECIPIENT ───
   const handleSelectRecipient = (recipient: RecipientUser) => {
-    // Validate self-transfer
-    if (
-      (recipient.uid && recipient.uid === ownerUid) ||
-      recipient.walletAddress.toLowerCase() === currentWalletAddress?.toLowerCase()
-    ) {
-      setSearchError('You cannot send HSCT to your own wallet.');
-      return;
-    }
-
     setSelectedRecipient(recipient);
     setTransferError(null);
+    setSearchError(null);
     setStep('enter_amount');
   };
 
   // ─── HANDLE QR SCAN SUCCESS ───
   const handleQRSuccess = (resolved: ResolvedRecipient) => {
-    if (resolved.walletAddress.toLowerCase() === currentWalletAddress?.toLowerCase()) {
-      setTransferError('Scanned QR code belongs to your own wallet.');
-      return;
-    }
+    const isSelf = resolved.walletAddress.toLowerCase() === currentWalletAddress?.toLowerCase();
 
     setSelectedRecipient({
       uid: resolved.uid || '',
-      username: resolved.username || 'external',
-      displayName: resolved.displayName || abbreviateAddress(resolved.walletAddress),
+      username: resolved.username || (isSelf ? 'my_wallet' : 'external'),
+      displayName: resolved.displayName || (isSelf ? 'My Wallet (Self)' : abbreviateAddress(resolved.walletAddress)),
       walletAddress: resolved.walletAddress,
     });
+    if (resolved.amount && resolved.amount > 0) {
+      setAmount(resolved.amount.toString());
+    }
     setTransferError(null);
+    setSearchError(null);
     setStep('enter_amount');
   };
 
@@ -189,31 +199,25 @@ export default function TransferPage() {
       return;
     }
 
-    if (cleanAddr.toLowerCase() === currentWalletAddress?.toLowerCase()) {
-      setSearchError('You cannot send HSCT to your own wallet.');
-      return;
-    }
-
     setIsResolvingAddress(true);
     try {
       // Try resolving server-side first to see if this address belongs to a registered SecureChain user
       const res = await fetch(`/api/users/search?q=${encodeURIComponent(cleanAddr)}&currentUid=${ownerUid || ''}`);
-      const data = await res.json();
+      const data = await safeParseJson(res);
 
-      if (data.success && data.results && data.results.length > 0) {
+      if (data && data.success && data.results && data.results.length > 0) {
         const found = data.results[0];
         handleSelectRecipient(found);
       } else {
-        // Treat as external wallet
+        const isSelf = cleanAddr.toLowerCase() === currentWalletAddress?.toLowerCase();
         handleSelectRecipient({
           uid: '',
-          username: 'external',
-          displayName: `External Wallet (${abbreviateAddress(cleanAddr)})`,
+          username: isSelf ? 'my_wallet' : 'external',
+          displayName: isSelf ? 'My Wallet (Self)' : `External Wallet (${abbreviateAddress(cleanAddr)})`,
           walletAddress: cleanAddr,
         });
       }
-    } catch (err) {
-      // Fallback to external wallet
+    } catch {
       handleSelectRecipient({
         uid: '',
         username: 'external',
@@ -264,8 +268,8 @@ export default function TransferPage() {
         }),
       });
 
-      const data = await res.json();
-      if (data.success && data.assessment) {
+      const data = await safeParseJson(res);
+      if (data && data.success && data.assessment) {
         setRiskAssessment(data.assessment);
       }
     } catch (riskErr) {
@@ -284,14 +288,13 @@ export default function TransferPage() {
     setTransferError(null);
 
     try {
-      const amountUsd = numericAmount / USD_TO_HSCT;
       const resultTx = await transferFunds({
         receiverUid: selectedRecipient.uid || undefined,
         receiverAddress: selectedRecipient.walletAddress,
         receiverUsername: selectedRecipient.username !== 'external' ? selectedRecipient.username : undefined,
         receiverDisplayName: selectedRecipient.displayName,
-        amount: amountUsd,
-        currency: 'USD',
+        amount: numericAmount,
+        currency: 'HSCT',
         note: note.trim() || undefined,
       });
 
@@ -306,14 +309,14 @@ export default function TransferPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#070707] text-white p-6 md:p-12 font-sans flex flex-col items-center justify-center relative">
+    <div className="min-h-screen bg-[#070707] text-white p-4 sm:p-6 md:p-12 font-sans flex flex-col items-center justify-center relative pb-28 md:pb-12">
       <div className="w-full max-w-xl">
         
         {/* Navigation Breadcrumb */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6 sm:mb-8">
           <Link
             href="/wallet"
-            className="inline-flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-sm font-medium"
+            className="inline-flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs sm:text-sm font-medium min-h-[44px]"
           >
             <ArrowLeft size={18} />
             Back to Wallet
@@ -325,7 +328,7 @@ export default function TransferPage() {
           </div>
         </div>
 
-        <div className="bg-neutral-950/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="bg-neutral-950/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden">
           {/* Ambient Lighting */}
           <div className="absolute -top-32 -left-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -337,18 +340,18 @@ export default function TransferPage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold border border-indigo-500/20 mb-3">
                   <Sparkles size={13} /> Step 1 of 3: Recipient Selection
                 </div>
-                <h1 className="text-3xl font-extrabold text-white tracking-tight">Send Money</h1>
-                <p className="text-neutral-400 text-sm mt-1">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Send Money</h1>
+                <p className="text-neutral-400 text-xs sm:text-sm mt-1">
                   Choose a recipient using registered user search, camera QR scan, wallet address, or recent contacts.
                 </p>
               </div>
 
-              {/* 4 Selection Tabs */}
-              <div className="grid grid-cols-4 gap-1.5 p-1 bg-neutral-900 border border-white/10 rounded-2xl">
+              {/* 4 Selection Tabs - 2x2 on mobile, 4 in a row on sm+ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-neutral-900 border border-white/10 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => setRecipientTab('search')}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'search'
                       ? 'bg-indigo-600 text-white shadow-md'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
@@ -364,7 +367,7 @@ export default function TransferPage() {
                     setRecipientTab('qr');
                     setIsQRModalOpen(true);
                   }}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'qr'
                       ? 'bg-indigo-600 text-white shadow-md'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
@@ -377,7 +380,7 @@ export default function TransferPage() {
                 <button
                   type="button"
                   onClick={() => setRecipientTab('address')}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'address'
                       ? 'bg-indigo-600 text-white shadow-md'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
@@ -390,7 +393,7 @@ export default function TransferPage() {
                 <button
                   type="button"
                   onClick={() => setRecipientTab('recent')}
-                  className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'recent'
                       ? 'bg-indigo-600 text-white shadow-md'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
@@ -719,27 +722,27 @@ export default function TransferPage() {
               </div>
 
               {/* Recipient Details Highlight Box */}
-              <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 space-y-4 shadow-inner">
+              <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4 shadow-inner">
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Recipient</span>
                   <div className="text-right">
-                    <p className="font-extrabold text-white text-base">{selectedRecipient.displayName}</p>
+                    <p className="font-extrabold text-white text-sm sm:text-base">{selectedRecipient.displayName}</p>
                     {selectedRecipient.username && selectedRecipient.username !== 'external' && (
                       <p className="text-xs text-indigo-400 font-mono">@{selectedRecipient.username}</p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-3 gap-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Wallet Address</span>
-                  <p className="font-mono text-xs text-neutral-300 break-all max-w-[240px] text-right">
+                  <p className="font-mono text-xs text-neutral-300 break-all text-left sm:text-right max-w-full sm:max-w-[280px]">
                     {selectedRecipient.walletAddress}
                   </p>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-white/5 pb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Amount to Send</span>
-                  <p className="font-black text-2xl text-emerald-400">{numericAmount.toLocaleString()} HSCT</p>
+                  <p className="font-black text-xl sm:text-2xl text-emerald-400">{numericAmount.toLocaleString()} HSCT</p>
                 </div>
 
                 <div className="flex items-center justify-between border-b border-white/5 pb-3 text-xs">
@@ -775,21 +778,21 @@ export default function TransferPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   disabled={isSubmitting}
                   onClick={() => setStep('enter_amount')}
-                  className="w-1/3 py-6 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold"
+                  className="w-full sm:w-1/3 py-5 sm:py-6 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold min-h-[48px]"
                 >
-                  Cancel
+                  Back
                 </Button>
                 <Button
                   type="button"
                   disabled={isSubmitting}
                   onClick={handleConfirmAndSend}
-                  className="w-2/3 py-6 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-base rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.3)] disabled:opacity-50"
+                  className="w-full sm:w-2/3 py-5 sm:py-6 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-sm sm:text-base rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.3)] disabled:opacity-50 min-h-[48px]"
                 >
                   {isSubmitting ? (
                     <>

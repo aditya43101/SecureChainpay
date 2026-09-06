@@ -442,10 +442,10 @@ function LoginContent() {
   };
 
   return (
-    <div className="w-full relative animate-in fade-in zoom-in-95 duration-700 max-w-md mx-auto">
+    <div className="w-full relative animate-in fade-in zoom-in-95 duration-700 max-w-md mx-auto px-2 sm:px-0">
       
       {/* Premium Glass Card */}
-      <div className="backdrop-blur-2xl bg-white/[0.03] border border-white/10 p-8 sm:p-10 rounded-[2.5rem] shadow-[0_12px_40px_0_rgba(0,0,0,0.5)] relative overflow-hidden">
+      <div className="backdrop-blur-2xl bg-white/[0.03] border border-white/10 p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_12px_40px_0_rgba(0,0,0,0.5)] relative overflow-hidden">
         
         {/* Subtle inner glow */}
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />

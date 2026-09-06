@@ -1,24 +1,37 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { paperEngine } from '@/lib/trading/paper-engine';
+import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 
 const DEMO_USER_ID = 'demo-user-id';
 
 export async function GET() {
   try {
-    const account = await db.paperAccount.findUnique({
-      where: { userId: DEMO_USER_ID },
-      include: {
-        orders: { orderBy: { executedAt: 'desc' }, take: 50 }
-      }
-    });
+    try {
+      const account = await db.paperAccount.findUnique({
+        where: { userId: DEMO_USER_ID },
+        include: {
+          orders: { orderBy: { executedAt: 'desc' }, take: 50 }
+        }
+      });
 
+      return NextResponse.json({
+        success: true,
+        orders: account ? account.orders : []
+      });
+    } catch {
+      const account = tradingFallbackStore.getPaperAccount(DEMO_USER_ID);
+      return NextResponse.json({
+        success: true,
+        orders: account.orders || []
+      });
+    }
+  } catch (error: any) {
+    const account = tradingFallbackStore.getPaperAccount(DEMO_USER_ID);
     return NextResponse.json({
       success: true,
-      orders: account ? account.orders : []
+      orders: account.orders || []
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 

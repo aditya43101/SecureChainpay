@@ -224,24 +224,24 @@ export default function ExplorerPage() {
   }, [transactions]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-12 font-sans relative pb-32">
-      <div className="max-w-6xl mx-auto space-y-8 relative z-10">
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-4 sm:p-6 md:p-12 font-sans relative pb-32">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 relative z-10">
         
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500 mb-2 flex items-center gap-3">
-              <Database className="w-8 h-8 text-emerald-400" />
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-500 mb-1 sm:mb-2 flex items-center gap-3">
+              <Database className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400 flex-shrink-0" />
               Blockchain Explorer
             </h1>
-            <p className="text-neutral-400">Global shared ledger — all users, one chain.</p>
+            <p className="text-neutral-400 text-sm sm:text-base">Global shared ledger — all users, one chain.</p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <Button 
               onClick={() => syncGlobalChain()}
               disabled={isLoading}
-              className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30 font-bold"
+              className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30 font-bold min-h-[44px] flex-1 sm:flex-initial"
             >
               <RefreshCw className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} size={16} /> Sync Chain
             </Button>
@@ -250,7 +250,7 @@ export default function ExplorerPage() {
                 validateBlockchain();
                 setShowValidationModal(true);
               }}
-              className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 font-bold shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 font-bold shadow-[0_0_15px_rgba(16,185,129,0.2)] min-h-[44px] flex-1 sm:flex-initial"
             >
               <ShieldCheck className="mr-2" size={18} /> Validate Blockchain
             </Button>
@@ -258,49 +258,49 @@ export default function ExplorerPage() {
         </div>
 
         {/* Network Information Panel */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <Server className="text-blue-400" size={20} />
-              <h3 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Network Name</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-3">
+              <Server className="text-blue-400 flex-shrink-0" size={18} />
+              <h3 className="font-semibold text-gray-300 text-xs sm:text-sm uppercase tracking-wider">Network Name</h3>
             </div>
-            <p className="text-xl font-bold text-white">SecureChain Local</p>
-            <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online • PoA Consensus</p>
+            <p className="text-lg sm:text-xl font-bold text-white truncate">SecureChain Mainnet</p>
+            <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online • Vercel Global Cloud</p>
           </div>
           
-          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <Activity className="text-purple-400" size={20} />
-              <h3 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Chain Height</h3>
+          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-3">
+              <Activity className="text-purple-400 flex-shrink-0" size={18} />
+              <h3 className="font-semibold text-gray-300 text-xs sm:text-sm uppercase tracking-wider">Chain Height</h3>
             </div>
-            <p className="text-xl font-bold text-white">{transactions.length} Blocks</p>
+            <p className="text-lg sm:text-xl font-bold text-white">{transactions.length} Blocks</p>
             <p className="text-xs text-neutral-500 mt-1">Latest Block #{latestBlock?.blockNumber || 0}</p>
           </div>
           
-          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <ShieldCheck className={validationResult?.isValid ? "text-emerald-400" : "text-red-400"} size={20} />
-              <h3 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Integrity Status</h3>
+          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-3">
+              <ShieldCheck className={`flex-shrink-0 ${validationResult?.isValid ? "text-emerald-400" : "text-red-400"}`} size={18} />
+              <h3 className="font-semibold text-gray-300 text-xs sm:text-sm uppercase tracking-wider">Integrity Status</h3>
             </div>
             {validationResult ? (
               <>
-                <p className={`text-xl font-bold ${validationResult.isValid ? 'text-emerald-400' : 'text-red-400'}`}>
+                <p className={`text-lg sm:text-xl font-bold ${validationResult.isValid ? 'text-emerald-400' : 'text-red-400'}`}>
                   {validationResult.isValid ? 'VALID' : 'CORRUPTED'}
                 </p>
-                <p className="text-xs text-neutral-500 mt-1">Checked: {validationResult.lastChecked}</p>
+                <p className="text-xs text-neutral-500 mt-1 truncate">Checked: {validationResult.lastChecked}</p>
               </>
             ) : (
               <p className="text-neutral-500 text-sm">Validating...</p>
             )}
           </div>
           
-          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center gap-3 mb-3">
-              <Clock className="text-orange-400" size={20} />
-              <h3 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Genesis Block</h3>
+          <div className="bg-neutral-900 border border-white/5 rounded-2xl p-4 sm:p-5 shadow-lg">
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-2 sm:mb-3">
+              <Clock className="text-orange-400 flex-shrink-0" size={18} />
+              <h3 className="font-semibold text-gray-300 text-xs sm:text-sm uppercase tracking-wider">Genesis Block</h3>
             </div>
-            <p className="text-sm font-mono text-white truncate">{genesisBlock?.hash ? genesisBlock.hash.substring(0, 16) + '...' : 'N/A'}</p>
-            <p className="text-xs text-neutral-500 mt-1">{genesisBlock ? formatDateTime(genesisBlock.date) : 'N/A'}</p>
+            <p className="text-xs sm:text-sm font-mono text-white truncate">{genesisBlock?.hash ? genesisBlock.hash.substring(0, 16) + '...' : 'N/A'}</p>
+            <p className="text-xs text-neutral-500 mt-1 truncate">{genesisBlock ? formatDateTime(genesisBlock.date) : 'N/A'}</p>
           </div>
         </div>
 
@@ -397,45 +397,45 @@ export default function ExplorerPage() {
               <div className="lg:col-span-2 bg-neutral-950/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none"></div>
                 
-                <div className="flex items-center justify-between mb-8 border-b border-white/10 pb-4 relative z-10">
-                  <h3 className="text-2xl font-bold">Block Details</h3>
-                  <span className="px-3 py-1 bg-white/5 text-emerald-400 font-mono text-sm rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-6 sm:mb-8 border-b border-white/10 pb-4 relative z-10">
+                  <h3 className="text-xl sm:text-2xl font-bold">Block Details</h3>
+                  <span className="px-3 py-1 bg-white/5 text-emerald-400 font-mono text-xs sm:text-sm rounded-lg border border-white/10">
                     #{selectedBlock.blockNumber}
                   </span>
                 </div>
 
-                <div className="space-y-6 relative z-10">
+                <div className="space-y-5 sm:space-y-6 relative z-10">
                   <div>
-                    <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold flex items-center gap-2"><Hash size={14}/> Block Hash</p>
-                    <p className="font-mono text-emerald-400 break-all bg-emerald-400/10 p-4 rounded-xl border border-emerald-400/20 shadow-inner">
+                    <p className="text-xs sm:text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold flex items-center gap-2"><Hash size={14}/> Block Hash</p>
+                    <p className="font-mono text-emerald-400 break-all bg-emerald-400/10 p-3 sm:p-4 rounded-xl border border-emerald-400/20 shadow-inner text-xs sm:text-sm">
                       {selectedBlock.hash}
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold flex items-center gap-2"><LinkIcon size={14}/> Previous Hash</p>
-                    <p className="font-mono text-neutral-400 break-all bg-black/50 p-4 rounded-xl border border-white/5 shadow-inner">
+                    <p className="text-xs sm:text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold flex items-center gap-2"><LinkIcon size={14}/> Previous Hash</p>
+                    <p className="font-mono text-neutral-400 break-all bg-black/50 p-3 sm:p-4 rounded-xl border border-white/5 shadow-inner text-xs sm:text-sm">
                       {selectedBlock.previousHash}
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-black/50 p-4 rounded-xl border border-white/5 col-span-2">
-                      <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Timestamp</p>
-                      <p className="font-semibold text-gray-200 truncate">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="bg-black/50 p-3.5 sm:p-4 rounded-xl border border-white/5 col-span-1 sm:col-span-2">
+                      <p className="text-xs sm:text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Timestamp</p>
+                      <p className="font-semibold text-gray-200 text-xs sm:text-sm truncate">
                         {formatDateTime(selectedBlock.date)}
                       </p>
                     </div>
-                    <div className="bg-black/50 p-4 rounded-xl border border-white/5">
-                      <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Type</p>
-                      <p className="font-semibold text-gray-200 capitalize">{selectedBlock.type}</p>
+                    <div className="bg-black/50 p-3.5 sm:p-4 rounded-xl border border-white/5">
+                      <p className="text-xs sm:text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Type</p>
+                      <p className="font-semibold text-gray-200 capitalize text-xs sm:text-sm">{selectedBlock.type}</p>
                     </div>
-                    <div className="bg-black/50 p-4 rounded-xl border border-white/5">
-                      <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Amount</p>
-                      <p className="font-semibold text-emerald-400">
+                    <div className="bg-black/50 p-3.5 sm:p-4 rounded-xl border border-white/5">
+                      <p className="text-xs sm:text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Amount</p>
+                      <p className="font-semibold text-emerald-400 text-xs sm:text-sm">
                         {formatTxAmountForDisplay(selectedBlock.amount, selectedBlock.currency).primary}
                       </p>
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-[11px] text-neutral-400 truncate">
                         ({formatTxAmountForDisplay(selectedBlock.amount, selectedBlock.currency).secondary})
                       </p>
                     </div>

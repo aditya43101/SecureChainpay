@@ -9,6 +9,8 @@ export interface ResolvedRecipient {
   displayName?: string;
   walletAddress: string;
   avatarUrl?: string | null;
+  amount?: number;
+  currency?: string;
 }
 
 /**
@@ -25,12 +27,14 @@ export function abbreviateAddress(address: string, startLen: number = 6, endLen:
  * Standardizes recipient resolution from any raw input or search item.
  */
 export function resolveRecipientFromPayload(
-  input: QRPayload | { uid?: string; username?: string; displayName?: string; walletAddress?: string; address?: string }
+  input: QRPayload | { uid?: string; username?: string; displayName?: string; walletAddress?: string; address?: string; amount?: number; currency?: string }
 ): ResolvedRecipient {
   const walletAddress = ('address' in input ? input.address : (input as any).walletAddress || '').trim();
   const uid = input.uid;
   const username = input.username;
   const displayName = input.displayName;
+  const amount = input.amount;
+  const currency = input.currency;
 
   if (uid || username) {
     return {
@@ -39,6 +43,8 @@ export function resolveRecipientFromPayload(
       username: username ? (username.startsWith('@') ? username : `@${username}`) : undefined,
       displayName: displayName || username || 'SecureChain User',
       walletAddress,
+      amount,
+      currency,
     };
   }
 
@@ -46,6 +52,8 @@ export function resolveRecipientFromPayload(
     recipientType: 'EXTERNAL_WALLET',
     walletAddress,
     displayName: abbreviateAddress(walletAddress),
+    amount,
+    currency,
   };
 }
 

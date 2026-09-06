@@ -1,22 +1,32 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId') || 'default-user-id';
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get('userId') || 'default-user-id';
 
-    const user = await prisma.user.findFirst();
-    const activeUserId = user ? user.id : userId;
+  try {
+    let activeUserId = userId;
+    try {
+      const user = await prisma.user.findFirst();
+      if (user) activeUserId = user.id;
+    } catch {
+      // Prisma user lookup failed, use query param userId
+    }
 
     let settings = await prisma.autoTradingSettings.findUnique({
       where: { userId: activeUserId }
     });
 
     if (!settings) {
-      settings = await prisma.autoTradingSettings.create({
-        data: { userId: activeUserId }
-      });
+      try {
+        settings = await prisma.autoTradingSettings.create({
+          data: { userId: activeUserId }
+        });
+      } catch {
+        settings = tradingFallbackStore.getSettings(activeUserId) as any;
+      }
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -37,21 +47,19 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      settings,
-      dailyState: dailyState || {
-        date: todayStr,
-        startingBalance: paperAccount?.equity || 100000,
-        realizedPnL: 0,
-        unrealizedPnL: 0,
-        totalTrades: 0,
-        winningTrades: 0,
-        losingTrades: 0,
-        dailyLossLimitReached: false
-      },
-      account: paperAccount || { cashBalance: 100000, equity: 100000, positions: [], orders: [] },
-      recentEvents
+      settings: settings || tradingFallbackStore.getSettings(activeUserId),
+      dailyState: dailyState || tradingFallbackStore.getDailyState(activeUserId),
+      account: paperAccount || tradingFallbackStore.getPaperAccount(activeUserId),
+      recentEvents: recentEvents || tradingFallbackStore.getSafetyEvents(activeUserId)
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.warn('[API /api/auto-trading/status] Database unavailable, returning fallback state:', error?.message);
+    return NextResponse.json({
+      success: true,
+      settings: tradingFallbackStore.getSettings(userId),
+      dailyState: tradingFallbackStore.getDailyState(userId),
+      account: tradingFallbackStore.getPaperAccount(userId),
+      recentEvents: tradingFallbackStore.getSafetyEvents(userId)
+    });
   }
 }

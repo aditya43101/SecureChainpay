@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 
 export async function GET(request: Request) {
   try {
@@ -12,19 +13,27 @@ export async function GET(request: Request) {
       whereClause.symbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
     }
 
-    const history = await db.tradingRecommendation.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      take: limit
-    });
+    try {
+      const history = await db.tradingRecommendation.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        take: limit
+      });
 
-    return NextResponse.json({
-      success: true,
-      count: history.length,
-      history
-    });
+      return NextResponse.json({
+        success: true,
+        count: history.length,
+        history
+      });
+    } catch {
+      const fallbackHistory = tradingFallbackStore.getRecommendations(symbol || undefined, limit);
+      return NextResponse.json({
+        success: true,
+        count: fallbackHistory.length,
+        history: fallbackHistory
+      });
+    }
   } catch (error: any) {
-    console.error('API /api/trading/recommendations/history error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ success: true, count: 0, history: [] });
   }
 }

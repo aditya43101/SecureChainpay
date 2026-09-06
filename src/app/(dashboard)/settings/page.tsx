@@ -62,61 +62,61 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0">
+    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0 px-2 sm:px-0">
       <div>
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">Settings</h1>
-        <p className="text-neutral-400 text-base">Manage your account preferences and configurations.</p>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-1 sm:mb-2">Settings</h1>
+        <p className="text-neutral-400 text-sm sm:text-base">Manage your account preferences and configurations.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-        {/* Settings Navigation */}
-        <div className="md:col-span-1 space-y-1">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 sm:gap-8">
+        {/* Settings Navigation: Horizontal scroll on mobile/tablet, vertical list on desktop */}
+        <div className="md:col-span-1 flex md:flex-col overflow-x-auto custom-scrollbar md:overflow-visible gap-1.5 pb-2 md:pb-0 -mx-2 px-2 sm:mx-0 sm:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+              className={`flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl transition-all flex-shrink-0 md:w-full min-h-[44px] ${
                 activeTab === tab.id 
                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                 : 'text-neutral-400 hover:text-white hover:bg-white/5 border border-transparent'
               }`}
             >
-              <div className="flex items-center gap-3 font-medium">
+              <div className="flex items-center gap-2 sm:gap-3 font-medium text-xs sm:text-sm whitespace-nowrap">
                 {tab.icon}
                 {tab.label}
               </div>
-              <ChevronRight size={16} className={activeTab === tab.id ? 'opacity-100' : 'opacity-0'} />
+              <ChevronRight size={16} className={`hidden md:block ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`} />
             </button>
           ))}
         </div>
 
         {/* Settings Content area */}
-        <div className="md:col-span-3 bg-neutral-900/40 border border-white/5 rounded-3xl p-6 sm:p-8 backdrop-blur-xl">
+        <div className="md:col-span-3 bg-neutral-900/40 border border-white/5 rounded-3xl p-4 sm:p-6 md:p-8 backdrop-blur-xl">
           
           {/* Profile Section */}
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
                 <div>
-                  <h2 className="text-2xl font-bold text-white">Profile Settings</h2>
-                  <p className="text-sm text-neutral-400">View and manage your decentralized user identity.</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">Profile Settings</h2>
+                  <p className="text-xs sm:text-sm text-neutral-400">View and manage your decentralized user identity.</p>
                 </div>
-                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5">
+                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5 w-fit">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   Account Active
                 </span>
               </div>
               
               {/* User Identity Card */}
-              <div className="p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-5">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-emerald-400 via-cyan-500 to-blue-500 p-[3px] shadow-[0_0_20px_rgba(52,211,153,0.3)]">
-                  <div className="w-full h-full bg-neutral-900 rounded-[14px] flex items-center justify-center text-white text-3xl font-black">
+              <div className="p-4 sm:p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-emerald-400 via-cyan-500 to-blue-500 p-[3px] shadow-[0_0_20px_rgba(52,211,153,0.3)] flex-shrink-0">
+                  <div className="w-full h-full bg-neutral-900 rounded-[14px] flex items-center justify-center text-white text-2xl sm:text-3xl font-black">
                     {profileUsername.charAt(0).toUpperCase()}
                   </div>
                 </div>
-                <div className="flex-1 text-center sm:text-left space-y-1">
-                  <h3 className="text-xl font-bold text-white">{profileUsername}</h3>
-                  <p className="text-sm text-neutral-400 font-mono">{profileContact}</p>
+                <div className="flex-1 text-center sm:text-left space-y-1 min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-white truncate">{profileUsername}</h3>
+                  <p className="text-xs sm:text-sm text-neutral-400 font-mono truncate">{profileContact}</p>
                   <div className="flex flex-wrap gap-2 pt-2 justify-center sm:justify-start">
                     <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-neutral-300 font-mono">
                       UID: {profileUser?.id ? `${profileUser.id.substring(0, 10)}...` : 'Loading...'}
@@ -262,8 +262,8 @@ export default function SettingsPage() {
                     <div>
                       <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Wallet Address</label>
                       <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={address || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono" />
-                        <button onClick={() => copyToClipboard(address || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                        <input type="text" readOnly value={address || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-l-lg text-xs sm:text-sm text-neutral-300 font-mono truncate" />
+                        <button onClick={() => copyToClipboard(address || '')} className="px-3.5 py-2.5 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors min-h-[44px] flex items-center justify-center" aria-label="Copy wallet address">
                           <Copy size={16} />
                         </button>
                       </div>
@@ -272,27 +272,27 @@ export default function SettingsPage() {
                     <div>
                       <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Public Key</label>
                       <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={publicKey || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-l-lg text-sm text-neutral-300 font-mono truncate" />
-                        <button onClick={() => copyToClipboard(publicKey || '')} className="px-3 py-2 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors">
+                        <input type="text" readOnly value={publicKey || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-l-lg text-xs sm:text-sm text-neutral-300 font-mono truncate" />
+                        <button onClick={() => copyToClipboard(publicKey || '')} className="px-3.5 py-2.5 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors min-h-[44px] flex items-center justify-center" aria-label="Copy public key">
                           <Copy size={16} />
                         </button>
                       </div>
                     </div>
                     
                     <div>
-                      <div className="flex justify-between items-end">
+                      <div className="flex justify-between items-end flex-wrap gap-1">
                         <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Private Key</label>
                         <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                           {encryptedPrivateKey ? 'AES-256-GCM Encrypted • On-demand access' : 'Not Found'}
                         </span>
                       </div>
                       <div className="flex items-center mt-1">
-                        <input type="text" readOnly value="Protected — accessed only when required for signing" className="w-full px-3 py-2 bg-[#121212] border border-neutral-800 rounded-lg text-sm text-emerald-400 font-mono" />
+                        <input type="text" readOnly value="Protected — accessed only when required for signing" className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-lg text-xs sm:text-sm text-emerald-400 font-mono" />
                       </div>
                     </div>
                     
-                    <div className="pt-2 flex justify-between items-center text-xs text-neutral-500">
-                      <span>Generated: {keyGeneratedAt ? new Date(keyGeneratedAt).toLocaleString() : 'N/A'}</span>
+                    <div className="pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-neutral-500 gap-1 sm:gap-0">
+                      <span>Generated: {keyGeneratedAt ? new Date(keyGeneratedAt).toLocaleDateString() : 'N/A'}</span>
                       <span>{algorithm || 'Pending'} • v{walletVersion || 'N/A'}</span>
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { technicalAnalysisService } from '../market/technical-analysis';
 import { strategyEngine, MLPredictionData } from './strategy-engine';
 import { riskEngine, UserRiskProfile } from './risk-engine';
 import { DEFAULT_STRATEGY_CONFIG } from './strategy-config';
+import { tradingFallbackStore } from './trading-fallback-store';
 
 export interface RecommendationObject {
   id?: string;
@@ -206,8 +207,14 @@ export const recommendationEngine = {
         }
       });
       recommendation.id = dbRecord.id;
-    } catch (err) {
-      console.error("Failed to store TradingRecommendation in DB:", err);
+    } catch {
+      // In-memory fallback
+      const saved = tradingFallbackStore.addRecommendation({
+        userId,
+        symbol: formattedSymbol,
+        ...recommendation
+      });
+      recommendation.id = saved.id;
     }
 
     return recommendation;

@@ -52,12 +52,27 @@ export interface GlobalChainState {
  * Uses a Firestore transaction to prevent race conditions.
  * This is idempotent — safe to call multiple times.
  */
+async function safeFetchJson(url: string, init?: RequestInit): Promise<any> {
+  try {
+    const res = await fetch(url, init);
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.warn(`[GlobalChain API] Endpoint ${url} returned non-JSON (${res.status})`);
+      return null;
+    }
+  } catch (err) {
+    console.warn(`[GlobalChain API] Endpoint ${url} network error:`, err);
+    return null;
+  }
+}
+
 export async function initializeGlobalGenesis(): Promise<Transaction> {
   if (typeof window !== 'undefined') {
     try {
-      const res = await fetch('/api/blockchain/state', { method: 'POST' });
-      const data = await res.json();
-      if (data.success && data.genesisBlock) {
+      const data = await safeFetchJson('/api/blockchain/state', { method: 'POST' });
+      if (data && data.success && data.genesisBlock) {
         return data.genesisBlock;
       }
     } catch (apiErr) {
@@ -329,9 +344,8 @@ export async function getGlobalBlocks(options?: {
 }): Promise<Transaction[]> {
   if (typeof window !== 'undefined') {
     try {
-      const res = await fetch('/api/blockchain/blocks');
-      const data = await res.json();
-      if (data.success && Array.isArray(data.blocks) && data.blocks.length > 0) {
+      const data = await safeFetchJson('/api/blockchain/blocks');
+      if (data && data.success && Array.isArray(data.blocks) && data.blocks.length > 0) {
         return data.blocks;
       }
     } catch (err) {
@@ -369,9 +383,8 @@ export async function getGlobalBlocks(options?: {
 export async function getGlobalChainState(): Promise<GlobalChainState | null> {
   if (typeof window !== 'undefined') {
     try {
-      const res = await fetch('/api/blockchain/state');
-      const data = await res.json();
-      if (data.success && data.chainState) {
+      const data = await safeFetchJson('/api/blockchain/state');
+      if (data && data.success && data.chainState) {
         return data.chainState;
       }
     } catch (err) {

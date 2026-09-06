@@ -13,7 +13,7 @@ export default function ReceivePage() {
   const user = useAuthStore((s) => s.user);
 
   const [copied, setCopied] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<'USD' | 'ETH' | 'BTC'>('USD');
+  const [selectedAsset, setSelectedAsset] = useState<'HSCT' | 'USD' | 'ETH' | 'BTC'>('HSCT');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,69 +47,52 @@ export default function ReceivePage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans flex flex-col items-center justify-center relative pb-24 md:pb-12">
+    <div className="min-h-screen bg-black text-white p-4 sm:p-6 md:p-12 font-sans flex flex-col items-center justify-center relative pb-28 md:pb-12">
       <div className="w-full max-w-xl">
-        <Link href="/wallet" className="inline-flex items-center gap-2 text-neutral-400 hover:text-white mb-8 transition-colors">
+        <Link href="/wallet" className="inline-flex items-center gap-2 text-neutral-400 hover:text-white mb-6 sm:mb-8 transition-colors text-xs sm:text-sm font-medium min-h-[44px]">
           <ArrowLeft size={18} />
           Back to Wallet
         </Link>
 
-        <div className="bg-neutral-950/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden space-y-8">
+        <div className="bg-neutral-950/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden space-y-6 sm:space-y-8">
           {/* Glowing Accents */}
           <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Header */}
           <div className="text-center relative z-10 space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-semibold mb-2">
-              <ShieldCheck size={14} /> Instant Settlement Supported
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs font-semibold mb-1 sm:mb-2">
+              <ShieldCheck size={14} /> Instant Settlement (0% Gas Fee)
             </div>
-            <h1 className="text-3xl font-extrabold text-white">Receive Funds</h1>
-            <p className="text-neutral-400 text-sm">
-              Share your payment QR code or wallet address to receive payments.
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white">Receive HSCT</h1>
+            <p className="text-neutral-400 text-xs sm:text-sm">
+              Scan this QR code with SecureChain Pay to instantly receive HSCT payments.
             </p>
           </div>
 
-          {/* Asset Selection */}
-          <div className="flex p-1 bg-black/50 border border-white/5 rounded-2xl relative z-10">
-            {(['USD', 'ETH', 'BTC'] as const).map((asset) => (
-              <button
-                key={asset}
-                onClick={() => setSelectedAsset(asset)}
-                className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-                  selectedAsset === asset
-                    ? 'bg-white/10 text-white shadow-sm border border-white/10'
-                    : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
-                }`}
-              >
-                {asset}
-              </button>
-            ))}
-          </div>
-
           {/* Scannable Real QR Code Card */}
-          <div className="flex flex-col items-center justify-center p-6 bg-neutral-900/60 border border-white/10 rounded-2xl relative z-10 space-y-4">
-            <div className="p-4 bg-white rounded-2xl shadow-xl flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center p-4 sm:p-6 bg-neutral-900/60 border border-white/10 rounded-2xl relative z-10 space-y-4">
+            <div className="p-3 sm:p-4 bg-white rounded-2xl shadow-xl flex items-center justify-center">
               {qrDataUrl ? (
-                <img src={qrDataUrl} alt="SecureChain Pay QR Code" className="w-48 h-48 rounded-lg" />
+                <img src={qrDataUrl} alt="SecureChain Pay QR Code" className="w-40 h-40 sm:w-48 sm:h-48 rounded-lg" />
               ) : (
-                <div className="w-48 h-48 flex items-center justify-center bg-gray-100 text-neutral-400 text-xs font-mono rounded-lg">
+                <div className="w-40 h-40 sm:w-48 sm:h-48 flex items-center justify-center bg-gray-100 text-neutral-400 text-xs font-mono rounded-lg">
                   Generating QR...
                 </div>
               )}
             </div>
             
             <p className="text-xs text-neutral-400 font-medium text-center">
-              Scan to send <span className="text-emerald-400 font-bold">{selectedAsset}</span> directly to{' '}
+              Scan to send <span className="text-emerald-400 font-bold">HSCT</span> directly to{' '}
               <span className="text-white font-bold">{user?.username ? `@${user.username}` : 'this wallet'}</span>
             </p>
 
             {/* QR Actions */}
             {qrDataUrl && (
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-3 pt-1 sm:pt-2">
                 <button
                   onClick={handleDownloadQR}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all min-h-[44px]"
                 >
                   <Download size={14} /> Download QR
                 </button>
@@ -122,13 +105,13 @@ export default function ReceivePage() {
             <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
               Your Public Wallet Address
             </label>
-            <div className="flex items-center bg-black/60 border border-neutral-800 rounded-xl overflow-hidden p-1.5 focus-within:border-emerald-500/50 transition-colors">
-              <span className="px-3 py-2 text-xs font-mono text-neutral-300 truncate flex-1 select-all">
+            <div className="flex flex-col sm:flex-row sm:items-center bg-black/60 border border-neutral-800 rounded-xl overflow-hidden p-1.5 focus-within:border-emerald-500/50 transition-colors gap-1.5 sm:gap-0">
+              <span className="px-3 py-2 text-xs font-mono text-neutral-300 break-all sm:truncate flex-1 select-all">
                 {address || '0x...'}
               </span>
               <button
                 onClick={handleCopy}
-                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold transition-all min-h-[44px] ${
                   copied
                     ? 'bg-emerald-500 text-neutral-950 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
                     : 'bg-white/10 text-white hover:bg-white/20'
@@ -150,7 +133,7 @@ export default function ReceivePage() {
           {/* Information Notice */}
           <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl text-xs text-neutral-400 space-y-1 relative z-10">
             <p className="font-semibold text-white flex items-center gap-1.5">
-              <Sparkles size={14} className="text-emerald-400" /> Non-Custodial & Encrypted
+              <Sparkles size={14} className="text-emerald-400 flex-shrink-0" /> Non-Custodial & Encrypted
             </p>
             <p>
               Funds sent to this address are instantly indexed by the SecureChain local PoA engine with zero network gas fees.
