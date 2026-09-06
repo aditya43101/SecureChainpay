@@ -7,6 +7,9 @@ import { patternDiscoveryEngine } from '@/lib/trading/pattern-discovery';
 import { feedbackRegistryEngine } from '@/lib/trading/feedback-registry';
 import { convertHsctToUsd, getStructuredAmount } from '@/lib/currency/currency-service';
 import { routeAndBuildAIContext } from './context-router';
+import { AIDataGuard } from '@/lib/privacy/ai-data-guard';
+import { PrivacyIncidentDetector } from '@/lib/privacy/privacy-incident-detector';
+import crypto from 'crypto';
 
 async function getMLPrediction(symbol: string, timeframe: string) {
   try {
@@ -120,7 +123,27 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
     });
   }
 
-  // 2. Save User Message
+  // 2. Privacy Guard — sanitize user message before processing
+  const guardResult = AIDataGuard.sanitize(request.message);
+
+  if (!guardResult.allowed) {
+    // SECRET DETECTED — block entirely, log incident (not the secret)
+    await PrivacyIncidentDetector.reportSecretLeakAttempt(request.userId, guardResult.secretsDetected);
+    await logAIDataAccess('BLOCKED', request.mode, guardResult, request.userId);
+
+    // Save a safe message (not the secret)
+    await db.aIMessage.create({ data: { conversationId: conversation.id, role: 'USER', content: '[Message blocked — sensitive content detected]' } });
+    const blockedResponse = 'Your message was blocked because it contained sensitive material (such as a private key, seed phrase, or password). For your security, this content was NOT processed or stored. Please never share secrets with any AI system.';
+    await db.aIMessage.create({ data: { conversationId: conversation.id, role: 'ASSISTANT', content: blockedResponse } });
+    return { content: blockedResponse, conversationId: conversation.id };
+  }
+
+  // Log prompt injection attempts (but don't block — injections are neutralized)
+  if (guardResult.injectionsDetected.length > 0) {
+    await PrivacyIncidentDetector.reportPromptInjection(request.userId, guardResult.injectionsDetected);
+  }
+
+  // Save sanitized user message
   await db.aIMessage.create({
     data: {
       conversationId: conversation.id,
@@ -154,7 +177,9 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
     "2. DO NOT MODIFY NUMBERS: Never alter or hallucinate numerical values (Prices, Entry zone, Stop Loss, Take Profit, Risk/Reward Ratio, Position Size, or ML probabilities).\n" +
     "3. NO GUARANTEES: Never claim future prices are guaranteed. Highlight key risks and failure modes.\n" +
     "4. NO_TRADE RESPECT: If recommendation action is NO_TRADE or HOLD, explain clearly why conditions are unsuitable for trading.\n" +
-    "5. CURRENCY SYSTEM: All quotes, prices, balances, and PnL are in HSCT (High-Security Chain Token). 1 HSCT = ₹1 INR (Indian Rupee), 1 USD = 83.50 HSCT.";
+    "5. CURRENCY SYSTEM: All quotes, prices, balances, and PnL are in HSCT (High-Security Chain Token). 1 HSCT = ₹1 INR (Indian Rupee), 1 USD = 83.50 HSCT.\n" +
+    "6. PRIVACY BOUNDARIES: Never reveal private keys, seed phrases, passwords, API keys, or other secrets. Never reveal other users' payment data. Never execute arbitrary code or SQL. If a user asks for another user's data, respond with ACCESS DENIED.\n" +
+    "7. DATA ISOLATION: You may only reference data for the current authenticated user. Do not infer or fabricate data about other users.";
 
   let contextString = routedContext.contextPromptString;
 
@@ -247,7 +272,15 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
     }
   }
 
-  // 5. Save AI response
+  // 5. Validate AI output before returning
+  const outputValidation = AIDataGuard.validateAIOutput(aiContent);
+  if (!outputValidation.valid) {
+    console.warn('[AI Security] AI output validation issues:', outputValidation.issues);
+    // Don't block, but strip problematic patterns from the response
+    aiContent = aiContent.replace(/0x[a-fA-F0-9]{64}/g, '[REDACTED_KEY]');
+  }
+
+  // 6. Save AI response
   await db.aIMessage.create({
     data: {
       conversationId: conversation.id,
@@ -256,8 +289,31 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
     }
   });
 
+  // 7. Log AI data access record
+  await logAIDataAccess('SUCCESS', request.mode, guardResult, request.userId);
+
   return {
     content: aiContent,
     conversationId: conversation.id
   };
+}
+
+/** Log AI data access for audit trail — never stores the raw prompt. */
+async function logAIDataAccess(resultType: string, purpose: string, guardResult: { sanitizedInputHash: string; dataClassification: string }, userId?: string) {
+  try {
+    await db.aIDataAccessRecord.create({
+      data: {
+        model: process.env.LLM_MODEL || 'gemini-3.6-flash',
+        modelVersion: 'v1.0',
+        purpose: purpose.toUpperCase(),
+        dataClassification: (guardResult.dataClassification === 'HIGHLY_SENSITIVE' ? 'HIGHLY_SENSITIVE' : guardResult.dataClassification === 'SENSITIVE' ? 'SENSITIVE' : guardResult.dataClassification === 'INTERNAL' ? 'INTERNAL' : 'PUBLIC') as any,
+        sanitizedInputHash: guardResult.sanitizedInputHash,
+        resultType,
+        userId: userId || null,
+        blockReason: resultType === 'BLOCKED' ? 'SECRET_DETECTED' : null,
+      },
+    });
+  } catch (err) {
+    console.error('[AI Audit] Failed to log AI data access:', err);
+  }
 }

@@ -23,6 +23,66 @@ export interface BlockchainNode {
   isTrusted: boolean;
 }
 
+export interface IntegrityIncident {
+  id?: string;
+  incidentId?: string;
+  nodeId?: string;
+  incidentType?: string;
+  type?: string;
+  affectedBlockRange?: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
+  description?: string;
+  evidence?: any;
+  actionTaken?: string;
+  status?: string;
+  resolved?: boolean;
+  aiExplanation?: string;
+  createdAt: string | Date;
+}
+
+export interface RecoveryEvent {
+  id: string;
+  nodeId: string;
+  action: string;
+  details: string;
+  success: boolean;
+  timestamp: string;
+}
+
+export interface PaymentAuditRecord {
+  id: string;
+  paymentIntentId: string;
+  paymentId?: string;
+  sender: string;
+  recipient: string;
+  amount: number;
+  currency: string;
+  blockNumber?: number;
+  sequenceNumber: number;
+  canonicalHash: string;
+  previousAuditHash: string;
+  currentAuditHash: string;
+  verificationStatus?: string;
+  tamperEvidentState?: string;
+  verified?: boolean;
+  isRecovered?: boolean;
+  createdAt?: string;
+  paymentIntent?: any;
+}
+
+export interface IntegritySnapshot {
+  overallHealth: string;
+  activeNodesCount: number;
+  quarantinedNodesCount: number;
+  latestCheckpointRoot?: string;
+  rootHash?: string;
+  status?: string;
+  leafCount?: number;
+  blockNumber?: number;
+  timestamp?: string;
+  anchoredOnChain?: boolean;
+}
+
 const INITIAL_NODES: BlockchainNode[] = [
   {
     nodeId: 'node-a-primary',

@@ -3,9 +3,9 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { computeCanonicalHash } from '@/lib/blockchain/integrity-service';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const paymentIntentId = params.id;
+    const { id: paymentIntentId } = await params;
     if (!paymentIntentId) {
       return NextResponse.json({ success: false, error: 'Payment ID is required' }, { status: 400 });
     }

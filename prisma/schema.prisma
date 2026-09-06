@@ -72,6 +72,8 @@ model User {
   executionOrders         ExecutionOrder[]
   safetyEvents            SafetyEvent[]
   paymentIntents          PaymentIntent[]
+  paymentDrafts           PaymentDraft[]
+  copilotDecisions        CopilotDecision[]
 }
 
 model Wallet {
@@ -957,4 +959,50 @@ model ComplianceProof {
   createdAt          DateTime @default(now())
 
   @@index([paymentIntentId])
+}
+
+model PaymentDraft {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  recipient       String
+  recipientName   String?
+  recipientUserId String?
+  amount          Decimal
+  currency        String   @default("USD")
+  description     String?
+  preferredRoute  String?  @default("ADAPTIVE")
+  idempotencyKey  String   @unique @default(uuid())
+  status          String   @default("DRAFT") // DRAFT, CONFIRMED, EXPIRED, CANCELLED, EXECUTING, COMPLETED, FAILED
+  securitySummary Json?    // Pre-flight check results: riskScore, routeHealth, warnings
+  confirmedAt     DateTime?
+  expiresAt       DateTime
+  paymentIntentId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([expiresAt])
+}
+
+model CopilotDecision {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  conversationId  String?
+  intent          String   // SEND_PAYMENT, CHECK_STATUS, EXPLAIN_FAILURE, CHECK_SAFETY, ROUTE_INFO, GENERAL_QUESTION
+  recommendation  Json     // Structured recommendation
+  explanation     String?
+  evidenceRefs    Json?    // Links to paymentId, auditRecordHash, policyId, routeId
+  policyVersion   String?
+  modelVersion    String?
+  userConfirmed   Boolean  @default(false)
+  outcome         String?  // EXECUTED, REJECTED, CANCELLED, ABANDONED, SUCCESS, FAILED
+  draftId         String?
+  paymentIntentId String?
+  userFeedback    String?  // HELPFUL, UNHELPFUL, INCORRECT
+  createdAt       DateTime @default(now())
+
+  @@index([userId, intent])
+  @@index([createdAt])
 }

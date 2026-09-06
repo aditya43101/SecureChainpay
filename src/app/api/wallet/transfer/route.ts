@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const receiverTxRef = adminDb.collection('users').doc(receiverUid).collection('transactions').doc(applicationTransactionId);
 
     let senderNewBalances: any = null;
-    let finalBlock: Transaction | null = null;
+    let finalBlock: any = null;
 
     // ─── 3. ATOMIC FIRESTORE TRANSACTION (ACID) ───
     try {
@@ -226,7 +226,7 @@ export async function POST(request: Request) {
           receiverTxRef.set(confirmedFields, { merge: true }),
         ]);
 
-        finalBlock = { ...finalBlock, ...confirmedFields };
+        finalBlock = Object.assign({}, finalBlock || {}, confirmedFields);
       } else {
         throw new Error(submissionResult.error || 'Blockchain submission returned false');
       }

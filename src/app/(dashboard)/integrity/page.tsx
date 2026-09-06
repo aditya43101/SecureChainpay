@@ -528,10 +528,10 @@ export default function IntegrityDashboardPage() {
                     )}
                   </td>
                   <td className="py-3.5 px-4 text-zinc-400 font-sans">
-                    {record.sender.substring(0, 8)}... → {record.recipient.substring(0, 8)}...
+                    {(record.sender || '0x_sender').substring(0, 8)}... → {(record.recipient || '0x_recipient').substring(0, 8)}...
                   </td>
                   <td className="py-3.5 px-4 font-bold text-emerald-400">
-                    {record.amount.toLocaleString()} {record.currency}
+                    {(record.amount || 0).toLocaleString()} {record.currency || 'USD'}
                   </td>
                   <td className="py-3.5 px-4 text-cyan-400 font-bold">#{record.blockNumber}</td>
                   <td className="py-3.5 px-4 text-zinc-400">

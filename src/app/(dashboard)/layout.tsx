@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Wallet, History, Settings, Bell, Search, Database, User, Bot, ShieldCheck, Sliders, ShieldAlert, Activity } from 'lucide-react';
+import { Home, Wallet, History, Settings, Bell, Search, Database, User, Bot, ShieldCheck, Sliders, ShieldAlert, Activity, Fingerprint } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
 import { AIAssistiveBall } from '@/components/trading-ai/AIAssistiveBall';
@@ -35,6 +35,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NavItem href="/integrity" icon={<ShieldAlert size={20} />} label="Integrity Layer" active={pathname?.startsWith('/integrity')} />
             <NavItem href="/continuity" icon={<ShieldCheck size={20} />} label="Payment Continuity" active={pathname?.startsWith('/continuity')} />
             <NavItem href="/predictive" icon={<Activity size={20} />} label="Predictive Ops" active={pathname?.startsWith('/predictive')} />
+            <NavItem href="/privacy" icon={<Fingerprint size={20} />} label="Privacy Center" active={pathname?.startsWith('/privacy')} />
+            <NavItem href="/copilot" icon={<Bot size={20} />} label="Payment Copilot" active={pathname?.startsWith('/copilot')} />
             <NavItem href="/ai-assistant" icon={<Bot size={20} />} label="AI Assistant" active={pathname?.startsWith('/ai-assistant')} />
             <NavItem href="/settings" icon={<Settings size={20} />} label="Settings" active={pathname?.startsWith('/settings')} />
           </nav>

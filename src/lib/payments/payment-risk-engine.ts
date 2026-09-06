@@ -318,3 +318,23 @@ export function evaluatePaymentRisk(params: {
     modelVersion: PAYMENT_AI_MODEL_VERSION,
   };
 }
+
+export class PaymentRiskEngine {
+  public static async evaluatePaymentRisk(params: {
+    senderId?: string;
+    userId?: string;
+    recipient?: string;
+    senderAddress?: string;
+    receiverAddress?: string;
+    amount: number;
+    currency?: string;
+  }) {
+    return evaluatePaymentRisk({
+      userId: params.userId || params.senderId || 'anonymous_user',
+      senderAddress: params.senderAddress || '0x_sender',
+      receiverAddress: params.receiverAddress || params.recipient || '0x_receiver',
+      amount: params.amount,
+      currency: params.currency || 'USD',
+    });
+  }
+}

@@ -211,6 +211,20 @@ export class AIDataGuard {
     return false;
   }
 
+  /**
+   * Helper alias for prompt sanitization.
+   */
+  static sanitizePrompt(prompt: string, options?: { userId?: string; purpose?: string }) {
+    const result = this.sanitize(prompt, options);
+    return {
+      sanitized: result.sanitizedPrompt,
+      blocked: !result.allowed,
+      blockReason: result.blockReason || undefined,
+      secretsDetected: result.secretsDetected,
+      injectionsDetected: result.injectionsDetected,
+    };
+  }
+
   /** SHA-256 hash of a string. */
   private static hashString(str: string): string {
     return crypto.createHash('sha256').update(str).digest('hex');
