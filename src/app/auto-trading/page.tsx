@@ -15,6 +15,7 @@ import {
   CheckCircle,
   XCircle,
   BarChart,
+  BarChart2,
   Cpu,
   Clock,
   TrendingUp,
@@ -22,6 +23,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { AutoTradingConfirmationModal } from '@/components/trading/AutoTradingConfirmationModal';
+import { TradingViewWidget } from '@/components/trade/TradingViewWidget';
 
 export default function AutoTradingPage() {
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,7 @@ export default function AutoTradingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [runningCycle, setRunningCycle] = useState(false);
   const [cycleLogs, setCycleLogs] = useState<string[]>([]);
+  const [chartSymbol, setChartSymbol] = useState('BTCUSDT');
 
   const fetchStatus = async () => {
     try {
@@ -312,6 +315,33 @@ export default function AutoTradingPage() {
               : 'No trades executed today'}
           </div>
         </div>
+      </div>
+
+      {/* Live Binance & TradingView Pro Chart Component */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Live Execution Market Feed</h3>
+          </div>
+          <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setChartSymbol('BTCUSDT')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${chartSymbol === 'BTCUSDT' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-slate-400'}`}
+            >
+              BTC/USDT
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartSymbol('ETHUSDT')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${chartSymbol === 'ETHUSDT' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-400'}`}
+            >
+              ETH/USDT
+            </button>
+          </div>
+        </div>
+        <TradingViewWidget symbol={chartSymbol} height={440} showOverlay={true} />
       </div>
 
       {/* Main Grid: Active Positions & Safety Audit Log */}

@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
-import { ShieldAlert, TrendingUp, DollarSign, RotateCcw, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ShieldAlert, TrendingUp, DollarSign, RotateCcw, AlertTriangle, ArrowUpRight, ArrowDownRight, BarChart2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/timezone-service';
+import { TradingViewWidget } from '@/components/trade/TradingViewWidget';
 
 export default function PaperTradingPage() {
   const [account, setAccount] = useState<any>(null);
@@ -143,6 +144,33 @@ export default function PaperTradingPage() {
               </div>
             </div>
           )}
+
+          {/* Live Interactive Binance / TradingView Chart Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-neutral-300">Live Paper Trading Market Chart</h3>
+              </div>
+              <div className="flex bg-neutral-900/80 border border-white/10 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setSymbol('BTCUSDT')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${symbol === 'BTCUSDT' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'text-neutral-400'}`}
+                >
+                  BTC/USDT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSymbol('ETHUSDT')}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${symbol === 'ETHUSDT' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-neutral-400'}`}
+                >
+                  ETH/USDT
+                </button>
+              </div>
+            </div>
+            <TradingViewWidget symbol={symbol} height={440} showOverlay={true} />
+          </div>
 
           {/* Quick Trade Order Form */}
           <div className="bg-neutral-900/80 border border-white/5 rounded-3xl p-6 backdrop-blur-2xl">
