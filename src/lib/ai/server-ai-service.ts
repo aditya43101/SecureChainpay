@@ -625,13 +625,8 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
 
   let aiContent = '';
 
-  // Try Google Gemini REST API — for all non-casual queries
-  const isValidKey = apiKey && apiKey.length > 10 && !apiKey.startsWith('AQ.') || (apiKey?.startsWith('AIza'));
-  if (isValidKey) {
-    const candidateModels = [preferredModel, 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    const uniqueModels = [...new Set(candidateModels)];
-
-    const geminiSystemPrompt = `You are the AI Copilot for **SecureChain Pay** — an enterprise blockchain payment and AI-assisted quantitative trading platform.
+  // Build the shared system prompt for all LLM providers
+  const sharedSystemPrompt = `You are the AI Copilot for **SecureChain Pay** — an enterprise blockchain payment and AI-assisted quantitative trading platform.
 
 YOUR IDENTITY & PERSONALITY:
 - You are a helpful, conversational, and knowledgeable assistant — NOT a rigid template-based bot.
@@ -646,7 +641,7 @@ PLATFORM KNOWLEDGE:
 - **Trading:** 10-step quantitative pipeline — Market Data → Technical Indicators → ML Prediction → Strategy Engine → Risk Engine → Execution
 - **Auto-Trading modes:** OFF, PAPER (simulated), LIVE. Safety gates pause if daily loss > 3%
 - **Key Pages:** /wallet, /trade, /dashboard, /explorer, /transactions, /ai-assistant, /settings, /paper-trading, /backtesting
-- **LLM:** Google Gemini 2.0 Flash is used as the primary AI model for this assistant
+- **AI Model:** Mistral AI (mistral-small-latest) is used as the primary LLM for this assistant
 
 ${routedContext?.systemDirective || ''}
 
@@ -657,38 +652,75 @@ RULES:
 4. For personal questions ("mera naam", "my age") — you don't have that info, say so naturally
 5. Respond in the same language as the user's message`;
 
-    for (const model of uniqueModels) {
+  const userContent = contextString ? `${request.message}\n\n${contextString}` : request.message;
+
+  // === MISTRAL API (AQ. keys) ===
+  if (apiKey && apiKey.startsWith('AQ.')) {
+    const mistralModels = [preferredModel, 'mistral-small-latest', 'mistral-large-latest', 'open-mistral-7b'];
+    const uniqueMistralModels = [...new Set(mistralModels)];
+
+    for (const model of uniqueMistralModels) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
+        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
           body: JSON.stringify({
-            contents: [{
-              role: 'user',
-              parts: [{ text: contextString ? `${request.message}\n\n${contextString}` : request.message }]
-            }],
-            systemInstruction: { parts: [{ text: geminiSystemPrompt }] },
-            generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
+            model,
+            messages: [
+              { role: 'system', content: sharedSystemPrompt },
+              { role: 'user', content: userContent }
+            ],
+            temperature: 0.75,
+            max_tokens: 2048
           })
         });
 
         if (response.ok) {
           const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          const text = data.choices?.[0]?.message?.content;
           if (text && text.trim().length > 0) {
             aiContent = text;
             break;
           }
         } else {
           const errData = await response.json().catch(() => ({}));
-          console.warn(`[AI Service] Gemini ${model} HTTP ${response.status}:`, errData?.error?.message || '');
+          console.warn(`[AI Service] Mistral ${model} HTTP ${response.status}:`, errData?.message || '');
         }
-      } catch (geminiErr) {
-        console.warn(`[AI Service] Gemini model ${model} error:`, geminiErr);
+      } catch (mistralErr) {
+        console.warn(`[AI Service] Mistral model ${model} error:`, mistralErr);
       }
     }
   }
+
+  // === GOOGLE GEMINI API (AIza keys) — fallback if Mistral not used ===
+  if (!aiContent && apiKey && apiKey.startsWith('AIza')) {
+    const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    for (const model of geminiModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: userContent }] }],
+            systemInstruction: { parts: [{ text: sharedSystemPrompt }] },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text && text.trim().length > 0) { aiContent = text; break; }
+        }
+      } catch (geminiErr) {
+        console.warn(`[AI Service] Gemini ${model} error:`, geminiErr);
+      }
+    }
+  }
+
 
   // If Gemini was not available or failed, seamlessly use the intelligent domain engine
   if (!aiContent || aiContent.trim().length === 0) {
