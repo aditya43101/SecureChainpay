@@ -137,42 +137,19 @@ export const marketDataService = {
    * Get candles, prioritizing Binance live feeds with robust fallback
    */
   async getCandles(symbol: string, timeframe: string, limit: number = 200): Promise<Candle[]> {
-    let cached: any[] = [];
-    try {
-      cached = await db.marketCandle.findMany({
-        where: { symbol, timeframe },
-        orderBy: { timestamp: 'desc' },
-        take: limit,
-      });
-    } catch {
-      // Non-blocking DB cache failure
-    }
-
-    const candles: Candle[] = (cached || []).map(c => ({
-      id: c.id,
-      symbol: c.symbol,
-      timeframe: c.timeframe,
-      timestamp: new Date(c.timestamp).toISOString(),
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-      volume: c.volume,
-    }));
-
     const binanceInterval = toBinanceInterval(timeframe);
     const fetchLimit = Math.min(limit, 200);
 
     const endpoints = [
-      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=${fetchLimit}`,
       `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=${fetchLimit}`,
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=${fetchLimit}`,
       `https://api.binance.us/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=${fetchLimit}`,
     ];
 
     for (const url of endpoints) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4000);
+        const timeout = setTimeout(() => controller.abort(), 2500);
         const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
         clearTimeout(timeout);
 
@@ -190,16 +167,10 @@ export const marketDataService = {
               volume: parseFloat(kline[5]),
             }));
 
-            // Background save to DB if available
+            // Non-blocking background save to DB if available
             this.saveCandles(fetchedCandles).catch(() => {});
 
-            // Merge fetched with cached, distinct by timestamp
-            const allCandlesMap = new Map<string, Candle>();
-            candles.forEach(c => allCandlesMap.set(c.timestamp, c));
-            fetchedCandles.forEach(c => allCandlesMap.set(c.timestamp, c));
-
-            const sorted = Array.from(allCandlesMap.values()).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            return sorted.slice(-limit);
+            return fetchedCandles.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
           }
         }
       } catch {
@@ -207,9 +178,33 @@ export const marketDataService = {
       }
     }
 
-    // If cached candles exist, return them
-    if (candles.length > 10) {
-      return candles.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Secondary fallback: DB cache
+    try {
+      if (process.env.DATABASE_URL) {
+        const cached = await db.marketCandle.findMany({
+          where: { symbol, timeframe },
+          orderBy: { timestamp: 'desc' },
+          take: limit,
+        });
+
+        if (cached && cached.length > 10) {
+          return cached
+            .map(c => ({
+              id: c.id,
+              symbol: c.symbol,
+              timeframe: c.timeframe,
+              timestamp: new Date(c.timestamp).toISOString(),
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+              volume: c.volume,
+            }))
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        }
+      }
+    } catch {
+      // Ignore DB error
     }
 
     // Otherwise generate clean, realistic synthetic candles matching current price
