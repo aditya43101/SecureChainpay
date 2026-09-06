@@ -49,7 +49,7 @@ export default function AutoTradingPage() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 10000); // refresh every 10s
+    const interval = setInterval(fetchStatus, 2000); // live refresh every 2s
     return () => clearInterval(interval);
   }, []);
 

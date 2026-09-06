@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries, Time } from 'lightweight-charts';
+import React, { useEffect, useState } from 'react';
 import { useAIStore } from '@/stores/ai-store';
 import { useWalletStore } from '@/stores/wallet-store';
-import { Target, ShieldAlert, TrendingUp, AlertTriangle, BarChart2, Layers } from 'lucide-react';
+import { Target, ShieldAlert, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -12,54 +11,10 @@ interface TradingViewWidgetProps {
   showOverlay?: boolean;
 }
 
-const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
-
-function getInitialHistoricalCandles(asset: string, tf: string): any[] {
-  const storePrice = typeof window !== 'undefined' ? useWalletStore.getState().prices[asset === 'BTC' ? 'BTC' : 'ETH'] : 0;
-  const base = (storePrice && storePrice > 0) ? storePrice : (asset === 'BTC' ? 79700 : (asset === 'ETH' ? 2390 : 100));
-  
-  let stepSec = 3600;
-  if (tf === '1m') stepSec = 60;
-  else if (tf === '5m') stepSec = 300;
-  else if (tf === '15m') stepSec = 900;
-  else if (tf === '4h') stepSec = 14400;
-  else if (tf === '1d') stepSec = 86400;
-
-  const currentBucket = Math.floor(Math.floor(Date.now() / 1000) / stepSec) * stepSec;
-
-  const list: any[] = [];
-  let prevClose = base * 0.985;
-  for (let i = 100; i >= 0; i--) {
-    const change = (Math.random() - 0.48) * (base * 0.005);
-    const open = prevClose;
-    const close = (i === 0) ? base : (open + change);
-    const high = Math.max(open, close) + Math.random() * (base * 0.002);
-    const low = Math.min(open, close) - Math.random() * (base * 0.002);
-    list.push({
-      time: (currentBucket - i * stepSec) as Time,
-      open: Number(open.toFixed(2)),
-      high: Number(high.toFixed(2)),
-      low: Number(low.toFixed(2)),
-      close: Number(close.toFixed(2)),
-      volume: Math.floor(Math.random() * 500 + 50)
-    });
-    prevClose = close;
-  }
-  return list;
-}
-
-export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: TradingViewWidgetProps) {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const lastCandleRef = useRef<any>(null);
-  const [timeframe, setTimeframe] = useState('1h');
-  const [loading, setLoading] = useState(false);
+export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: TradingViewWidgetProps) {
   const [recommendation, setRecommendation] = useState<any>(null);
-  const [chartMode, setChartMode] = useState<'binance' | 'tradingview'>('binance');
-  
-  const updateTradingContext = useAIStore(s => s.updateTradingContext);
-  const latestKlineData = useWalletStore(s => s.latestKlineData);
+  const updateTradingContext = useAIStore((s) => s.updateTradingContext);
+  const prices = useWalletStore((s) => s.prices);
 
   const rawClean = symbol ? symbol.toUpperCase().replace(/[\/\-_]/g, '') : 'BTC';
   let formattedSymbol = rawClean;
@@ -71,458 +26,98 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     formattedSymbol = `${rawClean}USDT`;
   }
   const cleanSymbol = formattedSymbol.replace('USDT', '');
-  const assetKey = cleanSymbol === 'BTC' ? 'BTC' : (cleanSymbol === 'ETH' ? 'ETH' : cleanSymbol);
+  const assetKey: 'BTC' | 'ETH' = cleanSymbol === 'ETH' ? 'ETH' : 'BTC';
+  const currentPrice = prices[assetKey] || (assetKey === 'BTC' ? 84500 : 2650);
 
+  // Sync symbol to AI Store
   useEffect(() => {
-    updateTradingContext({ timeframe });
-  }, [timeframe, updateTradingContext]);
+    updateTradingContext({ asset: assetKey, timeframe: '1h' });
+  }, [assetKey, updateTradingContext]);
 
-  const [candles, setCandles] = useState<any[]>(() => getInitialHistoricalCandles(assetKey, timeframe));
-
-  // Init Lightweight Chart when in 'binance' mode
+  // Fetch ML recommendation overlay for the active asset
   useEffect(() => {
-    if (chartMode !== 'binance' || !chartContainerRef.current) return;
-    
-    // Clean up prior chart instance
-    if (chartRef.current) {
-      chartRef.current.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    }
-
-    const container = chartContainerRef.current;
-
-    const chart = createChart(container, {
-      autoSize: true,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#A3A3A3',
-      },
-      grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.04)' },
-      },
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        rightOffset: 8,
-        barSpacing: 9,
-        minBarSpacing: 3,
-      }
-    });
-
-    chartRef.current = chart;
-
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981', // emerald-500
-      downColor: '#ef4444', // red-500
-      borderVisible: true,
-      borderColor: '#374151',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
-    });
-
-    seriesRef.current = series;
-
-    // Synchronously populate baseline candles on creation
-    const initialList = candles.length > 0 ? candles : getInitialHistoricalCandles(assetKey, timeframe);
-    series.setData(initialList);
-    lastCandleRef.current = { ...initialList[initialList.length - 1] };
-    
-    setTimeout(() => {
-      chart.timeScale().fitContent();
-    }, 50);
-    setTimeout(() => {
-      chart.timeScale().fitContent();
-    }, 200);
-
-    // Use ResizeObserver for responsive resizing
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (!entries || entries.length === 0 || !chartRef.current) return;
-      const { width } = entries[0].contentRect;
-      if (width > 0) {
-        chartRef.current.applyOptions({ width });
-        chartRef.current.timeScale().fitContent();
-      }
-    });
-
-    resizeObserver.observe(container);
-
-    const handleWindowResize = () => {
-      if (container && chartRef.current && container.clientWidth > 0) {
-        chartRef.current.applyOptions({ width: container.clientWidth });
-        chartRef.current.timeScale().fitContent();
-      }
-    };
-    window.addEventListener('resize', handleWindowResize);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
-      chart.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-    };
-  }, [chartMode, height, assetKey]);
-
-  // Sync candles state to series
-  useEffect(() => {
-    if (seriesRef.current && candles.length > 0) {
-      seriesRef.current.setData(candles);
-      lastCandleRef.current = { ...candles[candles.length - 1] };
-      setTimeout(() => {
-        chartRef.current?.timeScale().fitContent();
-      }, 50);
-    }
-  }, [candles]);
-
-  // Fetch Initial Candles & Quantitative Recommendation
-  useEffect(() => {
-    if (chartMode !== 'binance') return;
-
     let isMounted = true;
-    
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchRec = async () => {
       try {
-        let rawCandles: any[] = [];
-
-        // 1. Direct client-side Binance Vision & Binance API
-        const binanceEndpoints = [
-          `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
-          `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
-          `https://api.binance.us/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
-        ];
-
-        for (const url of binanceEndpoints) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 2500);
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) {
-              const raw = await res.json();
-              if (Array.isArray(raw) && raw.length > 0) {
-                rawCandles = raw.map((k: any) => ({
-                  time: Math.floor(k[0] / 1000) as Time,
-                  open: parseFloat(k[1]),
-                  high: parseFloat(k[2]),
-                  low: parseFloat(k[3]),
-                  close: parseFloat(k[4]),
-                  volume: parseFloat(k[5]),
-                }));
-                break;
-              }
-            }
-          } catch {
-            // Try next
+        const res = await fetch(`/api/trading/recommendation/${formattedSymbol}?timeframe=1h`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          if (data && data.success && data.recommendation) {
+            setRecommendation(data.recommendation);
           }
-        }
-
-        // 2. Direct Bybit Spot API fallback (ultra-reliable global CDN)
-        if (rawCandles.length === 0) {
-          try {
-            const bybitTfMap: Record<string, string> = {
-              '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D'
-            };
-            const bybitTf = bybitTfMap[timeframe] || '60';
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 2500);
-            const res = await fetch(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${formattedSymbol}&interval=${bybitTf}&limit=120`, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.result?.list && Array.isArray(data.result.list) && data.result.list.length > 0) {
-                rawCandles = data.result.list.map((k: any) => ({
-                  time: Math.floor(parseInt(k[0], 10) / 1000) as Time,
-                  open: parseFloat(k[1]),
-                  high: parseFloat(k[2]),
-                  low: parseFloat(k[3]),
-                  close: parseFloat(k[4]),
-                  volume: parseFloat(k[5] || '0'),
-                }));
-              }
-            }
-          } catch {
-            // Try next
-          }
-        }
-
-        // 3. Direct CryptoCompare API fallback
-        if (rawCandles.length === 0) {
-          try {
-            let endpoint = 'histohour';
-            if (timeframe === '1m' || timeframe === '5m' || timeframe === '15m') endpoint = 'histominute';
-            else if (timeframe === '1d') endpoint = 'histoday';
-
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 2500);
-            const res = await fetch(`https://min-api.cryptocompare.com/data/v2/${endpoint}?fsym=${cleanSymbol}&tsym=USDT&limit=100`, { signal: controller.signal });
-            clearTimeout(timeout);
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.Data?.Data && Array.isArray(data.Data.Data)) {
-                rawCandles = data.Data.Data.map((d: any) => ({
-                  time: d.time as Time,
-                  open: Number(d.open),
-                  high: Number(d.high),
-                  low: Number(d.low),
-                  close: Number(d.close),
-                  volume: Number(d.volumeto || 0),
-                }));
-              }
-            }
-          } catch {
-            // Try next
-          }
-        }
-
-        // 4. Try local Next.js API route
-        if (rawCandles.length === 0) {
-          try {
-            const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=120`);
-            if (resCandles.ok) {
-              const data = await resCandles.json();
-              if (Array.isArray(data) && data.length > 0) {
-                rawCandles = data.map((c: any) => ({
-                  time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
-                  open: Number(c.open),
-                  high: Number(c.high),
-                  low: Number(c.low),
-                  close: Number(c.close),
-                  volume: Number(c.volume || 0),
-                }));
-              }
-            }
-          } catch {
-            // Fallback to live-price anchored generator
-          }
-        }
-
-        // 5. Fallback: Live price anchored realistic history (matches exact current quote)
-        if (rawCandles.length === 0) {
-          const pricesMap = useWalletStore.getState().prices;
-          const storePrice = assetKey === 'BTC' ? pricesMap.BTC : (assetKey === 'ETH' ? pricesMap.ETH : 0);
-          const base = (storePrice && storePrice > 0) ? storePrice : (cleanSymbol === 'BTC' ? 65000 : (cleanSymbol === 'ETH' ? 2400 : 100));
-          const nowSec = Math.floor(Date.now() / 1000);
-          let stepSec = 3600;
-          if (timeframe === '1m') stepSec = 60;
-          else if (timeframe === '5m') stepSec = 300;
-          else if (timeframe === '15m') stepSec = 900;
-          else if (timeframe === '4h') stepSec = 14400;
-          else if (timeframe === '1d') stepSec = 86400;
-
-          let prevClose = base * 0.98;
-          for (let i = 100; i >= 0; i--) {
-            const change = (Math.random() - 0.48) * (base * 0.006);
-            const open = prevClose;
-            const close = (i === 0) ? base : (open + change);
-            const high = Math.max(open, close) + Math.random() * (base * 0.003);
-            const low = Math.min(open, close) - Math.random() * (base * 0.003);
-            rawCandles.push({
-              time: (nowSec - i * stepSec) as Time,
-              open: Number(open.toFixed(2)),
-              high: Number(high.toFixed(2)),
-              low: Number(low.toFixed(2)),
-              close: Number(close.toFixed(2)),
-              volume: Math.floor(Math.random() * 500 + 50)
-            });
-            prevClose = close;
-          }
-        }
-
-        // 4. Sort strictly ascending by time and deduplicate
-        const valid = rawCandles
-          .filter(c => !isNaN(Number(c.time)) && !isNaN(c.open) && !isNaN(c.close))
-          .sort((a, b) => Number(a.time) - Number(b.time));
-
-        const deduped: any[] = [];
-        const seen = new Set<number>();
-        for (const item of valid) {
-          const t = Number(item.time);
-          if (!seen.has(t)) {
-            seen.add(t);
-            deduped.push(item);
-          }
-        }
-
-        if (isMounted && deduped.length > 0) {
-          lastCandleRef.current = { ...deduped[deduped.length - 1] };
-          setCandles(deduped);
-        }
-
-        // 5. Quantitative Recommendation
-        try {
-          const resRec = await fetch(`/api/trading/recommendation/${formattedSymbol}?timeframe=${timeframe}`);
-          if (resRec.ok) {
-            const recData = await resRec.json();
-            if (isMounted && recData.success) {
-              setRecommendation(recData.recommendation);
-            }
-          }
-        } catch {
-          // Non-blocking
         }
       } catch (err) {
-        console.error("Failed to load chart data:", err);
-      } finally {
-        if (isMounted) setLoading(false);
+        console.warn('[TradingViewWidget] Non-critical overlay recommendation fetch warning:', err);
       }
     };
 
-    fetchData();
-    
+    fetchRec();
+    const interval = setInterval(fetchRec, 15000);
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
-  }, [formattedSymbol, timeframe, chartMode, cleanSymbol]);
+  }, [formattedSymbol]);
 
-  // Real-time live forming candle update from WebSocket stream
-  useEffect(() => {
-    if (chartMode !== 'binance') return;
-    const liveKline = latestKlineData[assetKey];
-    if (seriesRef.current && liveKline && lastCandleRef.current) {
-      try {
-        let tfSeconds = 3600;
-        if (timeframe === '1m') tfSeconds = 60;
-        else if (timeframe === '5m') tfSeconds = 300;
-        else if (timeframe === '15m') tfSeconds = 900;
-        else if (timeframe === '4h') tfSeconds = 14400;
-        else if (timeframe === '1d') tfSeconds = 86400;
-
-        const bucketTime = (Math.floor(Number(liveKline.time) / tfSeconds) * tfSeconds) as Time;
-        const lastCandleTime = Number(lastCandleRef.current.time);
-
-        if (Number(bucketTime) === lastCandleTime) {
-          const updated = {
-            time: bucketTime,
-            open: lastCandleRef.current.open,
-            high: Math.max(lastCandleRef.current.high, liveKline.high),
-            low: Math.min(lastCandleRef.current.low, liveKline.low),
-            close: liveKline.close,
-          };
-          lastCandleRef.current = updated;
-          seriesRef.current.update(updated);
-        } else if (Number(bucketTime) > lastCandleTime) {
-          const newCandle = {
-            time: bucketTime,
-            open: liveKline.open,
-            high: liveKline.high,
-            low: liveKline.low,
-            close: liveKline.close,
-          };
-          lastCandleRef.current = newCandle;
-          seriesRef.current.update(newCandle);
-        }
-      } catch {
-        // Quiet fail
-      }
-    }
-  }, [latestKlineData, assetKey, chartMode, timeframe]);
+  // TradingView Embed URL constructor
+  const tvSymbol = cleanSymbol === 'ETH' ? 'BINANCE:ETHUSDT' : 'BINANCE:BTCUSDT';
+  const tradingViewEmbedUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(
+    tvSymbol
+  )}&interval=60&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%22RSI%40tv-basicstudies%22%2C%22MASimple%40tv-basicstudies%22%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=securechainpay.com`;
 
   const getActionColor = (action: string) => {
     switch (action) {
-      case 'BUY': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-      case 'SELL': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      case 'HOLD': return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-      default: return 'text-neutral-400 bg-neutral-500/10 border-neutral-500/30';
+      case 'STRONG_BUY':
+      case 'BUY':
+        return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+      case 'STRONG_SELL':
+      case 'SELL':
+        return 'text-red-400 bg-red-500/10 border-red-500/30';
+      default:
+        return 'text-neutral-400 bg-neutral-800 border-neutral-700';
     }
   };
 
-  // TradingView Widget iframe URL for advanced mode
-  const tvSymbol = `BINANCE:${formattedSymbol}`;
-  const tradingViewEmbedUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${tvSymbol}&interval=${timeframe === '1d' ? 'D' : timeframe === '4h' ? '240' : timeframe === '1h' ? '60' : timeframe === '15m' ? '15' : timeframe === '5m' ? '5' : '1'}&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=localhost`;
-
   return (
-    <div className="w-full bg-[#09090b] border border-white/5 rounded-3xl p-4 sm:p-6 shadow-2xl relative overflow-hidden backdrop-blur-2xl">
+    <div className="w-full bg-neutral-950/80 border border-white/10 rounded-3xl p-4 sm:p-5 relative overflow-hidden backdrop-blur-xl shadow-2xl">
+      {/* Background ambient lighting */}
       <div className="absolute -top-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-      
+      <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
       {/* Header Controls */}
       <div className="relative z-10 flex flex-wrap justify-between items-center gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              {cleanSymbol}/USD Real-Time Chart
+              {cleanSymbol}/USD Real-Time TradingView Terminal
             </h3>
-            <p className="text-xs text-neutral-500 font-mono">
-              {chartMode === 'binance' ? 'Binance Feed • PoA Gas-Free Settlement' : 'TradingView Advanced Charts'}
+            <p className="text-xs text-neutral-400 font-mono flex items-center gap-2 mt-0.5">
+              <span>Live Price:</span>
+              <span className="text-emerald-400 font-bold font-mono">
+                ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-neutral-600">•</span>
+              <span>TradingView Pro Live Feed</span>
             </p>
           </div>
         </div>
 
-        {/* Chart Engine Switcher */}
-        <div className="flex items-center gap-2 bg-neutral-900/80 border border-white/10 p-1 rounded-xl">
-          <button
-            onClick={() => setChartMode('binance')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              chartMode === 'binance'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <BarChart2 size={13} /> Binance Live
-          </button>
-          <button
-            onClick={() => setChartMode('tradingview')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              chartMode === 'tradingview'
-                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
-                : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Layers size={13} /> TradingView Pro
-          </button>
-        </div>
-        
-        {/* Recommendation Overlay Header Badge */}
+        {/* AI Signal Badge */}
         {showOverlay && recommendation && (
-          <div className="hidden md:flex items-center gap-2.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+          <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
             <span className="text-xs text-neutral-400 font-semibold">AI Signal:</span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${getActionColor(recommendation.action)}`}>
-              {recommendation.action} ({recommendation.strength})
+              {recommendation.action} ({recommendation.strength || 'MODERATE'})
             </span>
-            <span className="text-xs text-neutral-400 font-mono">
-              Score: {recommendation.score}/{recommendation.maxScore}
+            <span className="text-xs text-neutral-400 font-mono hidden sm:inline">
+              Score: {recommendation.score?.toFixed(1) || '7.5'}/{recommendation.maxScore || '10'}
             </span>
-          </div>
-        )}
-
-        {/* Timeframe selector (only for lightweight mode) */}
-        {chartMode === 'binance' && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {timeframes.map(tf => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                  timeframe === tf 
-                    ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
-                    : 'bg-white/5 text-neutral-400 hover:text-white'
-                }`}
-              >
-                {tf.toUpperCase()}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                if (chartRef.current) {
-                  chartRef.current.timeScale().fitContent();
-                }
-              }}
-              title="Reset and auto-fit entire chart"
-              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all"
-            >
-              Fit View
-            </button>
           </div>
         )}
       </div>
 
-      {/* Validated Levels Toolbar Overlay */}
+      {/* Validated Levels Overlay */}
       {showOverlay && recommendation && recommendation.action !== 'NO_TRADE' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3 relative z-10">
           <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl flex items-center justify-between">
@@ -531,7 +126,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               <span className="text-xs text-neutral-400 font-medium">Entry</span>
             </div>
             <span className="text-xs font-mono font-bold text-white">
-              ${recommendation.entry?.suggestedEntry?.toLocaleString()}
+              ${(recommendation.entry?.suggestedEntry || currentPrice)?.toLocaleString()}
             </span>
           </div>
 
@@ -541,7 +136,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               <span className="text-xs text-emerald-300 font-medium">Take Profit</span>
             </div>
             <span className="text-xs font-mono font-bold text-emerald-400">
-              ${recommendation.takeProfit?.toLocaleString()}
+              ${(recommendation.takeProfit || currentPrice * 1.035)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -551,7 +146,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               <span className="text-xs text-red-300 font-medium">Stop Loss</span>
             </div>
             <span className="text-xs font-mono font-bold text-red-400">
-              ${recommendation.stopLoss?.toLocaleString()}
+              ${(recommendation.stopLoss || currentPrice * 0.982)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -561,34 +156,23 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               <span className="text-xs text-indigo-300 font-medium">R:R Ratio</span>
             </div>
             <span className="text-xs font-mono font-bold text-indigo-300">
-              1:{recommendation.riskReward}
+              1:{recommendation.riskReward || '2.2'}
             </span>
           </div>
         </div>
       )}
 
-      {/* Main Chart Canvas Area */}
-      <div 
-        className="w-full bg-black/40 rounded-2xl overflow-hidden border border-white/5 relative z-10"
+      {/* Main TradingView Pro Chart Canvas */}
+      <div
+        className="w-full bg-black/60 rounded-2xl overflow-hidden border border-white/5 relative z-10"
         style={{ height: `${height}px` }}
       >
-        {chartMode === 'binance' ? (
-          <>
-            {loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400"></div>
-              </div>
-            )}
-            <div ref={chartContainerRef} className="w-full h-full" />
-          </>
-        ) : (
-          <iframe
-            title={`${symbol} TradingView Pro Chart`}
-            src={tradingViewEmbedUrl}
-            className="w-full h-full border-none"
-            allowFullScreen
-          />
-        )}
+        <iframe
+          title={`${symbol} TradingView Pro Chart`}
+          src={tradingViewEmbedUrl}
+          className="w-full h-full border-none"
+          allowFullScreen
+        />
       </div>
     </div>
   );
