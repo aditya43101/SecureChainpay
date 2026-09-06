@@ -148,7 +148,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       try {
         let rawCandles: any[] = [];
 
-        // 1. Direct client-side Binance Vision API (fastest, no rate-limit, global CDN)
+        // 1. Direct client-side Binance Vision & Binance API
         const binanceEndpoints = [
           `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
           `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
@@ -158,7 +158,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
         for (const url of binanceEndpoints) {
           try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 3000);
+            const timeout = setTimeout(() => controller.abort(), 2500);
             const res = await fetch(url, { signal: controller.signal });
             clearTimeout(timeout);
             if (res.ok) {
@@ -176,11 +176,69 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               }
             }
           } catch {
-            // Try next endpoint
+            // Try next
           }
         }
 
-        // 2. Try local backend Next.js API if direct Binance was blocked
+        // 2. Direct Bybit Spot API fallback (ultra-reliable global CDN)
+        if (rawCandles.length === 0) {
+          try {
+            const bybitTfMap: Record<string, string> = {
+              '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D'
+            };
+            const bybitTf = bybitTfMap[timeframe] || '60';
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 2500);
+            const res = await fetch(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${formattedSymbol}&interval=${bybitTf}&limit=120`, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.result?.list && Array.isArray(data.result.list) && data.result.list.length > 0) {
+                rawCandles = data.result.list.map((k: any) => ({
+                  time: Math.floor(parseInt(k[0], 10) / 1000) as Time,
+                  open: parseFloat(k[1]),
+                  high: parseFloat(k[2]),
+                  low: parseFloat(k[3]),
+                  close: parseFloat(k[4]),
+                  volume: parseFloat(k[5] || '0'),
+                }));
+              }
+            }
+          } catch {
+            // Try next
+          }
+        }
+
+        // 3. Direct CryptoCompare API fallback
+        if (rawCandles.length === 0) {
+          try {
+            let endpoint = 'histohour';
+            if (timeframe === '1m' || timeframe === '5m' || timeframe === '15m') endpoint = 'histominute';
+            else if (timeframe === '1d') endpoint = 'histoday';
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 2500);
+            const res = await fetch(`https://min-api.cryptocompare.com/data/v2/${endpoint}?fsym=${cleanSymbol}&tsym=USDT&limit=100`, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.Data?.Data && Array.isArray(data.Data.Data)) {
+                rawCandles = data.Data.Data.map((d: any) => ({
+                  time: d.time as Time,
+                  open: Number(d.open),
+                  high: Number(d.high),
+                  low: Number(d.low),
+                  close: Number(d.close),
+                  volume: Number(d.volumeto || 0),
+                }));
+              }
+            }
+          } catch {
+            // Try next
+          }
+        }
+
+        // 4. Try local Next.js API route
         if (rawCandles.length === 0) {
           try {
             const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=120`);
@@ -198,13 +256,15 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
               }
             }
           } catch {
-            // Fallback to synthetic
+            // Fallback to live-price anchored generator
           }
         }
 
-        // 3. Fallback to generated realistic candles if both remote and backend were unreachable
+        // 5. Fallback: Live price anchored realistic history (matches exact current quote)
         if (rawCandles.length === 0) {
-          const base = cleanSymbol === 'BTC' ? 65000 : (cleanSymbol === 'ETH' ? 3450 : 100);
+          const pricesMap = useWalletStore.getState().prices;
+          const storePrice = assetKey === 'BTC' ? pricesMap.BTC : (assetKey === 'ETH' ? pricesMap.ETH : 0);
+          const base = (storePrice && storePrice > 0) ? storePrice : (cleanSymbol === 'BTC' ? 65000 : (cleanSymbol === 'ETH' ? 2400 : 100));
           const nowSec = Math.floor(Date.now() / 1000);
           let stepSec = 3600;
           if (timeframe === '1m') stepSec = 60;
@@ -217,7 +277,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
           for (let i = 100; i >= 0; i--) {
             const change = (Math.random() - 0.48) * (base * 0.006);
             const open = prevClose;
-            const close = open + change;
+            const close = (i === 0) ? base : (open + change);
             const high = Math.max(open, close) + Math.random() * (base * 0.003);
             const low = Math.min(open, close) - Math.random() * (base * 0.003);
             rawCandles.push({
@@ -392,7 +452,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
 
         {/* Timeframe selector (only for lightweight mode) */}
         {chartMode === 'binance' && (
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {timeframes.map(tf => (
               <button
                 key={tf}
@@ -406,6 +466,17 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
                 {tf.toUpperCase()}
               </button>
             ))}
+            <button
+              onClick={() => {
+                if (chartRef.current) {
+                  chartRef.current.timeScale().fitContent();
+                }
+              }}
+              title="Reset and auto-fit entire chart"
+              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all"
+            >
+              Fit View
+            </button>
           </div>
         )}
       </div>
