@@ -15,14 +15,17 @@ interface TradingViewWidgetProps {
 const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
 function getInitialHistoricalCandles(asset: string, tf: string): any[] {
-  const base = asset === 'BTC' ? 79700 : (asset === 'ETH' ? 2390 : 100);
-  const nowSec = Math.floor(Date.now() / 1000);
+  const storePrice = typeof window !== 'undefined' ? useWalletStore.getState().prices[asset === 'BTC' ? 'BTC' : 'ETH'] : 0;
+  const base = (storePrice && storePrice > 0) ? storePrice : (asset === 'BTC' ? 79700 : (asset === 'ETH' ? 2390 : 100));
+  
   let stepSec = 3600;
   if (tf === '1m') stepSec = 60;
   else if (tf === '5m') stepSec = 300;
   else if (tf === '15m') stepSec = 900;
   else if (tf === '4h') stepSec = 14400;
   else if (tf === '1d') stepSec = 86400;
+
+  const currentBucket = Math.floor(Math.floor(Date.now() / 1000) / stepSec) * stepSec;
 
   const list: any[] = [];
   let prevClose = base * 0.985;
@@ -33,7 +36,7 @@ function getInitialHistoricalCandles(asset: string, tf: string): any[] {
     const high = Math.max(open, close) + Math.random() * (base * 0.002);
     const low = Math.min(open, close) - Math.random() * (base * 0.002);
     list.push({
-      time: (nowSec - i * stepSec) as Time,
+      time: (currentBucket - i * stepSec) as Time,
       open: Number(open.toFixed(2)),
       high: Number(high.toFixed(2)),
       low: Number(low.toFixed(2)),
@@ -49,6 +52,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const lastCandleRef = useRef<any>(null);
   const [timeframe, setTimeframe] = useState('1h');
   const [loading, setLoading] = useState(false);
   const [recommendation, setRecommendation] = useState<any>(null);
@@ -87,7 +91,6 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     }
 
     const container = chartContainerRef.current;
-    const initialWidth = container.clientWidth > 0 ? container.clientWidth : 800;
 
     const chart = createChart(container, {
       autoSize: true,
@@ -102,8 +105,8 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 6,
-        barSpacing: 10,
+        rightOffset: 8,
+        barSpacing: 9,
         minBarSpacing: 3,
       }
     });
@@ -123,16 +126,17 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
 
     seriesRef.current = series;
 
-    // If candles already exist in state, populate them immediately
-    if (candles.length > 0) {
-      series.setData(candles);
-      setTimeout(() => {
-        chart.timeScale().fitContent();
-      }, 50);
-      setTimeout(() => {
-        chart.timeScale().fitContent();
-      }, 250);
-    }
+    // Synchronously populate baseline candles on creation
+    const initialList = candles.length > 0 ? candles : getInitialHistoricalCandles(assetKey, timeframe);
+    series.setData(initialList);
+    lastCandleRef.current = { ...initialList[initialList.length - 1] };
+    
+    setTimeout(() => {
+      chart.timeScale().fitContent();
+    }, 50);
+    setTimeout(() => {
+      chart.timeScale().fitContent();
+    }, 200);
 
     // Use ResizeObserver for responsive resizing
     const resizeObserver = new ResizeObserver((entries) => {
@@ -161,9 +165,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [chartMode, height]);
-
-  const lastCandleRef = useRef<any>(null);
+  }, [chartMode, height, assetKey]);
 
   // Sync candles state to series
   useEffect(() => {
