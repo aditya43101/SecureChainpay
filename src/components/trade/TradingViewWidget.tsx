@@ -103,6 +103,8 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     };
   }, [chartMode, height]);
 
+  const historicalCandlesRef = useRef<any[]>([]);
+
   // Fetch Initial Candles & Quantitative Recommendation
   useEffect(() => {
     if (chartMode !== 'binance') return;
@@ -114,58 +116,71 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       try {
         let candlesData: any[] = [];
 
-        // 1. Try local backend Next.js API
-        try {
-          const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=150`);
-          if (resCandles.ok) {
-            const data = await resCandles.json();
-            if (Array.isArray(data) && data.length > 0) {
-              candlesData = data;
+        // 1. Direct client-side Binance Vision API (highest speed, no rate limits, works everywhere)
+        const binanceEndpoints = [
+          `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
+          `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
+          `https://api.binance.us/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
+        ];
+
+        for (const url of binanceEndpoints) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3500);
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (res.ok) {
+              const raw = await res.json();
+              if (Array.isArray(raw) && raw.length > 0) {
+                candlesData = raw.map((k: any) => ({
+                  time: Math.floor(k[0] / 1000) as Time,
+                  open: parseFloat(k[1]),
+                  high: parseFloat(k[2]),
+                  low: parseFloat(k[3]),
+                  close: parseFloat(k[4]),
+                  volume: parseFloat(k[5]),
+                }));
+                break;
+              }
             }
+          } catch {
+            // Try next endpoint
           }
-        } catch {
-          // Fallback to direct fetch
         }
 
-        // 2. Direct client-side Binance fallback if API returned empty
+        // 2. Try local backend Next.js API if external endpoints were blocked
         if (candlesData.length === 0) {
-          const binanceEndpoints = [
-            `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=100`,
-            `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=100`,
-            `https://api.binance.us/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=100`,
-          ];
-
-          for (const url of binanceEndpoints) {
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 3500);
-              const res = await fetch(url, { signal: controller.signal });
-              clearTimeout(timeout);
-              if (res.ok) {
-                const raw = await res.json();
-                if (Array.isArray(raw) && raw.length > 0) {
-                  candlesData = raw.map((k: any) => ({
-                    timestamp: new Date(k[0]).toISOString(),
-                    open: parseFloat(k[1]),
-                    high: parseFloat(k[2]),
-                    low: parseFloat(k[3]),
-                    close: parseFloat(k[4]),
-                    volume: parseFloat(k[5]),
-                  }));
-                  break;
-                }
+          try {
+            const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=120`);
+            if (resCandles.ok) {
+              const data = await resCandles.json();
+              if (Array.isArray(data) && data.length > 0) {
+                candlesData = data.map((c: any) => ({
+                  time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
+                  open: Number(c.open),
+                  high: Number(c.high),
+                  low: Number(c.low),
+                  close: Number(c.close),
+                  volume: Number(c.volume || 0),
+                }));
               }
-            } catch {
-              // Try next endpoint
             }
+          } catch {
+            // Fallback to synthetic
           }
         }
 
         // 3. Fallback to generated realistic candles if both remote and backend were unreachable
         if (candlesData.length === 0) {
           const base = cleanSymbol === 'BTC' ? 65000 : (cleanSymbol === 'ETH' ? 3450 : 100);
-          const now = Date.now();
-          const step = 60 * 60 * 1000;
+          const nowSec = Math.floor(Date.now() / 1000);
+          let stepSec = 3600;
+          if (timeframe === '1m') stepSec = 60;
+          else if (timeframe === '5m') stepSec = 300;
+          else if (timeframe === '15m') stepSec = 900;
+          else if (timeframe === '4h') stepSec = 14400;
+          else if (timeframe === '1d') stepSec = 86400;
+
           let prevClose = base * 0.98;
           for (let i = 80; i >= 0; i--) {
             const change = (Math.random() - 0.48) * (base * 0.006);
@@ -174,7 +189,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
             const high = Math.max(open, close) + Math.random() * (base * 0.003);
             const low = Math.min(open, close) - Math.random() * (base * 0.003);
             candlesData.push({
-              timestamp: new Date(now - i * step).toISOString(),
+              time: (nowSec - i * stepSec) as Time,
               open: Number(open.toFixed(2)),
               high: Number(high.toFixed(2)),
               low: Number(low.toFixed(2)),
@@ -185,16 +200,29 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
           }
         }
 
-        // 4. Render candles onto series
-        if (isMounted && seriesRef.current && candlesData.length > 0) {
-          const chartData = candlesData.map(c => ({
-            time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
-          }));
-          seriesRef.current.setData(chartData);
+        // 4. Render sorted candles onto series
+        if (isMounted && candlesData.length > 0) {
+          // Sort strictly ascending by time and deduplicate
+          const sorted = candlesData
+            .filter(c => !isNaN(Number(c.time)) && !isNaN(c.open) && !isNaN(c.close))
+            .sort((a, b) => Number(a.time) - Number(b.time));
+
+          const deduped: any[] = [];
+          const seen = new Set<number>();
+          for (const item of sorted) {
+            const t = Number(item.time);
+            if (!seen.has(t)) {
+              seen.add(t);
+              deduped.push(item);
+            }
+          }
+
+          historicalCandlesRef.current = deduped;
+
+          if (seriesRef.current) {
+            seriesRef.current.setData(deduped);
+            chartRef.current?.timeScale().fitContent();
+          }
         }
 
         // 5. Quantitative Recommendation
@@ -227,20 +255,49 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
   useEffect(() => {
     if (chartMode !== 'binance') return;
     const liveKline = latestKlineData[assetKey];
-    if (seriesRef.current && liveKline) {
+    if (seriesRef.current && liveKline && historicalCandlesRef.current.length > 0) {
       try {
-        seriesRef.current.update({
-          time: liveKline.time as Time,
-          open: liveKline.open,
-          high: liveKline.high,
-          low: liveKline.low,
-          close: liveKline.close,
-        });
+        const lastCandle = historicalCandlesRef.current[historicalCandlesRef.current.length - 1];
+        if (!lastCandle) return;
+
+        let tfSeconds = 3600;
+        if (timeframe === '1m') tfSeconds = 60;
+        else if (timeframe === '5m') tfSeconds = 300;
+        else if (timeframe === '15m') tfSeconds = 900;
+        else if (timeframe === '4h') tfSeconds = 14400;
+        else if (timeframe === '1d') tfSeconds = 86400;
+
+        const bucketTime = (Math.floor(Number(liveKline.time) / tfSeconds) * tfSeconds) as Time;
+        const lastCandleTime = Number(lastCandle.time);
+
+        if (Number(bucketTime) === lastCandleTime) {
+          // Update current active candle
+          const updated = {
+            time: bucketTime,
+            open: lastCandle.open,
+            high: Math.max(lastCandle.high, liveKline.high),
+            low: Math.min(lastCandle.low, liveKline.low),
+            close: liveKline.close,
+          };
+          historicalCandlesRef.current[historicalCandlesRef.current.length - 1] = updated;
+          seriesRef.current.update(updated);
+        } else if (Number(bucketTime) > lastCandleTime) {
+          // New candle in timeframe
+          const newCandle = {
+            time: bucketTime,
+            open: liveKline.open,
+            high: liveKline.high,
+            low: liveKline.low,
+            close: liveKline.close,
+          };
+          historicalCandlesRef.current.push(newCandle);
+          seriesRef.current.update(newCandle);
+        }
       } catch {
         // Quiet fail
       }
     }
-  }, [latestKlineData, assetKey, chartMode]);
+  }, [latestKlineData, assetKey, chartMode, timeframe]);
 
   const getActionColor = (action: string) => {
     switch (action) {

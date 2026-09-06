@@ -8,8 +8,8 @@ export async function GET(
   try {
     const symbol = (await params).symbol;
     const { searchParams } = new URL(request.url);
-    const timeframe = searchParams.get('timeframe') || '1h';
-    const limit = parseInt(searchParams.get('limit') || '200', 10);
+    const timeframe = searchParams.get('timeframe') || searchParams.get('interval') || '1h';
+    const limit = parseInt(searchParams.get('limit') || '150', 10);
 
     if (!symbol) {
       return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
@@ -17,17 +17,16 @@ export async function GET(
 
     const formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
     
-    // Validate timeframe
+    // Normalize timeframe
     const validTimeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
-    if (!validTimeframes.includes(timeframe)) {
-      return NextResponse.json({ error: 'Invalid timeframe' }, { status: 400 });
-    }
+    const selectedTimeframe = validTimeframes.includes(timeframe) ? timeframe : '1h';
 
-    const candles = await marketDataService.getCandles(formattedSymbol, timeframe, limit);
+    const candles = await marketDataService.getCandles(formattedSymbol, selectedTimeframe, limit);
     
     return NextResponse.json(candles);
   } catch (error: any) {
-    console.error('Candles Error:', error);
-    return NextResponse.json({ error: 'Market data temporarily unavailable' }, { status: 500 });
+    console.error('Candles Route Error:', error);
+    // Return empty array instead of 500 so client fallback kicks in cleanly
+    return NextResponse.json([]);
   }
 }
