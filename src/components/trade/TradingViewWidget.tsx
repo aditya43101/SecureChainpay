@@ -14,6 +14,37 @@ interface TradingViewWidgetProps {
 
 const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
+function getInitialHistoricalCandles(asset: string, tf: string): any[] {
+  const base = asset === 'BTC' ? 79700 : (asset === 'ETH' ? 2390 : 100);
+  const nowSec = Math.floor(Date.now() / 1000);
+  let stepSec = 3600;
+  if (tf === '1m') stepSec = 60;
+  else if (tf === '5m') stepSec = 300;
+  else if (tf === '15m') stepSec = 900;
+  else if (tf === '4h') stepSec = 14400;
+  else if (tf === '1d') stepSec = 86400;
+
+  const list: any[] = [];
+  let prevClose = base * 0.985;
+  for (let i = 100; i >= 0; i--) {
+    const change = (Math.random() - 0.48) * (base * 0.005);
+    const open = prevClose;
+    const close = (i === 0) ? base : (open + change);
+    const high = Math.max(open, close) + Math.random() * (base * 0.002);
+    const low = Math.min(open, close) - Math.random() * (base * 0.002);
+    list.push({
+      time: (nowSec - i * stepSec) as Time,
+      open: Number(open.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      volume: Math.floor(Math.random() * 500 + 50)
+    });
+    prevClose = close;
+  }
+  return list;
+}
+
 export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: TradingViewWidgetProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -42,7 +73,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     updateTradingContext({ timeframe });
   }, [timeframe, updateTradingContext]);
 
-  const [candles, setCandles] = useState<any[]>([]);
+  const [candles, setCandles] = useState<any[]>(() => getInitialHistoricalCandles(assetKey, timeframe));
 
   // Init Lightweight Chart when in 'binance' mode
   useEffect(() => {
