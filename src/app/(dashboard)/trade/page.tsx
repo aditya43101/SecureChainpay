@@ -1,42 +1,179 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useWalletStore } from '@/stores/wallet-store';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
+import { useAIStore } from '@/stores/ai-store';
+import { useSearchParams } from 'next/navigation';
+import { TradingViewWidget } from '@/components/trade/TradingViewWidget';
+import { RefreshCw, Newspaper, Info, ShieldCheck, Sparkles, TrendingUp, Bot } from 'lucide-react';
+import { AIAssistantPanel } from '@/components/trading-ai/AIAssistantPanel';
+import { formatTime } from '@/lib/timezone-service';
 
 type CryptoAsset = 'BTC' | 'ETH';
 
-export default function TradePage() {
-  const { balances, executeTransaction } = useWalletStore();
-  const [prices, setPrices] = useState({ BTC: 0, ETH: 0 });
+interface NewsItem {
+  title: string;
+  source: string;
+  date: string;
+  snippet: string;
+}
+
+interface AssetDetails {
+  rank: number;
+  marketCap: string;
+  circulatingSupply: string;
+  maxSupply: string;
+  allTimeHigh: string;
+}
+
+const NEWS_DATA: Record<CryptoAsset, NewsItem[]> = {
+  BTC: [
+    {
+      title: "Bitcoin Hash Rate Reaches New Milestone Amid Network Security Upgrades",
+      source: "CryptoNews Daily",
+      date: "August 24, 2026",
+      snippet: "The total computational power securing the Bitcoin network has reached an all-time high, reinforcing the blockchain's robust resistance to external attacks."
+    },
+    {
+      title: "Institutional Inflows in Spot Bitcoin ETFs Continue to Accelerate",
+      source: "Financial Ledger",
+      date: "August 23, 2026",
+      snippet: "Global investment banks report record-high asset management inflows into Bitcoin exchange-traded funds, signaling long-term macro accumulation."
+    },
+    {
+      title: "Bitcoin Scarcity Model Strengthens Post-Halving as Exchange Reserves Drop",
+      source: "Decentralized Investor",
+      date: "August 22, 2026",
+      snippet: "On-chain analytic reports indicate liquid supply on major cryptocurrency exchanges has reached a multi-year low, suggesting positive price pressure."
+    }
+  ],
+  ETH: [
+    {
+      title: "Ethereum Core Developers Detail EIP Upgrades for Gas Fee Reduction",
+      source: "Etherscan Insights",
+      date: "August 24, 2026",
+      snippet: "The latest technical update proposals focus heavily on layer-2 rollup blob gas optimizations, promising to slash transaction costs by up to 90%."
+    },
+    {
+      title: "Ethereum Staking TVL Surpasses 32 Million ETH, Locking Long-Term Supply",
+      source: "Validator Network",
+      date: "August 23, 2026",
+      snippet: "Over 26% of the circulating Ethereum supply is now actively locked in the consensus layer protocol, contributing to validator rewards and coin deflation."
+    },
+    {
+      title: "Layer-2 Activity on Arbitrum and Base Reaches All-Time Transaction Highs",
+      source: "Layer-2 Tracker",
+      date: "August 22, 2026",
+      snippet: "Decentralized applications on Ethereum rollups are processing record numbers of micro-transactions, expanding utility while maintaining mainnet security."
+    }
+  ]
+};
+
+const DETAILS_DATA: Record<CryptoAsset, AssetDetails> = {
+  BTC: {
+    rank: 1,
+    marketCap: "1.26 Trillion HSCT",
+    circulatingSupply: "19.74 Million BTC",
+    maxSupply: "21.00 Million BTC",
+    allTimeHigh: "6,158,125 HSCT"
+  },
+  ETH: {
+    rank: 2,
+    marketCap: "415 Billion HSCT",
+    circulatingSupply: "120.2 Million ETH",
+    maxSupply: "Infinite (Inflationary/Burn model)",
+    allTimeHigh: "408,398 HSCT"
+  }
+};
+
+function TradeContent() {
+  const { balances, executeTransaction, prices, fetchPrices, tickerStats, subscribeToLivePrices } = useWalletStore();
+  const searchParams = useSearchParams();
+  const assetParam = searchParams.get('asset');
+  
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset>('BTC');
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [realStats, setRealStats] = useState<any>(null);
 
-  // Fetch prices from CoinGecko
+  // AI Panel State
+  const aiPanelOpen = useAIStore((s) => s.isPanelOpen);
+  const isTradingPanelEnabled = useAIStore((s) => s.isTradingPanelEnabled);
+  const isAssistantEnabled = useAIStore((s) => s.isAssistantEnabled);
+  const setAIPanelOpen = useAIStore((s) => s.setPanelOpen);
+  const setActiveAsset = useAIStore((s) => s.setActiveAsset);
+
+  // Handle asset parameter from query string
   useEffect(() => {
-    const fetchPrices = async () => {
+    if (assetParam === 'ETH' || assetParam === 'BTC') {
+      setSelectedAsset(assetParam);
+    }
+  }, [assetParam]);
+
+  // Sync selected asset to AI store
+  useEffect(() => {
+    setActiveAsset(selectedAsset);
+  }, [selectedAsset, setActiveAsset]);
+
+  // Subscribe to live WebSocket updates (sub-second feeds)
+  useEffect(() => {
+    const unsubscribe = subscribeToLivePrices();
+    return () => unsubscribe();
+  }, [subscribeToLivePrices]);
+
+  // Sync prices from centralized wallet store on mount
+  useEffect(() => {
+    const syncPrices = async () => {
       try {
-        const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd');
-        const data = await res.json();
-        setPrices({
-          BTC: data.bitcoin.usd,
-          ETH: data.ethereum.usd
-        });
+        await fetchPrices();
       } catch (err) {
-        console.error('Failed to fetch prices', err);
-        // Fallback simulated prices if API fails or is rate-limited
-        setPrices({ BTC: 64230.50, ETH: 3450.20 });
+        console.error('Failed to fetch prices in trade page:', err);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchPrices();
-    const interval = setInterval(fetchPrices, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
+    syncPrices();
+  }, [fetchPrices]);
+
+  // Fetch real market stats from backend
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStats = async () => {
+      try {
+        const formattedSymbol = selectedAsset === 'BTC' ? 'BTCUSDT' : (selectedAsset === 'ETH' ? 'ETHUSDT' : selectedAsset);
+        const res = await fetch(`/api/market/ticker/${formattedSymbol}`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setRealStats(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch real stats:", err);
+      }
+    };
+    fetchStats();
+    
+    // Refresh stats every 10 seconds
+    const interval = setInterval(fetchStats, 10000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedAsset]);
+
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchPrices();
+    } catch (err) {
+      console.warn('Manual refresh failed:', err);
+    } finally {
+      setTimeout(() => setRefreshing(false), 800);
+    }
+  };
 
   const handleTrade = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,20 +185,23 @@ export default function TradePage() {
       return;
     }
 
-    const price = prices[selectedAsset];
-    const totalUsd = numAmount * price;
+    const priceInUsd = prices[selectedAsset];
+    const priceInHsct = priceInUsd * USD_TO_HSCT;
+    const totalHsct = numAmount * priceInHsct;
+
+    const availableHsct = balances.USD;
 
     if (tradeType === 'buy') {
-      if (balances.USD < totalUsd) {
-        setError('Insufficient USD balance');
+      if (availableHsct < totalHsct) {
+        setError('Insufficient HSCT balance');
         return;
       }
       try {
         await executeTransaction(
           'trade',
-          totalUsd,
+          totalHsct,
           'USD',
-          `Bought ${numAmount} ${selectedAsset} for $${totalUsd.toFixed(2)}`,
+          `Bought ${numAmount} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`,
           { tradeAsset: selectedAsset, tradeAmount: numAmount }
         );
       } catch (err: any) {
@@ -78,8 +218,8 @@ export default function TradePage() {
           'trade',
           numAmount,
           selectedAsset,
-          `Sold ${numAmount} ${selectedAsset} for $${totalUsd.toFixed(2)}`,
-          { tradeAsset: 'USD', tradeAmount: totalUsd }
+          `Sold ${numAmount} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`,
+          { tradeAsset: 'USD', tradeAmount: totalHsct }
         );
       } catch (err: any) {
         setError(err.message || 'Transaction failed');
@@ -90,111 +230,328 @@ export default function TradePage() {
     setAmount('');
   };
 
+  const priceInUsd = prices[selectedAsset];
+  const priceInHsct = priceInUsd * USD_TO_HSCT;
+  
+  const news = NEWS_DATA[selectedAsset];
+  const details = DETAILS_DATA[selectedAsset];
+
+  // Prefer real backend stats, fallback to store stats
+  const dailyHighHsct = realStats ? parseFloat(realStats.high24h) * USD_TO_HSCT : (tickerStats[selectedAsset].high || priceInUsd * 1.025) * USD_TO_HSCT;
+  const dailyLowHsct = realStats ? parseFloat(realStats.low24h) * USD_TO_HSCT : (tickerStats[selectedAsset].low || priceInUsd * 0.978) * USD_TO_HSCT;
+  
+  // Volume converted to HSCT values
+  const rawVolumeUsd = realStats ? parseFloat(realStats.volume24h) * priceInUsd : (selectedAsset === 'BTC' ? 24.85e9 : 12.40e9);
+  const rawVolumeHsct = rawVolumeUsd * USD_TO_HSCT;
+  const dailyVolumeHsct = `${~~(rawVolumeHsct / 1e9)} Billion HSCT`;
+
+  const priceChangePercent = realStats ? parseFloat(realStats.change24h) : (tickerStats[selectedAsset].change || 0.00);
+
+  const showAIPanel = isAssistantEnabled && isTradingPanelEnabled;
+
+  const marketConnectionStatus = useWalletStore((s) => s.marketConnectionStatus);
+  const lastMarketDataAt = useWalletStore((s) => s.lastMarketDataAt);
+  const isMarketDataStale = useWalletStore((s) => s.isMarketDataStale);
+
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans">
-      <div className="max-w-3xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 mb-2">
-            Trade Crypto
-          </h1>
-          <p className="text-gray-400">Buy and sell cryptocurrency at real-time market prices.</p>
+    <div className="min-h-screen bg-black text-white font-sans">
+      <div className="flex">
+        {/* Main Trading Content */}
+        <div className={`flex-1 min-w-0 p-4 md:p-8 transition-all ${showAIPanel && aiPanelOpen ? 'md:pr-0' : ''}`}>
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header Block with Title & Manual Refresh */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900/30 border border-white/5 p-6 rounded-3xl backdrop-blur-xl">
+          <div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-black text-white tracking-tight">Trade Terminal</h1>
+              
+              {/* Connection Status Badge */}
+              <span className={`px-2.5 py-0.5 border text-xs font-mono font-bold rounded-full flex items-center gap-1.5 ${
+                marketConnectionStatus === 'CONNECTED' && !isMarketDataStale
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : isMarketDataStale
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  marketConnectionStatus === 'CONNECTED' && !isMarketDataStale ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`} />
+                {marketConnectionStatus === 'CONNECTED' 
+                  ? (isMarketDataStale ? 'STALE FEED' : 'BINANCE WS LIVE') 
+                  : marketConnectionStatus}
+              </span>
+
+              {/* Real-time Last Updated Timestamp in Asia/Kolkata */}
+              {lastMarketDataAt && (
+                <span className="text-xs text-neutral-400 font-mono">
+                  Updated: <span className="text-neutral-200 font-bold">{formatTime(lastMarketDataAt)}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-neutral-400 text-sm mt-1">Non-custodial instant order execution • Live USD prices with HSCT settlement</p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            {/* Quick selectors */}
+            <div className="flex bg-black/40 border border-white/5 p-1 rounded-2xl">
+              <button 
+                onClick={() => setSelectedAsset('BTC')} 
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${selectedAsset === 'BTC' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-sm' : 'text-neutral-500 hover:text-white'}`}
+              >
+                BTC
+              </button>
+              <button 
+                onClick={() => setSelectedAsset('ETH')} 
+                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${selectedAsset === 'ETH' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-sm' : 'text-neutral-500 hover:text-white'}`}
+              >
+                ETH
+              </button>
+            </div>
+            
+            {/* Refresh Button */}
+            <button 
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all flex items-center justify-center text-white disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={refreshing ? 'animate-spin text-indigo-400' : ''} />
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Market Prices */}
-          <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
-            <h2 className="text-xl font-bold mb-4">Market Prices</h2>
-            {loading ? (
-              <p className="text-gray-400 animate-pulse">Loading prices...</p>
-            ) : (
-              <div className="space-y-4">
-                <div onClick={() => setSelectedAsset('BTC')} className={`p-4 rounded-xl cursor-pointer transition-colors border ${selectedAsset === 'BTC' ? 'border-orange-500 bg-orange-500/10' : 'border-gray-800 hover:bg-gray-800'}`}>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_currentColor]"></div>
-                      <span className="font-semibold text-lg">Bitcoin (BTC)</span>
-                    </div>
-                    <span className="font-mono text-lg">${prices.BTC.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div onClick={() => setSelectedAsset('ETH')} className={`p-4 rounded-xl cursor-pointer transition-colors border ${selectedAsset === 'ETH' ? 'border-blue-500 bg-blue-500/10' : 'border-gray-800 hover:bg-gray-800'}`}>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_currentColor]"></div>
-                      <span className="font-semibold text-lg">Ethereum (ETH)</span>
-                    </div>
-                    <span className="font-mono text-lg">${prices.ETH.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Live Ticker Stats Bar */}
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 bg-neutral-950/60 border border-white/5 p-5 rounded-3xl font-mono text-sm">
+          <div>
+            <span className="text-neutral-500 text-xs block mb-1">MARKET PAIR</span>
+            <span className="text-white font-bold text-base">{selectedAsset}/USD</span>
           </div>
+          <div>
+            <span className="text-neutral-500 text-xs block mb-1">LAST PRICE</span>
+            <span className="text-white font-black text-base">${priceInUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-neutral-500 text-[10px] block mt-0.5 font-mono">≈ {priceInHsct.toLocaleString('en-US', { maximumFractionDigits: 2 })} HSCT</span>
+          </div>
+          <div>
+            <span className="text-neutral-500 text-xs block mb-1">24H CHANGE</span>
+            <span className={`font-bold text-base flex items-center gap-1 ${priceChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {priceChangePercent >= 0 ? '▲' : '▼'} {Math.abs(priceChangePercent).toFixed(2)}%
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-500 text-xs block mb-1">24H HIGH</span>
+            <span className="text-emerald-400 font-bold text-base">${(realStats ? parseFloat(realStats.high24h) : (tickerStats[selectedAsset].high || priceInUsd * 1.025)).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+            <span className="text-neutral-500 text-[10px] block mt-0.5 font-mono">≈ {dailyHighHsct.toLocaleString('en-US', { maximumFractionDigits: 2 })} HSCT</span>
+          </div>
+          <div>
+            <span className="text-neutral-500 text-xs block mb-1">24H LOW</span>
+            <span className="text-rose-400 font-bold text-base">${(realStats ? parseFloat(realStats.low24h) : (tickerStats[selectedAsset].low || priceInUsd * 0.978)).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+            <span className="text-neutral-500 text-[10px] block mt-0.5 font-mono">≈ {dailyLowHsct.toLocaleString('en-US', { maximumFractionDigits: 2 })} HSCT</span>
+          </div>
+          <div className="col-span-2 md:col-span-1">
+            <span className="text-neutral-500 text-xs block mb-1">24H VOLUME</span>
+            <span className="text-white font-bold text-base">${~~(rawVolumeUsd / 1e9)}B</span>
+            <span className="text-neutral-500 text-[10px] block mt-0.5 font-mono">≈ {dailyVolumeHsct}</span>
+          </div>
+        </div>
 
-          {/* Trade Form */}
-          <div className="bg-gray-950/80 backdrop-blur border border-gray-800 rounded-2xl p-6">
-            <div className="flex bg-gray-900 rounded-lg p-1 mb-6">
-              <button 
-                onClick={() => setTradeType('buy')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tradeType === 'buy' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              >
-                Buy
-              </button>
-              <button 
-                onClick={() => setTradeType('sell')}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tradeType === 'sell' ? 'bg-rose-600 text-white' : 'text-gray-400 hover:text-white'}`}
-              >
-                Sell
-              </button>
-            </div>
-
-            <form onSubmit={handleTrade} className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">
-                  Amount in {selectedAsset}
-                </label>
-                <div className="relative">
-                  <input 
-                    type="number"
-                    step="any"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full bg-gray-900 border border-gray-700 text-white px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">
-                    {selectedAsset}
-                  </span>
-                </div>
-              </div>
-
-              {amount && !isNaN(parseFloat(amount)) && (
-                <div className="p-4 bg-gray-900 rounded-xl flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Estimated Total</span>
-                  <span className="font-mono font-semibold">${(parseFloat(amount) * prices[selectedAsset]).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits:2})}</span>
-                </div>
-              )}
-
-              {error && <div className="text-rose-500 text-sm font-medium">{error}</div>}
-
-              <button 
-                type="submit" 
-                className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
-                  tradeType === 'buy' 
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(5,150,105,0.4)]'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white shadow-[0_0_15px_rgba(225,29,72,0.4)]'
-                }`}
-              >
-                {tradeType === 'buy' ? 'Buy' : 'Sell'} {selectedAsset}
-              </button>
-            </form>
+        {/* Main Grid: left 3 columns for chart/news, right 1 column for order book panel */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+          
+          {/* LEFT 3 COLUMNS: Chart, Stats, News */}
+          <div className="xl:col-span-3 space-y-6">
             
-            <div className="mt-4 pt-4 border-t border-gray-800 text-sm text-gray-500 flex justify-between">
-              <span>Available {selectedAsset}: {balances[selectedAsset]}</span>
-              <span>Available USD: ${balances.USD.toLocaleString()}</span>
+            {/* Live Interactive Chart */}
+            <TradingViewWidget symbol={selectedAsset} />
+
+            {/* Two Column details and news block */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Asset Statistics Card */}
+              <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl relative overflow-hidden">
+                <div className="absolute -top-40 -left-40 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 relative z-10">
+                  <Info size={18} className="text-indigo-400" />
+                  Asset Information
+                </h3>
+                
+                <div className="space-y-4 font-mono text-sm relative z-10">
+                  <div className="flex justify-between py-2 border-b border-white/5">
+                    <span className="text-neutral-500">Market Rank</span>
+                    <span className="text-white font-bold">#{details.rank}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/5">
+                    <span className="text-neutral-500">Market Cap</span>
+                    <span className="text-white font-bold">{details.marketCap}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/5">
+                    <span className="text-neutral-500">Circulating Supply</span>
+                    <span className="text-white font-bold">{details.circulatingSupply}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-white/5">
+                    <span className="text-neutral-500">Max Supply</span>
+                    <span className="text-white font-bold">{details.maxSupply}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-neutral-500">All-Time High</span>
+                    <span className="text-emerald-400 font-bold">{details.allTimeHigh}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic News Card */}
+              <div className="bg-neutral-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-xl relative overflow-hidden">
+                <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 relative z-10">
+                  <Newspaper size={18} className="text-purple-400" />
+                  Market News & Analytics
+                </h3>
+                
+                <div className="space-y-4 relative z-10">
+                  {news.map((item, idx) => (
+                    <div key={idx} className="space-y-1 group/news cursor-pointer">
+                      <div className="flex justify-between items-center text-[10px] text-neutral-500">
+                        <span className="font-semibold text-purple-400/80">{item.source}</span>
+                        <span>{item.date}</span>
+                      </div>
+                      <h4 className="text-xs font-bold text-neutral-200 group-hover/news:text-indigo-400 transition-colors line-clamp-1">
+                        {item.title}
+                      </h4>
+                      <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">
+                        {item.snippet}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* RIGHT 1 COLUMN: Order Panel (Angel One Style Side-Widget) */}
+          <div className="xl:col-span-1">
+            <div className="bg-neutral-950/80 backdrop-blur-2xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden sticky top-6">
+              <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex justify-between items-center mb-6 z-10 relative">
+                <h3 className="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <Sparkles size={16} className="text-emerald-400 animate-pulse" />
+                  Order Panel
+                </h3>
+                <span className="text-[10px] bg-neutral-900 border border-white/5 text-neutral-400 font-mono px-2 py-0.5 rounded">
+                  PoA Gas-Free
+                </span>
+              </div>
+
+              {/* Order Placement Action Switcher */}
+              <div className="flex bg-neutral-900/60 border border-white/5 rounded-2xl p-1 mb-6 relative z-10">
+                <button 
+                  onClick={() => setTradeType('buy')}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${tradeType === 'buy' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/15' : 'text-neutral-500 hover:text-neutral-300'}`}
+                >
+                  Buy
+                </button>
+                <button 
+                  onClick={() => setTradeType('sell')}
+                  className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${tradeType === 'sell' ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/15' : 'text-neutral-500 hover:text-neutral-300'}`}
+                >
+                  Sell
+                </button>
+              </div>
+
+              <form onSubmit={handleTrade} className="space-y-6 relative z-10">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
+                    Amount ({selectedAsset})
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="number"
+                      step="any"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-neutral-900 border border-white/5 text-white font-mono text-lg px-4 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-sm">
+                      {selectedAsset}
+                    </span>
+                  </div>
+                </div>
+
+                {amount && !isNaN(parseFloat(amount)) && (
+                  <div className="p-4 bg-neutral-900 border border-white/5 rounded-2xl space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-neutral-400 text-sm">USD Value</span>
+                      <span className="font-mono font-bold text-white text-lg">
+                        ${(parseFloat(amount) * priceInUsd).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-white/5 pt-2">
+                      <span className="text-neutral-500 text-xs">Settlement (HSCT)</span>
+                      <span className="font-mono text-neutral-300 text-sm">
+                        {(parseFloat(amount) * priceInHsct).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} HSCT
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className="text-rose-500 text-sm font-bold">{error}</div>}
+
+                <button 
+                  type="submit" 
+                  className={`w-full py-4.5 rounded-2xl font-bold text-base transition-all ${
+                    tradeType === 'buy' 
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_30px_rgba(16,185,129,0.4)]'
+                      : 'bg-rose-600 hover:bg-rose-500 text-white shadow-[0_4px_20px_rgba(244,63,94,0.25)] hover:shadow-[0_4px_30px_rgba(244,63,94,0.4)]'
+                  } active:scale-95`}
+                >
+                  {tradeType === 'buy' ? 'Place Buy Order' : 'Place Sell Order'}
+                </button>
+              </form>
+              
+              <div className="mt-6 pt-6 border-t border-white/5 text-xs text-neutral-500 flex flex-col gap-2 relative z-10">
+                <div className="flex justify-between">
+                  <span>Available {selectedAsset}</span>
+                  <span className="font-mono text-white">{balances[selectedAsset].toFixed(4)} {selectedAsset}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Available Balance (hSCT)</span>
+                  <span className="font-mono text-white">{balances.USD.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT</span>
+                </div>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
+      </div>
+
+      {/* AI Panel Toggle Button (in trade page only) */}
+      {showAIPanel && !aiPanelOpen && (
+        <button
+          onClick={() => setAIPanelOpen(true)}
+          className="fixed top-28 right-4 z-20 px-3 py-2 rounded-xl bg-emerald-600/80 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-lg backdrop-blur-sm transition-all hover:scale-105 border border-emerald-500/30"
+          aria-label="Open AI Trading Panel"
+        >
+          <Bot size={14} />
+          AI Panel
+        </button>
+      )}
+
+      {/* AI Side Panel */}
+      {showAIPanel && <AIAssistantPanel variant="inline" />}
+      </div>
     </div>
+  );
+}
+
+export default function TradePage() {
+  return (
+    <Suspense fallback={<div className="text-white text-center p-12 bg-black min-h-screen">Loading Trading Environment...</div>}>
+      <TradeContent />
+    </Suspense>
   );
 }

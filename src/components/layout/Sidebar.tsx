@@ -17,6 +17,10 @@ const navItems = [
   { id: 'explorer', label: 'Block Explorer', icon: '🔗', path: '/explorer' },
   { id: 'transactions', label: 'Transactions', icon: '🔄', path: '/transactions' },
   { id: 'trade', label: 'Trade Crypto', icon: '💱', path: '/trade' },
+  { id: 'backtesting', label: 'Backtesting', icon: '📈', path: '/backtesting' },
+  { id: 'paper-trading', label: 'Paper Trading', icon: '🧪', path: '/paper-trading' },
+  { id: 'ai-learning', label: 'AI Learning', icon: '🧠', path: '/ai-learning' },
+  { id: 'auto-trading', label: 'Auto Trading', icon: '🤖', path: '/auto-trading' },
   { id: 'settings', label: 'Settings', icon: '⚙️', path: '/settings' },
 ];
 

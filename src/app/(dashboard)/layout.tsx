@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Wallet, History, Settings, Bell, Search, Database, User } from 'lucide-react';
+import { Home, Wallet, History, Settings, Bell, Search, Database, User, Bot, ShieldCheck, Sliders, ShieldAlert, Activity } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
+import { AIAssistiveBall } from '@/components/trading-ai/AIAssistiveBall';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -28,6 +29,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <NavItem href="/wallet" icon={<Wallet size={20} />} label="Wallet" active={pathname?.startsWith('/wallet')} />
             <NavItem href="/explorer" icon={<Database size={20} />} label="Block Explorer" active={pathname?.startsWith('/explorer')} />
             <NavItem href="/transactions" icon={<History size={20} />} label="Transactions" active={pathname?.startsWith('/transactions')} />
+            <NavItem href="/reconciliation" icon={<Database size={20} />} label="Reconciliation" active={pathname?.startsWith('/reconciliation')} />
+            <NavItem href="/security" icon={<ShieldCheck size={20} />} label="Payment Security" active={pathname?.startsWith('/security')} />
+            <NavItem href="/routing" icon={<Sliders size={20} />} label="Routing Engine" active={pathname?.startsWith('/routing')} />
+            <NavItem href="/integrity" icon={<ShieldAlert size={20} />} label="Integrity Layer" active={pathname?.startsWith('/integrity')} />
+            <NavItem href="/continuity" icon={<ShieldCheck size={20} />} label="Payment Continuity" active={pathname?.startsWith('/continuity')} />
+            <NavItem href="/predictive" icon={<Activity size={20} />} label="Predictive Ops" active={pathname?.startsWith('/predictive')} />
+            <NavItem href="/ai-assistant" icon={<Bot size={20} />} label="AI Assistant" active={pathname?.startsWith('/ai-assistant')} />
             <NavItem href="/settings" icon={<Settings size={20} />} label="Settings" active={pathname?.startsWith('/settings')} />
           </nav>
 
@@ -78,6 +86,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="absolute top-0 left-1/4 w-[50%] h-[300px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
             {children}
           </div>
+
+          {/* Floating AI Assistant Ball */}
+          <AIAssistiveBall />
         </main>
         
         {/* Mobile Nav (Bottom) */}
@@ -86,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <MobileNavItem href="/wallet" icon={<Wallet size={20} />} active={pathname?.startsWith('/wallet')} />
           <MobileNavItem href="/explorer" icon={<Database size={20} />} active={pathname?.startsWith('/explorer')} />
           <MobileNavItem href="/transactions" icon={<History size={20} />} active={pathname?.startsWith('/transactions')} />
+          <MobileNavItem href="/ai-assistant" icon={<Bot size={20} />} active={pathname?.startsWith('/ai-assistant')} />
           <MobileNavItem href="/settings" icon={<Settings size={20} />} active={pathname?.startsWith('/settings')} />
         </nav>
       </div>

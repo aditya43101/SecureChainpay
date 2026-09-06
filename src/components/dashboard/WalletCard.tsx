@@ -2,10 +2,10 @@
 
 import { Eye, EyeOff, TrendingUp, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
-import { useWalletStore } from '@/stores/wallet-store';
+import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
 
 export function WalletCard() {
-  const { balances, address } = useWalletStore();
+  const { balances, address, prices } = useWalletStore();
   const [showBalance, setShowBalance] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -13,6 +13,13 @@ export function WalletCard() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const cryptoHsct = (balances.ETH * prices.ETH + balances.BTC * prices.BTC) * USD_TO_HSCT;
+  const fiatHsct = (balances.USD || 0) * USD_TO_HSCT; // Current spendable HSCT balance
+  const lifetimeFiatHsct = (balances.lifetimeDeposited ?? balances.USD ?? 0) * USD_TO_HSCT;
+  // Overview shows lifetime deposited + crypto in HSCT
+  const lifetimeHsct = lifetimeFiatHsct + cryptoHsct;
+  const spendableHsct = fiatHsct; // What user can actually spend right now
 
   return (
     <div className="relative p-6 sm:p-10 rounded-[2rem] overflow-hidden group min-h-[320px] flex flex-col justify-between border border-white/5 shadow-2xl">
@@ -39,7 +46,7 @@ export function WalletCard() {
         <div className="flex items-start justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-neutral-300">
-              <span className="text-base font-medium">Total Portfolio Value</span>
+              <span className="text-base font-medium">Total Portfolio Value (HSCT)</span>
               <button 
                 onClick={() => setShowBalance(!showBalance)}
                 className="hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10"
@@ -49,10 +56,14 @@ export function WalletCard() {
             </div>
             <div className="flex items-baseline gap-2">
               <h2 className="text-5xl sm:text-6xl font-black text-white tracking-tight drop-shadow-md">
-                {showBalance ? `$${(balances.USD + balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}` : '••••••'}
-                {showBalance && <span className="text-3xl text-neutral-400 font-bold ml-1">.{((balances.USD + balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[1])}</span>}
+                {showBalance ? `${lifetimeHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}` : '••••••'}
+                {showBalance && <span className="text-3xl text-neutral-400 font-bold ml-1">.{lifetimeHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[1]}</span>}
+                {showBalance && <span className="text-xl text-neutral-500 font-bold ml-2">HSCT</span>}
               </h2>
             </div>
+            <p className="text-xs text-neutral-400 font-medium">
+              Spendable Balance: <span className="text-emerald-400 font-semibold">{showBalance ? `${spendableHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}</span>
+            </p>
           </div>
           
           <div className="flex flex-col items-end gap-3">
@@ -61,13 +72,13 @@ export function WalletCard() {
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-8 bg-neutral-950/40 p-5 rounded-2xl border border-white/5 backdrop-blur-md">
           <div className="flex-1">
-            <p className="text-sm text-neutral-400 font-medium mb-1">Crypto Assets</p>
-            <p className="text-xl font-bold text-white">{showBalance ? `$${(balances.ETH * 3000 + balances.BTC * 60000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</p>
+            <p className="text-sm text-neutral-400 font-medium mb-1">Crypto Value</p>
+            <p className="text-xl font-bold text-white">{showBalance ? `${cryptoHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}</p>
           </div>
           <div className="hidden sm:block w-px h-10 bg-white/10" />
           <div className="flex-1">
-            <p className="text-sm text-neutral-400 font-medium mb-1">Fiat Balance</p>
-            <p className="text-xl font-bold text-white">{showBalance ? `$${balances.USD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••••••'}</p>
+            <p className="text-sm text-neutral-400 font-medium mb-1">Fiat Balance (hSCT)</p>
+            <p className="text-xl font-bold text-white">{showBalance ? `${fiatHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}</p>
           </div>
           <div className="hidden sm:block w-px h-10 bg-white/10" />
           

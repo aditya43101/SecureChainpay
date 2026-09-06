@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import TransactionList from '@/components/transactions/TransactionList';
-import { useWalletStore } from '@/stores/wallet-store';
+import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
 
 export default function WalletPage() {
   const { balances, transactions, executeTransaction } = useWalletStore();
@@ -15,24 +15,25 @@ export default function WalletPage() {
 
   const handleSimulateDeposit = async () => {
     setError(null);
-    const amount = Number(depositAmount);
+    const amountHsct = Number(depositAmount);
     
-    if (!depositAmount || isNaN(amount)) {
+    if (!depositAmount || isNaN(amountHsct)) {
       setError('Please enter a valid number.');
       return;
     }
-    if (amount <= 0) {
+    if (amountHsct <= 0) {
       setError('Amount must be greater than zero.');
       return;
     }
-    if (amount > 100000) {
-      setError('Maximum deposit is $100,000.');
+    if (amountHsct > 10000000) {
+      setError('Maximum deposit is 10,000,000 HSCT.');
       return;
     }
 
     setIsDepositing(true);
     try {
-      await executeTransaction('credit', amount, 'USD', 'Simulated USD Deposit', { source: 'Bank Transfer Simulation' });
+      const amountUsd = amountHsct / USD_TO_HSCT;
+      await executeTransaction('credit', amountUsd, 'USD', `Deposited ${amountHsct.toLocaleString()} HSCT`, { source: 'Simulated HSCT Deposit' });
       
       setShowDepositInput(false);
       setDepositAmount('');
@@ -53,7 +54,7 @@ export default function WalletPage() {
           <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 mb-2">
             My Wallet
           </h1>
-          <p className="text-gray-400">Manage your SecureChain Pay assets and quick actions.</p>
+          <p className="text-gray-400">Manage your SecureChain Pay assets and quick actions in HSCT.</p>
         </div>
 
         {/* Balance Card */}
@@ -68,13 +69,12 @@ export default function WalletPage() {
             <div className="space-y-2">
               <span className="text-gray-400 font-medium tracking-wide uppercase text-sm">Available Balance</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl text-gray-500 font-semibold">$</span>
-                <span className="text-6xl font-black tracking-tight text-white">{balances.USD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span className="text-xl text-gray-400 font-medium">USD</span>
+                <span className="text-6xl font-black tracking-tight text-white">{(balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-2xl text-gray-400 font-bold ml-1">HSCT</span>
               </div>
               <div className="inline-flex items-center gap-2 mt-4 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-sm font-medium">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                +0.0% this month
+                Casino Tokens - Fixed Supply
               </div>
             </div>
 
@@ -86,18 +86,17 @@ export default function WalletPage() {
                   className="flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-black rounded-xl font-bold transition-all duration-300 shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.3)] w-full md:w-auto"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-                  Deposit Funds
+                  Deposit HSCT
                 </button>
               ) : (
                 <div className="flex flex-col gap-2 w-full md:w-auto">
                   <div className="flex bg-black/40 border border-white/20 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-within:border-emerald-500/50 transition-colors">
-                    <span className="flex items-center pl-4 text-gray-400 font-medium">$</span>
                     <input 
                       type="text" 
                       value={depositAmount}
                       onChange={(e) => setDepositAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                      placeholder="Amount" 
-                      className="bg-transparent border-none focus:outline-none focus:ring-0 text-white font-semibold py-4 px-3 w-32"
+                      placeholder="HSCT Amount" 
+                      className="bg-transparent border-none focus:outline-none focus:ring-0 text-white font-semibold py-4 px-4 w-40"
                       disabled={isDepositing}
                       autoFocus
                     />
@@ -124,32 +123,6 @@ export default function WalletPage() {
                 Trade Crypto
               </Link>
               
-              {/* DEV ONLY: STRESS TEST BUTTON */}
-              {process.env.NODE_ENV === 'development' && (
-                <button 
-                  onClick={async () => {
-                    if (!confirm("Run Stress Test? This will create 100 blocks.")) return;
-                    setIsDepositing(true);
-                    try {
-                      console.log("[SecureChain: Stress Test] Starting 100 blocks...");
-                      for(let i=1; i<=100; i++) {
-                        await executeTransaction('credit', 10, 'USD', `Stress Test Block ${i}`, { source: 'Stress Test' });
-                      }
-                      console.log("[SecureChain: Stress Test] Successfully created 100 blocks!");
-                      alert("Stress test complete! 100 blocks added.");
-                    } catch(err) {
-                      console.error("Stress Test Failed:", err);
-                      alert("Stress test failed!");
-                    } finally {
-                      setIsDepositing(false);
-                    }
-                  }}
-                  disabled={isDepositing}
-                  className="flex items-center justify-center gap-2 px-8 py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all duration-300 shadow-lg w-full md:w-auto disabled:opacity-50"
-                >
-                  🧨 Stress Test
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -172,7 +145,7 @@ export default function WalletPage() {
             <h2 className="text-2xl font-bold text-white">Assets Overview</h2>
             <div className="bg-gray-950/50 backdrop-blur-xl border border-gray-800/80 rounded-3xl p-6 shadow-2xl space-y-6">
               {[
-                { name: 'US Dollar', symbol: 'USD', amount: balances.USD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: 'bg-green-500' },
+                { name: 'SecureChain Token', symbol: 'HSCT', amount: (balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: 'bg-green-500' },
                 { name: 'Ethereum', symbol: 'ETH', amount: balances.ETH.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }), color: 'bg-blue-500' },
                 { name: 'Bitcoin', symbol: 'BTC', amount: balances.BTC.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 }), color: 'bg-orange-500' },
               ].map(asset => (

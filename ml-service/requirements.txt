@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+scikit-learn
+pandas
+xgboost
+psycopg2-binary
+sqlalchemy
+ta

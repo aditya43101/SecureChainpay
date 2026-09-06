@@ -1,18 +1,48 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { WalletCard } from '@/components/dashboard/WalletCard';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { ArrowUpRight, ArrowDownLeft, RefreshCcw, MoreHorizontal, Info } from 'lucide-react';
-import { useWalletStore } from '@/stores/wallet-store';
+import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
+import { formatTxAmountForDisplay } from '@/lib/currency/currency-service';
+import Link from 'next/link';
 
 export default function DashboardPage() {
-  const { transactions } = useWalletStore();
+  const [cryptoData, setCryptoData] = useState<any[]>([]);
+  const [loadingMarkets, setLoadingMarkets] = useState(true);
+  const { transactions, fetchPrices, subscribeToLivePrices, prices, tickerStats } = useWalletStore();
   const realTransactions = transactions.filter(t => t.type !== 'genesis');
 
   useEffect(() => {
-    console.log('[DASHBOARD] mounted in DOM - rendering Overview, WalletCard, QuickActions');
-  }, []);
+    const unsubscribe = subscribeToLivePrices();
+    return () => unsubscribe();
+  }, [subscribeToLivePrices]);
+
+  useEffect(() => {
+    const fetchMarkets = async () => {
+      try {
+        const res = await fetch('/api/crypto/market-data');
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.data)) {
+          setCryptoData(json.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch market data:', err);
+      } finally {
+        setLoadingMarkets(false);
+      }
+    };
+
+    fetchMarkets();
+    fetchPrices().catch(() => null);
+
+    const interval = setInterval(() => {
+      fetchMarkets();
+      fetchPrices().catch(() => null);
+    }, 15000); // refresh every 15s
+    return () => clearInterval(interval);
+  }, [fetchPrices]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0">
@@ -38,6 +68,91 @@ export default function DashboardPage() {
         </div>
         <div className="lg:col-span-1">
           <QuickActions />
+        </div>
+      </div>
+
+      {/* Markets Section */}
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white tracking-tight">Market Overview</h2>
+          <div className="flex items-center gap-2 text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-neutral-400 font-mono">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Live Prices
+          </div>
+        </div>
+
+        <div className="bg-neutral-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl p-6">
+          {loadingMarkets ? (
+            <div className="space-y-4 py-4">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="h-16 w-full bg-white/5 rounded-2xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-white/5 text-neutral-400 text-sm font-semibold pb-4">
+                    <th className="py-4 font-medium">Asset</th>
+                    <th className="py-4 font-medium">Price (HSCT)</th>
+                    <th className="py-4 font-medium">24h Change</th>
+                    <th className="py-4 font-medium">Market Cap (HSCT)</th>
+                    <th className="py-4 text-right font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {cryptoData.map((asset) => {
+                    const livePrice = (asset.symbol === 'BTC' || asset.symbol === 'ETH')
+                      ? prices[asset.symbol as 'BTC' | 'ETH']
+                      : asset.price;
+                    const liveChange = (asset.symbol === 'BTC' || asset.symbol === 'ETH')
+                      ? tickerStats[asset.symbol as 'BTC' | 'ETH'].change
+                      : asset.change24h;
+                    const isPositive = liveChange >= 0;
+                    return (
+                      <tr key={asset.id} className="hover:bg-white/[0.02] transition-colors group">
+                        <td className="py-4 flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
+                            asset.symbol === 'BTC' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                            asset.symbol === 'ETH' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                            asset.symbol === 'SOL' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' :
+                            asset.symbol === 'BNB' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
+                            'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          }`}>
+                            {asset.symbol}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-white">{asset.name}</p>
+                            <p className="text-xs text-neutral-500 font-mono">{asset.symbol}/HSCT</p>
+                          </div>
+                        </td>
+                        <td className="py-4 font-mono font-semibold text-white">
+                          {(livePrice * USD_TO_HSCT).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT
+                        </td>
+                        <td className="py-4">
+                          <span className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-1 rounded-full ${
+                            isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          }`}>
+                            {isPositive ? '▲' : '▼'} {Math.abs(liveChange).toFixed(2)}%
+                          </span>
+                        </td>
+                        <td className="py-4 font-mono text-neutral-400 text-sm">
+                          {((asset.marketCap * USD_TO_HSCT) / 1e9).toFixed(2)}B HSCT
+                        </td>
+                        <td className="py-4 text-right">
+                          <Link href={`/trade?asset=${asset.symbol}`}>
+                            <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-md hover:shadow-indigo-500/20 group-hover:scale-105 active:scale-95">
+                              Trade
+                            </button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -95,9 +210,11 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-6">
                     <div className="text-right">
                       <p className={`text-base sm:text-lg font-bold ${tx.type === 'credit' ? 'text-emerald-400' : 'text-white'}`}>
-                        {tx.type === 'credit' ? '+' : '-'}{tx.amount.toFixed(2)} {tx.currency}
+                        {tx.type === 'credit' ? '+' : '-'}{formatTxAmountForDisplay(tx.amount, tx.currency).primary}
                       </p>
-                      <p className="text-sm text-neutral-500 font-medium">Block #{tx.blockNumber}</p>
+                      <p className="text-xs text-neutral-400 font-medium">
+                        {formatTxAmountForDisplay(tx.amount, tx.currency).secondary}
+                      </p>
                     </div>
                   </div>
                 </div>

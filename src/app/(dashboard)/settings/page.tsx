@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Copy } from 'lucide-react';
+import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Copy, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
 import { useWalletStore } from '@/stores/wallet-store';
 import { auth } from '@/lib/firebase/client';
+import { AISettings } from '@/components/trading-ai/AISettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [theme, setTheme] = useState('dark');
-  const [currency, setCurrency] = useState('USD');
   const profileUser = useAuthStore((state) => state.user);
   
   const address = useWalletStore((state) => state.address);
@@ -57,6 +57,7 @@ export default function SettingsPage() {
     { id: 'preferences', label: 'Preferences', icon: <Sun size={18} /> },
     { id: 'security', label: 'Security & Keys', icon: <Lock size={18} /> },
     { id: 'help', label: 'Help & Support', icon: <HelpCircle size={18} /> },
+    { id: 'trading-ai', label: 'Trading AI', icon: <Bot size={18} /> },
     { id: 'about', label: 'About Us', icon: <Info size={18} /> },
   ];
 
@@ -228,20 +229,15 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <div>
-                    <h3 className="font-medium text-white">Primary Currency</h3>
-                    <p className="text-sm text-neutral-400">Your default fiat display currency.</p>
+                {/* Native Currency Info */}
+                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
+                  <div className="flex items-center gap-3">
+                    <CreditCard size={20} className="text-emerald-400" />
+                    <div>
+                      <h3 className="font-medium text-white">Platform Currency</h3>
+                      <p className="text-sm text-neutral-400">All portfolio balances are denominated in <span className="text-emerald-400 font-bold">HSCT</span>. Trading prices are shown in <span className="text-white font-bold">USD</span> with HSCT equivalent.</p>
+                    </div>
                   </div>
-                  <select 
-                    value={currency} 
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="bg-[#121212] border border-neutral-800 text-white text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2.5 outline-none"
-                  >
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="INR">INR (₹)</option>
-                  </select>
                 </div>
               </div>
             </div>
@@ -369,6 +365,11 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Trading AI Section */}
+          {activeTab === 'trading-ai' && (
+            <AISettings />
           )}
 
           {/* About Us Section */}

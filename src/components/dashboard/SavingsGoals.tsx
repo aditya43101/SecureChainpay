@@ -19,7 +19,7 @@ const goals = [
     name: 'Vacation Fund',
     target: 5000,
     current: 4200,
-    currency: 'USDT',
+    currency: 'HSCT',
     color: 'from-emerald-400 to-teal-500',
     icon: <TrendingUp className="w-5 h-5 text-emerald-400" />
   },

@@ -1,21 +1,49 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useWalletStore } from '@/stores/wallet-store';
-import { Copy, Check, ArrowLeft, ShieldCheck, QrCode, Sparkles, Download } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth-store';
+import { Copy, Check, ArrowLeft, ShieldCheck, QrCode, Sparkles, Download, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { generateQRDataURL } from '@/lib/qr/qr-service';
 
 export default function ReceivePage() {
-  const { address, publicKey } = useWalletStore();
+  const { address } = useWalletStore();
+  const user = useAuthStore((s) => s.user);
+
   const [copied, setCopied] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<'USD' | 'ETH' | 'BTC'>('USD');
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!address) return;
+    generateQRDataURL({
+      address,
+      uid: user?.id,
+      username: user?.username,
+      displayName: user?.name || user?.username || 'SecureChain User',
+      currency: selectedAsset,
+    })
+      .then((url) => setQrDataUrl(url))
+      .catch((err) => console.error('Failed to generate QR Code:', err));
+  }, [address, user, selectedAsset]);
 
   const handleCopy = () => {
     if (!address) return;
     navigator.clipboard.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadQR = () => {
+    if (!qrDataUrl) return;
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `SecureChainPay_QR_${user?.username || 'Wallet'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -38,7 +66,7 @@ export default function ReceivePage() {
             </div>
             <h1 className="text-3xl font-extrabold text-white">Receive Funds</h1>
             <p className="text-neutral-400 text-sm">
-              Share your address or QR code to receive payments on SecureChain.
+              Share your payment QR code or wallet address to receive payments.
             </p>
           </div>
 
@@ -59,46 +87,34 @@ export default function ReceivePage() {
             ))}
           </div>
 
-          {/* QR Code Card */}
+          {/* Scannable Real QR Code Card */}
           <div className="flex flex-col items-center justify-center p-6 bg-neutral-900/60 border border-white/10 rounded-2xl relative z-10 space-y-4">
             <div className="p-4 bg-white rounded-2xl shadow-xl flex items-center justify-center">
-              {/* Stylized QR Code SVG representing wallet address */}
-              <svg width="180" height="180" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-black">
-                <rect width="100" height="100" fill="white" />
-                <rect x="10" y="10" width="25" height="25" fill="black" />
-                <rect x="15" y="15" width="15" height="15" fill="white" />
-                <rect x="18" y="18" width="9" height="9" fill="black" />
-
-                <rect x="65" y="10" width="25" height="25" fill="black" />
-                <rect x="70" y="15" width="15" height="15" fill="white" />
-                <rect x="73" y="18" width="9" height="9" fill="black" />
-
-                <rect x="10" y="65" width="25" height="25" fill="black" />
-                <rect x="15" y="70" width="15" height="15" fill="white" />
-                <rect x="18" y="73" width="9" height="9" fill="black" />
-
-                <rect x="40" y="15" width="8" height="8" fill="black" />
-                <rect x="52" y="15" width="6" height="6" fill="black" />
-                <rect x="40" y="27" width="15" height="6" fill="black" />
-                <rect x="40" y="40" width="20" height="20" fill="black" />
-                <rect x="45" y="45" width="10" height="10" fill="white" />
-
-                <rect x="65" y="40" width="10" height="8" fill="black" />
-                <rect x="80" y="40" width="8" height="12" fill="black" />
-                <rect x="65" y="55" width="25" height="6" fill="black" />
-                <rect x="65" y="65" width="12" height="12" fill="black" />
-                <rect x="82" y="70" width="8" height="20" fill="black" />
-                
-                <rect x="15" y="42" width="15" height="6" fill="black" />
-                <rect x="10" y="52" width="25" height="6" fill="black" />
-                <rect x="40" y="65" width="8" height="25" fill="black" />
-                <rect x="52" y="75" width="15" height="12" fill="black" />
-              </svg>
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="SecureChain Pay QR Code" className="w-48 h-48 rounded-lg" />
+              ) : (
+                <div className="w-48 h-48 flex items-center justify-center bg-gray-100 text-neutral-400 text-xs font-mono rounded-lg">
+                  Generating QR...
+                </div>
+              )}
             </div>
             
-            <p className="text-xs text-neutral-400 font-medium">
-              Scan to send <span className="text-emerald-400 font-bold">{selectedAsset}</span> directly to this wallet
+            <p className="text-xs text-neutral-400 font-medium text-center">
+              Scan to send <span className="text-emerald-400 font-bold">{selectedAsset}</span> directly to{' '}
+              <span className="text-white font-bold">{user?.username ? `@${user.username}` : 'this wallet'}</span>
             </p>
+
+            {/* QR Actions */}
+            {qrDataUrl && (
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleDownloadQR}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-xs font-bold text-white transition-all"
+                >
+                  <Download size={14} /> Download QR
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Wallet Address Box */}

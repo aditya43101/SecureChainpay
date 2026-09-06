@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth as adminAuth } from '@/lib/firebase/admin';
-import { db as prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 import { generateTokens } from '@/lib/auth/jwt';
 import { cookies } from 'next/headers';
 

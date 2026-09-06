@@ -9,7 +9,7 @@ import {
   ReconciliationAuditLog,
   MismatchSeverity,
 } from '@/types/reconciliation';
-import { canonicalizePayload, computeCanonicalHash, toTxIdBytes32 } from './hybrid-ledger';
+import { canonicalizePayload, computeCanonicalHash, toTxIdBytes32, submitTransactionToLedger } from './hybrid-ledger';
 
 const LEDGER_ABI = SecureChainLedgerArtifact.abi;
 const LEDGER_CONTRACT_ADDRESS = process.env.LEDGER_CONTRACT_ADDRESS || '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
@@ -97,7 +97,7 @@ export async function reconcileTransaction(
     sender: txRecord.sender || txRecord.walletAddress || '',
     receiver: txRecord.receiver || txRecord.payload?.receiverWallet || 'System',
     amount: txRecord.amount,
-    asset: txRecord.asset || txRecord.currency || 'USD',
+    asset: txRecord.asset || txRecord.currency || 'HSCT',
     idempotencyKey: txRecord.idempotencyKey || txRecord.id,
     timestamp: txRecord.createdAt || txRecord.date,
   });
@@ -179,7 +179,78 @@ export async function reconcileTransaction(
   }
   // 2. BLOCKCHAIN QUERY & STATE VERIFICATION (Phase 3G, 3J, 3O)
   // ════════════════════════════════════════════════════════════
-  const chainTxHash = txRecord.blockchainTransactionHash;
+  let chainTxHash = txRecord.blockchainTransactionHash;
+
+  if (!chainTxHash) {
+    // Attempt auto-submission to smart contract if autoRecover is enabled or transaction is unanchored
+    try {
+      const appId = txRecord.applicationTransactionId || txRecord.id;
+      const senderWallet = txRecord.sender || txRecord.walletAddress || '';
+      const receiverWallet = txRecord.receiver || txRecord.payload?.receiverWallet || 'System';
+      const asset = (txRecord.asset || txRecord.currency || 'HSCT').toUpperCase();
+
+      const anchorRes = await submitTransactionToLedger({
+        applicationTransactionId: appId,
+        sender: senderWallet,
+        receiver: receiverWallet,
+        amount: txRecord.amount,
+        currency: asset,
+      });
+
+      if (anchorRes.success && anchorRes.blockchainTransactionHash) {
+        txRecord.blockchainTransactionHash = anchorRes.blockchainTransactionHash;
+        txRecord.blockNumber = anchorRes.blockNumber;
+        txRecord.blockHash = anchorRes.blockHash;
+        txRecord.chainId = anchorRes.chainId;
+        txRecord.contractAddress = anchorRes.contractAddress;
+        txRecord.status = 'CONFIRMED';
+        chainTxHash = anchorRes.blockchainTransactionHash;
+
+        recoveredFields = {
+          status: 'CONFIRMED' as TransactionStatus,
+          blockchainTransactionHash: anchorRes.blockchainTransactionHash,
+          blockNumber: anchorRes.blockNumber,
+          blockHash: anchorRes.blockHash,
+          chainId: anchorRes.chainId,
+          contractAddress: anchorRes.contractAddress,
+          confirmedAt: new Date().toISOString(),
+          reconciliationStatus: 'RECOVERY_COMPLETED',
+          lastReconciledAt: timestamp,
+        };
+
+        // Sync with admin DB global_blocks and user transaction index
+        try {
+          const { getAdminDb } = await import('@/lib/firebase/admin');
+          const adminDb = getAdminDb();
+          const confirmedData = {
+            status: 'CONFIRMED',
+            reconciliationStatus: 'MATCHED',
+            blockchainTransactionHash: anchorRes.blockchainTransactionHash,
+            blockHash: anchorRes.blockHash,
+            blockNumber: anchorRes.blockNumber,
+            chainId: anchorRes.chainId,
+            contractAddress: anchorRes.contractAddress,
+            confirmedAt: new Date().toISOString(),
+          };
+
+          await adminDb.collection('global_blocks').doc(appId).set(confirmedData, { merge: true });
+
+          if (txRecord.userId) {
+            await adminDb
+              .collection('users')
+              .doc(txRecord.userId)
+              .collection('transactions')
+              .doc(appId)
+              .set(confirmedData, { merge: true });
+          }
+        } catch (adminDbErr) {
+          console.warn('[ReconciliationEngine] Non-fatal admin block sync warning:', adminDbErr);
+        }
+      }
+    } catch (anchorErr) {
+      console.warn('[ReconciliationEngine] Auto-anchor attempt notice:', anchorErr);
+    }
+  }
 
   if (!chainTxHash) {
     // No on-chain hash recorded
@@ -295,7 +366,7 @@ export async function reconcileTransaction(
           }
 
           // Compare Asset / Currency
-          const expectedCurrency = (txRecord.asset || txRecord.currency || 'USD').toUpperCase();
+          const expectedCurrency = (txRecord.asset || txRecord.currency || 'HSCT').toUpperCase();
           if (onChainContractRecord.currency.toUpperCase() !== expectedCurrency) {
             mismatches.push({
               field: 'asset',

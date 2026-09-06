@@ -12,6 +12,8 @@ import { initializeGlobalGenesis, appendBlockToGlobalChain } from '@/lib/blockch
 // ═══════════════════════════════════════════════════════════
 const initPromises = new Map<string, Promise<void>>();
 
+export const USD_TO_HSCT = 83.5;
+
 // Typed Error Codes for Wallet Lifecycle
 export type WalletErrorCode =
   | 'WALLET_NOT_FOUND'
@@ -100,9 +102,11 @@ export interface Transaction {
 }
 
 interface Balances {
+  HSCT: number;
   USD: number;
   BTC: number;
   ETH: number;
+  lifetimeDeposited: number; // cumulative deposits — only reduces on explicit withdrawal
 }
 
 interface WalletState {
@@ -124,6 +128,17 @@ interface WalletState {
   transactions: Transaction[];
   lastBlockNumber: number;
   lastBlockHash: string | null;
+  prices: { BTC: number; ETH: number };
+  tickerStats: {
+    BTC: { high: number; low: number; volume: string; change: number; price: number };
+    ETH: { high: number; low: number; volume: string; change: number; price: number };
+  };
+  marketConnectionStatus: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'ERROR';
+  lastMarketDataAt: string | null;
+  isMarketDataStale: boolean;
+  latestKlineData: Record<string, { time: number; open: number; high: number; low: number; close: number; volume: number; isClosed: boolean }>;
+  fetchPrices: () => Promise<void>;
+  subscribeToLivePrices: () => () => void;
   setHasHydrated: (state: boolean) => void;
   initializeWallet: (uid: string) => Promise<void>;
   syncTransactions: (uid: string) => Promise<void>;
@@ -139,7 +154,7 @@ interface WalletState {
   ) => Promise<Transaction>;
 
   transferFunds: (params: {
-    receiverUid: string;
+    receiverUid?: string;
     receiverAddress: string;
     receiverUsername?: string;
     receiverDisplayName?: string;
@@ -340,12 +355,176 @@ export const useWalletStore = create<WalletState>()(
       walletVersion: null,
       keyFingerprint: null,
       
-      balances: { USD: 0, BTC: 0, ETH: 0 },
+      balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
       transactions: [],
       lastBlockNumber: 0,
       lastBlockHash: null,
+      prices: { BTC: 64230.50, ETH: 3450.20 },
+      tickerStats: {
+        BTC: { high: 65420, low: 63100, volume: '$24.85 Billion', change: 1.25, price: 64230.50 },
+        ETH: { high: 3520, low: 3380, volume: '$12.40 Billion', change: -0.45, price: 3450.20 },
+      },
+      marketConnectionStatus: 'DISCONNECTED',
+      lastMarketDataAt: null,
+      isMarketDataStale: false,
+      latestKlineData: {},
       
       setHasHydrated: (state) => set({ _hasHydrated: state }),
+      
+      subscribeToLivePrices: () => {
+        if (typeof window === 'undefined') return () => {};
+        
+        let ws: WebSocket | null = null;
+        let isUnsubscribed = false;
+        let reconnectTimeout: NodeJS.Timeout | null = null;
+        let staleCheckInterval: NodeJS.Timeout | null = null;
+        let retryCount = 0;
+
+        const connect = () => {
+          if (isUnsubscribed) return;
+
+          set({ marketConnectionStatus: retryCount > 0 ? 'RECONNECTING' : 'CONNECTING' });
+          console.log('[SecureChain: WS] Connecting to Binance Live WebSocket...');
+          
+          ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=btcusdt@ticker/ethusdt@ticker/btcusdt@kline_1m/ethusdt@kline_1m');
+
+          ws.onopen = () => {
+            if (isUnsubscribed) {
+              ws?.close();
+              return;
+            }
+            retryCount = 0;
+            console.log('[SecureChain: WS] Connected to Binance Live Feed.');
+            set({ marketConnectionStatus: 'CONNECTED', isMarketDataStale: false });
+          };
+          
+          ws.onmessage = (event) => {
+            if (isUnsubscribed) return;
+            try {
+              const msg = JSON.parse(event.data);
+              if (!msg.stream || !msg.data) return;
+
+              const nowIso = new Date().toISOString();
+              set({ lastMarketDataAt: nowIso, isMarketDataStale: false });
+
+              // Handle 24h Ticker Stream
+              if (msg.stream.endsWith('@ticker')) {
+                const symbol = msg.data.s; // 'BTCUSDT' or 'ETHUSDT'
+                const lastPrice = Number(msg.data.c || 0);
+                const highPrice = Number(msg.data.h || 0);
+                const lowPrice = Number(msg.data.l || 0);
+                const changePercent = Number(msg.data.P || 0);
+                const totalVolume = Number(msg.data.q || 0); // Quote asset volume in USDT
+                
+                const volumeStr = totalVolume > 1e9 
+                  ? `$${(totalVolume / 1e9).toFixed(2)} Billion` 
+                  : `$${(totalVolume / 1e6).toFixed(2)} Million`;
+                  
+                const assetKey = symbol === 'BTCUSDT' ? 'BTC' : 'ETH';
+                
+                const currentPrices = get().prices;
+                const currentStats = get().tickerStats;
+                
+                if (currentPrices[assetKey] !== lastPrice || currentStats[assetKey]?.high !== highPrice) {
+                  set({
+                    prices: { ...currentPrices, [assetKey]: lastPrice },
+                    tickerStats: {
+                      ...currentStats,
+                      [assetKey]: {
+                        high: highPrice,
+                        low: lowPrice,
+                        volume: volumeStr,
+                        change: changePercent,
+                        price: lastPrice
+                      }
+                    }
+                  });
+                }
+              }
+
+              // Handle 1m Kline Stream for Live Forming Candle
+              if (msg.stream.endsWith('@kline_1m')) {
+                const kline = msg.data.k;
+                if (kline) {
+                  const symbol = kline.s; // 'BTCUSDT' or 'ETHUSDT'
+                  const assetKey = symbol === 'BTCUSDT' ? 'BTC' : 'ETH';
+                  const currentKlineMap = { ...get().latestKlineData };
+                  
+                  currentKlineMap[assetKey] = {
+                    time: Math.floor(kline.t / 1000), // Seconds for Lightweight Charts
+                    open: parseFloat(kline.o),
+                    high: parseFloat(kline.h),
+                    low: parseFloat(kline.l),
+                    close: parseFloat(kline.c),
+                    volume: parseFloat(kline.v),
+                    isClosed: Boolean(kline.x)
+                  };
+
+                  set({ latestKlineData: currentKlineMap });
+                }
+              }
+            } catch (err) {
+              // Quiet fail for parsing issues
+            }
+          };
+          
+          ws.onerror = (err) => {
+            console.warn('[SecureChain: WS] WebSocket error encountered:', err);
+            set({ marketConnectionStatus: 'ERROR' });
+          };
+
+          ws.onclose = () => {
+            if (isUnsubscribed) return;
+            console.warn('[SecureChain: WS] Connection closed. Scheduling reconnect...');
+            set({ marketConnectionStatus: 'DISCONNECTED' });
+            
+            retryCount++;
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+            reconnectTimeout = setTimeout(connect, delay);
+          };
+        };
+
+        // Stale Data Detector (checks every 2s)
+        staleCheckInterval = setInterval(() => {
+          const lastAt = get().lastMarketDataAt;
+          if (lastAt) {
+            const diffMs = Date.now() - new Date(lastAt).getTime();
+            if (diffMs > 5000 && !get().isMarketDataStale) {
+              set({ isMarketDataStale: true });
+            }
+          }
+        }, 2000);
+
+        connect();
+
+        return () => {
+          isUnsubscribed = true;
+          console.log('[SecureChain: WS] Unsubscribing and closing WebSocket...');
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          if (staleCheckInterval) clearInterval(staleCheckInterval);
+          if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            ws.close();
+          }
+        };
+      },
+      
+      fetchPrices: async () => {
+        try {
+          const res = await fetch('https://api.coincap.io/v2/assets?limit=10');
+          const json = await res.json();
+          if (json && Array.isArray(json.data)) {
+            const btcItem = json.data.find((item: any) => item.symbol === 'BTC');
+            const ethItem = json.data.find((item: any) => item.symbol === 'ETH');
+            const newPrices = { ...get().prices };
+            if (btcItem) newPrices.BTC = Number(btcItem.priceUsd || 0);
+            if (ethItem) newPrices.ETH = Number(ethItem.priceUsd || 0);
+            set({ prices: newPrices });
+            console.log('[SecureChain: Prices] Direct client-side price sync successful:', newPrices);
+          }
+        } catch (err) {
+          console.warn('[SecureChain: Prices] Direct price fetch failed, using fallback:', err);
+        }
+      },
       
       // ═══════════════════════════════════════════════════════
       // SYNC TRANSACTIONS (Background Non-Blocking)
@@ -397,7 +576,7 @@ export const useWalletStore = create<WalletState>()(
                 userId: tx.userId || uid,
                 sender: tx.sender || tx.walletAddress || '',
                 receiver: tx.receiver || tx.payload?.receiverWallet || 'System',
-                asset: tx.asset || tx.currency || 'USD',
+                asset: tx.asset || tx.currency || 'HSCT',
                 canonicalPayload: tx.canonicalPayload || '',
                 transactionHash: tx.transactionHash || tx.hash,
                 signature: tx.signature || tx.digitalSignature || '',
@@ -496,7 +675,7 @@ export const useWalletStore = create<WalletState>()(
                 address: null,
                 publicKey: null,
                 encryptedPrivateKey: null,
-                balances: { USD: 0, BTC: 0, ETH: 0 },
+                balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
                 transactions: [],
                 lastBlockNumber: 0,
                 lastBlockHash: null
@@ -572,7 +751,15 @@ export const useWalletStore = create<WalletState>()(
                 algorithm: data.algorithm || 'ECDSA/secp256k1',
                 walletVersion: data.walletVersion || '1.0',
                 keyFingerprint: fingerprint,
-                balances: data.balances || stateAfterIsolation.balances || { USD: 0, BTC: 0, ETH: 0 },
+                balances: {
+                  HSCT: 0,
+                  USD: 0,
+                  BTC: 0,
+                  ETH: 0,
+                  ...(data.balances || {}),
+                  // ensure lifetimeDeposited is always present
+                  lifetimeDeposited: data.balances?.lifetimeDeposited ?? data.lifetimeDeposited ?? data.balances?.USD ?? 0,
+                },
                 lastBlockNumber: typeof data.lastBlockNumber === 'number' ? data.lastBlockNumber : 0,
                 lastBlockHash: data.lastBlockHash || null,
                 _hasHydrated: true,
@@ -580,6 +767,7 @@ export const useWalletStore = create<WalletState>()(
               });
 
               get().syncTransactions(uid);
+              get().fetchPrices().catch(() => null);
               return true;
             };
 
@@ -669,16 +857,18 @@ export const useWalletStore = create<WalletState>()(
             }
 
             // ═══════════════════════════════════════════════════════
-            // STATE B: WALLET CONFIRMED NOT TO EXIST IN CLOUD
+            // STATE B: WALLET CONFIRMED NOT TO EXIST IN CLOUD (NEW USER / POST-RESET)
             // ═══════════════════════════════════════════════════════
-            // If local state has valid keys for this UID, preserve them
-            if (hasLocalKeys) {
-              const restored = await restoreWalletState(stateAfterIsolation, 'LOCAL');
-              if (restored) {
-                console.warn(`[WALLET ${getWElapsed()}] Firestore returned NOT_FOUND, but valid local keys exist for this UID. Restored without generating replacement.`);
-                return;
-              }
-            }
+            // Clear any stale local wallet storage if cloud confirms wallet does not exist
+            set({
+              address: null,
+              publicKey: null,
+              encryptedPrivateKey: null,
+              balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
+              transactions: [],
+              lastBlockNumber: 0,
+              lastBlockHash: null
+            });
 
             // ─── NEW USER WALLET GENERATION (GENUINELY NEW USER ONLY) ───
             console.info(`[WalletInit] Genuinely new user confirmed for UID: ${uid}. Generating new wallet...`);
@@ -699,7 +889,7 @@ export const useWalletStore = create<WalletState>()(
               algorithm: 'ECDSA/secp256k1',
               walletVersion: '1.0',
               keyFingerprint: fingerprint,
-              balances: { USD: 0, BTC: 0, ETH: 0 },
+              balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
             };
 
             // Pre-verify before persisting
@@ -861,11 +1051,13 @@ export const useWalletStore = create<WalletState>()(
           }
           
           const currentData = walletSnap.data();
-          const currentBalances = currentData.balances || { USD: 0, BTC: 0, ETH: 0 };
+          const currentBalances = currentData.balances || { USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 };
           
-          newBalances = { ...currentBalances } as Balances;
+          newBalances = { ...currentBalances, lifetimeDeposited: currentBalances.lifetimeDeposited ?? 0 } as Balances;
           if (type === 'credit') {
             newBalances![currency] += amount;
+            // Track lifetime deposits — only increases on credit, never on spend
+            newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + amount;
           } else if (type === 'debit') {
             if (newBalances![currency] < amount) throw new Error("Insufficient funds");
             newBalances![currency] -= amount;
@@ -1047,13 +1239,13 @@ export const useWalletStore = create<WalletState>()(
         receiverUsername,
         receiverDisplayName,
         amount,
-        currency = 'USD',
+        currency = 'HSCT',
         note,
       }) => {
         const uid = auth.currentUser?.uid;
         if (!uid) throw new Error('User not authenticated');
 
-        console.log(`[SecureChain: Transfer] ▶ Initiating transfer of $${amount} ${currency} to ${receiverAddress}`);
+        console.log(`[SecureChain: Transfer] ▶ Initiating transfer of ${amount} ${currency} to ${receiverAddress}`);
 
         let state = get();
 
@@ -1069,9 +1261,9 @@ export const useWalletStore = create<WalletState>()(
         }
 
         // 2. Balance Check
-        const currentBalance = Number(state.balances[currency] || 0);
+        const currentBalance = Number((state.balances as any)[currency] || state.balances.HSCT || 0);
         if (currentBalance < amount) {
-          throw new Error(`Insufficient balance. You have $${currentBalance.toFixed(2)} ${currency}.`);
+          throw new Error(`Insufficient balance. You have ${currentBalance.toFixed(2)} ${currency}.`);
         }
 
         // 3. Self-transfer check
@@ -1170,7 +1362,7 @@ export const useWalletStore = create<WalletState>()(
           algorithm: null,
           walletVersion: null,
           keyFingerprint: null,
-          balances: { USD: 0, BTC: 0, ETH: 0 }, 
+          balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 }, 
           transactions: [], 
           lastBlockNumber: 0,
           lastBlockHash: null

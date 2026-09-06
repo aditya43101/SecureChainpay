@@ -19,7 +19,7 @@ const scheduledPayments = [
     id: 2,
     recipient: 'Freelance Design',
     amount: 850.50,
-    currency: 'USDT',
+    currency: 'HSCT',
     date: '2026-07-22',
     frequency: 'One-time',
     status: 'Processing',

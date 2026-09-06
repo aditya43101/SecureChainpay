@@ -28,7 +28,8 @@ export const getAdminDb = (): Firestore => {
   const databaseId = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || 'securechainpay';
   try {
     return getFirestore(app, databaseId);
-  } catch {
+  } catch (err: any) {
+    console.error('[Admin DB Error] Failed to init with databaseId:', databaseId, err.message);
     return getFirestore(app);
   }
 };

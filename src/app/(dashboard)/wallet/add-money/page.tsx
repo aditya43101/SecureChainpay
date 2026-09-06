@@ -4,10 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase/client';
 import { onAuthStateChanged } from 'firebase/auth';
 import Link from 'next/link';
-import { useWalletStore } from '@/stores/wallet-store';
+import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
 import { useRouter } from 'next/navigation';
 
-const PRESET_AMOUNTS = [50, 100, 500, 1000];
+const PRESET_AMOUNTS = [100, 500, 1000, 5000];
 
 export default function AddMoneyPage() {
   const { executeTransaction, balances } = useWalletStore();
@@ -15,7 +15,7 @@ export default function AddMoneyPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'add' | 'withdraw'>('add');
   
-  const [amount, setAmount] = useState<string>('100');
+  const [amount, setAmount] = useState<string>('500');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -30,19 +30,21 @@ export default function AddMoneyPage() {
   const handleAction = async () => {
     if (!amount || Number(amount) <= 0) return;
     
-    // For withdrawal, check balance
-    if (activeTab === 'withdraw' && Number(amount) > balances.USD) {
-      alert("Insufficient USD balance to withdraw this amount.");
+    // For withdrawal, check balance (balances.USD is USD value, we compare in HSCT)
+    const availableHsct = balances.USD * USD_TO_HSCT;
+    if (activeTab === 'withdraw' && Number(amount) > availableHsct) {
+      alert("Insufficient HSCT balance to withdraw this amount.");
       return;
     }
 
     setIsProcessing(true);
     try {
       const txType = activeTab === 'add' ? 'credit' : 'debit';
-      const desc = activeTab === 'add' ? 'Wallet Top-up (Simulation)' : 'Wallet Withdrawal (Simulation)';
+      const desc = activeTab === 'add' ? `Wallet Top-up of ${amount} HSCT` : `Wallet Withdrawal of ${amount} HSCT`;
       
+      const amountUsd = Number(amount) / USD_TO_HSCT;
       // Instantly generate a blockchain block for this action
-      await executeTransaction(txType, Number(amount), 'USD', desc, {
+      await executeTransaction(txType, amountUsd, 'USD', desc, {
         source: 'Bank Gateway Simulation'
       });
 
@@ -54,6 +56,8 @@ export default function AddMoneyPage() {
       setIsProcessing(false);
     }
   };
+
+  const availableHsct = balances.USD * USD_TO_HSCT;
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans flex flex-col items-center justify-center relative">
@@ -79,7 +83,7 @@ export default function AddMoneyPage() {
               <div>
                 <h2 className="text-3xl font-bold text-white mb-2">Success!</h2>
                 <p className="text-gray-400 text-lg">
-                  Mock ${amount} {activeTab === 'add' ? 'added successfully to' : 'withdrawn successfully from'} wallet!
+                  Mock {Number(amount).toLocaleString()} HSCT {activeTab === 'add' ? 'added successfully to' : 'withdrawn successfully from'} wallet!
                 </p>
               </div>
               <button onClick={() => router.push('/explorer')} className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full">
@@ -107,27 +111,30 @@ export default function AddMoneyPage() {
 
               <div className="text-center">
                 <h1 className="text-3xl font-extrabold text-white mb-2">
-                  {activeTab === 'add' ? 'Add Money' : 'Withdraw Money'}
+                  {activeTab === 'add' ? 'Add HSCT Tokens' : 'Withdraw HSCT Tokens'}
                 </h1>
                 <p className="text-gray-400">
                   {activeTab === 'add' 
-                    ? 'Top up your SecureChain wallet securely via Mock Gateway.' 
-                    : 'Withdraw funds from your SecureChain wallet to your bank.'}
+                    ? 'Top up your SecureChain wallet with HSCT Casino credits.' 
+                    : 'Withdraw your HSCT tokens back to your simulator account.'}
                 </p>
               </div>
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Enter Amount (USD)</label>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-gray-400">Enter Amount (HSCT)</label>
+                    <span className="text-xs text-neutral-500">Available: {availableHsct.toLocaleString()} HSCT</span>
+                  </div>
                   <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl text-gray-500 font-bold">$</span>
                     <input
                       type="number"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-gray-900 border border-gray-700 text-white text-4xl font-black py-6 pl-14 pr-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center"
+                      className="w-full bg-gray-900 border border-gray-700 text-white text-4xl font-black py-6 px-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center"
                       placeholder="0.00"
                     />
+                    <span className="absolute right-6 top-1/2 -translate-y-1/2 text-lg text-neutral-500 font-bold font-mono">HSCT</span>
                   </div>
                 </div>
 
@@ -142,7 +149,7 @@ export default function AddMoneyPage() {
                           : 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800 hover:border-gray-700'
                       }`}
                     >
-                      ${preset}
+                      {preset}
                     </button>
                   ))}
                 </div>
@@ -151,7 +158,7 @@ export default function AddMoneyPage() {
               <div className="pt-4 space-y-4 border-t border-gray-800/80">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Amount</span>
-                  <span className="text-white font-medium">${Number(amount || 0).toFixed(2)}</span>
+                  <span className="text-white font-medium">{Number(amount || 0).toLocaleString()} HSCT</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Processing Fee</span>
@@ -159,7 +166,7 @@ export default function AddMoneyPage() {
                 </div>
                 <div className="flex justify-between text-lg font-bold">
                   <span className="text-white">Total {activeTab === 'add' ? 'to Pay' : 'to Withdraw'}</span>
-                  <span className="text-white">${Number(amount || 0).toFixed(2)}</span>
+                  <span className="text-white">{Number(amount || 0).toLocaleString()} HSCT</span>
                 </div>
               </div>
 
@@ -178,7 +185,7 @@ export default function AddMoneyPage() {
                   </>
                 ) : (
                   <>
-                    {activeTab === 'add' ? 'Proceed to Pay' : 'Confirm Withdrawal'} ${Number(amount || 0).toFixed(2)}
+                    {activeTab === 'add' ? 'Proceed to Add' : 'Confirm Withdrawal'} {Number(amount || 0).toLocaleString()} HSCT
                   </>
                 )}
               </button>
@@ -197,8 +204,6 @@ export default function AddMoneyPage() {
           )}
         </div>
       </div>
-
-
     </div>
   );
 }

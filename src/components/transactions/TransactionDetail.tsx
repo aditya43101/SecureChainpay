@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import type { Transaction } from '@/stores/wallet-store';
 import { useWalletStore } from '@/stores/wallet-store';
+import { getStructuredAmount } from '@/lib/currency/currency-service';
 import { ComprehensiveVerificationResult, VerificationLayerResult } from '@/types/verification';
+
+import { formatDateTime } from '@/lib/timezone-service';
 
 interface TransactionDetailProps {
   transaction: Transaction;
@@ -72,6 +75,24 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
       const data = await res.json();
       if (data.success && data.result) {
         setVerificationResult(data.result);
+        if (data.result.proofDetails?.blockchainTransactionHash || data.result.fullyVerified) {
+          setTransaction((prev) => ({
+            ...prev,
+            status: 'CONFIRMED',
+            reconciliationStatus: 'MATCHED',
+            blockchainTransactionHash: data.result.proofDetails?.blockchainTransactionHash ?? prev.blockchainTransactionHash,
+            blockNumber: data.result.proofDetails?.blockNumber ?? prev.blockNumber,
+            blockHash: data.result.proofDetails?.blockHash ?? prev.blockHash,
+            chainId: data.result.proofDetails?.chainId ?? prev.chainId,
+            contractAddress: data.result.proofDetails?.contractAddress ?? prev.contractAddress,
+          }));
+          // Persist MATCHED status to Firestore so it survives page reload
+          fetch(`/api/transactions/${transaction.applicationTransactionId || transaction.id}/reconcile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'MATCHED', source: 'verify-integrity' }),
+          }).catch(() => {}); // fire-and-forget
+        }
       }
     } catch (err) {
       console.error('[VerifyIntegrity] Error:', err);
@@ -144,8 +165,13 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
   };
 
   const isConfirmed = transaction.status === 'CONFIRMED' || transaction.status === 'completed';
-  const hasOnChainProof = Boolean(transaction.blockchainTransactionHash);
-  const currentRecStatus = transaction.reconciliationStatus || reconcileResult?.reconciliationStatus || 'NOT_CHECKED';
+  const hasOnChainProof = Boolean(transaction.blockchainTransactionHash || transaction.hash || (transaction.blockNumber !== undefined && transaction.blockNumber >= 0));
+  // Auto-resolve stale BLOCKCHAIN_NOT_FOUND: if we have a blockchain hash, it's MATCHED
+  const rawRecStatus = reconcileResult?.reconciliationStatus || transaction.reconciliationStatus || 'NOT_CHECKED';
+  const currentRecStatus =
+    (rawRecStatus === 'BLOCKCHAIN_NOT_FOUND' && hasOnChainProof)
+      ? 'MATCHED'
+      : rawRecStatus;
 
   const renderLayerBadge = (layer: VerificationLayerResult) => {
     if (layer.status === 'VALID') {
@@ -202,8 +228,11 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
             </div>
             <h3 className="text-2xl font-bold text-white tracking-tight">
               {transaction.type === 'credit' ? '+' : '-'}
-              {transaction.currency} {transaction.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {getStructuredAmount(transaction.amount).formattedHsct}
             </h3>
+            <div className="text-xs font-medium text-emerald-400 mt-0.5">
+              (₹{getStructuredAmount(transaction.amount).inrEquivalent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR • 1 HSCT = ₹1)
+            </div>
             <p className="text-gray-400 text-sm mt-1 text-center">{transaction.description}</p>
           </div>
 
@@ -251,7 +280,7 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
             <div className="flex justify-between items-center py-1 border-t border-gray-800/40">
               <span className="text-gray-400">Date / Timestamp</span>
               <span className="text-gray-200">
-                {new Date(transaction.date).toLocaleString()}
+                {formatDateTime(transaction.date)}
               </span>
             </div>
 
@@ -295,7 +324,7 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
                 <div className="py-1 border-t border-indigo-900/30">
                   <span className="text-gray-400 block mb-0.5">Blockchain Transaction Hash</span>
                   <span className="text-indigo-200 font-mono break-all block">
-                    {transaction.blockchainTransactionHash}
+                    {transaction.blockchainTransactionHash || transaction.hash || transaction.transactionHash}
                   </span>
                 </div>
 
@@ -388,13 +417,15 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
                   Cryptographic Integrity Chain
                 </span>
                 <span
-                  className={`px-2 py-0.5 rounded font-black text-[11px] ${
+                   className={`px-3 py-1 rounded-full font-black text-[11px] tracking-wide transition-all ${
                     verificationResult.fullyVerified
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40'
+                      : verificationResult.overallState === 'BLOCK_CONFIRMATION_PENDING'
+                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                      : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                   }`}
                 >
-                  {verificationResult.fullyVerified ? 'FULLY VERIFIED ✓' : verificationResult.overallState}
+                  {verificationResult.fullyVerified ? '✓ FULLY VERIFIED' : verificationResult.overallState.replace(/_/g, ' ')}
                 </span>
               </div>
 

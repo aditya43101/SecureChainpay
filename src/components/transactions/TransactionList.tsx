@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import TransactionDetail from './TransactionDetail';
 
 import { Transaction } from '@/stores/wallet-store';
+import { formatTxAmountForDisplay } from '@/lib/currency/currency-service';
+import { formatDateTime } from '@/lib/timezone-service';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -53,12 +55,7 @@ export default function TransactionList({ transactions, limit }: TransactionList
                   </h4>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-gray-400">
-                      {new Date(tx.date).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatDateTime(tx.date)}
                     </span>
                     <span className="w-1 h-1 rounded-full bg-gray-600"></span>
                     <span
@@ -82,7 +79,10 @@ export default function TransactionList({ transactions, limit }: TransactionList
                   }`}
                 >
                   {tx.type === 'credit' ? '+' : '-'}
-                  {tx.currency} {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatTxAmountForDisplay(tx.amount, tx.currency).primary}
+                </div>
+                <div className="text-xs text-gray-500 font-medium">
+                  {formatTxAmountForDisplay(tx.amount, tx.currency).secondary}
                 </div>
               </div>
             </div>

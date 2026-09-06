@@ -4,7 +4,10 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useExplorerStore } from '@/stores/explorer-store';
 import { Search, ShieldCheck, ShieldAlert, CheckCircle2, XCircle, Activity, Server, Hash, Clock, Link as LinkIcon, Database, ArrowRight, RefreshCw } from 'lucide-react';
 import { ethers } from 'ethers';
+import { useWalletStore, type Transaction } from '@/stores/wallet-store';
 import { Button } from '@/components/ui/button';
+import { formatTxAmountForDisplay } from '@/lib/currency/currency-service';
+import { formatDateTime } from '@/lib/timezone-service';
 
 // A custom hook for debouncing search input
 function useDebounce<T>(value: T, delay: number): T {
@@ -127,7 +130,7 @@ export default function ExplorerPage() {
       noMissingBlocks,
       signaturesValid,
       isValid,
-      lastChecked: new Date().toLocaleString()
+      lastChecked: formatDateTime(new Date())
     });
   }, [transactions]);
 
@@ -297,7 +300,7 @@ export default function ExplorerPage() {
               <h3 className="font-semibold text-gray-300 text-sm uppercase tracking-wider">Genesis Block</h3>
             </div>
             <p className="text-sm font-mono text-white truncate">{genesisBlock?.hash ? genesisBlock.hash.substring(0, 16) + '...' : 'N/A'}</p>
-            <p className="text-xs text-neutral-500 mt-1">{genesisBlock ? new Date(genesisBlock.date).toLocaleString() : 'N/A'}</p>
+            <p className="text-xs text-neutral-500 mt-1">{genesisBlock ? formatDateTime(genesisBlock.date) : 'N/A'}</p>
           </div>
         </div>
 
@@ -420,7 +423,7 @@ export default function ExplorerPage() {
                     <div className="bg-black/50 p-4 rounded-xl border border-white/5 col-span-2">
                       <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Timestamp</p>
                       <p className="font-semibold text-gray-200 truncate">
-                        {new Date(selectedBlock.date).toLocaleString()}
+                        {formatDateTime(selectedBlock.date)}
                       </p>
                     </div>
                     <div className="bg-black/50 p-4 rounded-xl border border-white/5">
@@ -429,7 +432,12 @@ export default function ExplorerPage() {
                     </div>
                     <div className="bg-black/50 p-4 rounded-xl border border-white/5">
                       <p className="text-sm text-neutral-500 uppercase tracking-widest mb-1 font-bold">Amount</p>
-                      <p className="font-semibold text-gray-200">{selectedBlock.amount} {selectedBlock.currency}</p>
+                      <p className="font-semibold text-emerald-400">
+                        {formatTxAmountForDisplay(selectedBlock.amount, selectedBlock.currency).primary}
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        ({formatTxAmountForDisplay(selectedBlock.amount, selectedBlock.currency).secondary})
+                      </p>
                     </div>
                   </div>
 
@@ -476,19 +484,19 @@ export default function ExplorerPage() {
                     </div>
                   </div>
 
-                  {/* On-Chain EVM Proof Section */}
-                  {selectedBlock.blockchainTransactionHash && (
+                  {/* On-Chain EVM / Ledger Proof Section */}
+                  {(selectedBlock.blockchainTransactionHash || selectedBlock.hash || selectedBlock.blockNumber !== undefined) && (
                     <div className="pt-6 border-t border-indigo-500/20">
                       <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-indigo-300">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
-                        EVM Smart Contract Proof
+                        Blockchain Ledger Proof (Block #{selectedBlock.blockNumber})
                       </h4>
                       <div className="bg-indigo-950/20 border border-indigo-500/20 rounded-xl p-4 font-mono text-xs space-y-3">
                         <div>
                           <span className="text-indigo-400 font-bold block mb-0.5">Blockchain TX Hash:</span>
-                          <span className="text-indigo-200 break-all">{selectedBlock.blockchainTransactionHash}</span>
+                          <span className="text-indigo-200 break-all">{selectedBlock.blockchainTransactionHash || selectedBlock.hash || selectedBlock.transactionHash}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -497,13 +505,13 @@ export default function ExplorerPage() {
                           </div>
                           <div>
                             <span className="text-indigo-400 font-bold block mb-0.5">Chain ID:</span>
-                            <span className="text-white">{selectedBlock.chainId ?? 31337}</span>
+                            <span className="text-white">{selectedBlock.chainId ?? 31337} (SecureChain Hybrid Ledger)</span>
                           </div>
                         </div>
-                        {selectedBlock.blockHash && (
+                        {(selectedBlock.blockHash || selectedBlock.hash) && (
                           <div>
                             <span className="text-indigo-400 font-bold block mb-0.5">Block Hash:</span>
-                            <span className="text-neutral-300 break-all">{selectedBlock.blockHash}</span>
+                            <span className="text-neutral-300 break-all">{selectedBlock.blockHash || selectedBlock.hash}</span>
                           </div>
                         )}
                         {selectedBlock.contractAddress && (
