@@ -72,8 +72,9 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
+        rightOffset: 6,
+        barSpacing: 8,
+        minBarSpacing: 3,
       }
     });
 
@@ -82,7 +83,10 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     const series = chart.addSeries(CandlestickSeries, {
       upColor: '#10b981', // emerald-500
       downColor: '#ef4444', // red-500
-      borderVisible: false,
+      borderVisible: true,
+      borderColor: '#374151',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
       wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
     });
@@ -122,10 +126,13 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
     };
   }, [chartMode, height]);
 
+  const lastCandleRef = useRef<any>(null);
+
   // Sync candles state to series
   useEffect(() => {
     if (seriesRef.current && candles.length > 0) {
       seriesRef.current.setData(candles);
+      lastCandleRef.current = { ...candles[candles.length - 1] };
       chartRef.current?.timeScale().fitContent();
     }
   }, [candles]);
@@ -143,15 +150,15 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
 
         // 1. Direct client-side Binance Vision API (fastest, no rate-limit, global CDN)
         const binanceEndpoints = [
-          `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=150`,
-          `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=150`,
-          `https://api.binance.us/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=150`,
+          `https://data-api.binance.vision/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
+          `https://api.binance.com/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
+          `https://api.binance.us/api/v3/klines?symbol=${formattedSymbol}&interval=${timeframe}&limit=120`,
         ];
 
         for (const url of binanceEndpoints) {
           try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 3500);
+            const timeout = setTimeout(() => controller.abort(), 3000);
             const res = await fetch(url, { signal: controller.signal });
             clearTimeout(timeout);
             if (res.ok) {
@@ -176,7 +183,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
         // 2. Try local backend Next.js API if direct Binance was blocked
         if (rawCandles.length === 0) {
           try {
-            const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=150`);
+            const resCandles = await fetch(`/api/market/candles/${formattedSymbol}?timeframe=${timeframe}&limit=120`);
             if (resCandles.ok) {
               const data = await resCandles.json();
               if (Array.isArray(data) && data.length > 0) {
@@ -241,6 +248,7 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
         }
 
         if (isMounted && deduped.length > 0) {
+          lastCandleRef.current = { ...deduped[deduped.length - 1] };
           setCandles(deduped);
         }
 
@@ -274,11 +282,8 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
   useEffect(() => {
     if (chartMode !== 'binance') return;
     const liveKline = latestKlineData[assetKey];
-    if (seriesRef.current && liveKline && candles.length > 0) {
+    if (seriesRef.current && liveKline && lastCandleRef.current) {
       try {
-        const lastCandle = candles[candles.length - 1];
-        if (!lastCandle) return;
-
         let tfSeconds = 3600;
         if (timeframe === '1m') tfSeconds = 60;
         else if (timeframe === '5m') tfSeconds = 300;
@@ -287,16 +292,17 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
         else if (timeframe === '1d') tfSeconds = 86400;
 
         const bucketTime = (Math.floor(Number(liveKline.time) / tfSeconds) * tfSeconds) as Time;
-        const lastCandleTime = Number(lastCandle.time);
+        const lastCandleTime = Number(lastCandleRef.current.time);
 
         if (Number(bucketTime) === lastCandleTime) {
           const updated = {
             time: bucketTime,
-            open: lastCandle.open,
-            high: Math.max(lastCandle.high, liveKline.high),
-            low: Math.min(lastCandle.low, liveKline.low),
+            open: lastCandleRef.current.open,
+            high: Math.max(lastCandleRef.current.high, liveKline.high),
+            low: Math.min(lastCandleRef.current.low, liveKline.low),
             close: liveKline.close,
           };
+          lastCandleRef.current = updated;
           seriesRef.current.update(updated);
         } else if (Number(bucketTime) > lastCandleTime) {
           const newCandle = {
@@ -306,13 +312,14 @@ export function TradingViewWidget({ symbol, height = 500, showOverlay = true }: 
             low: liveKline.low,
             close: liveKline.close,
           };
+          lastCandleRef.current = newCandle;
           seriesRef.current.update(newCandle);
         }
       } catch {
         // Quiet fail
       }
     }
-  }, [latestKlineData, assetKey, chartMode, timeframe, candles]);
+  }, [latestKlineData, assetKey, chartMode, timeframe]);
 
   const getActionColor = (action: string) => {
     switch (action) {
