@@ -13,6 +13,8 @@ export default function WalletPage() {
   const [isDepositing, setIsDepositing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const currentHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
+
   const handleSimulateDeposit = async () => {
     setError(null);
     const amountHsct = Number(depositAmount);
@@ -32,8 +34,7 @@ export default function WalletPage() {
 
     setIsDepositing(true);
     try {
-      const amountUsd = amountHsct / USD_TO_HSCT;
-      await executeTransaction('credit', amountUsd, 'USD', `Deposited ${amountHsct.toLocaleString()} HSCT`, { source: 'Simulated HSCT Deposit' });
+      await executeTransaction('credit', amountHsct, 'HSCT', `Deposited ${amountHsct.toLocaleString()} HSCT`, { source: 'Simulated HSCT Deposit' });
       
       setShowDepositInput(false);
       setDepositAmount('');
@@ -54,7 +55,7 @@ export default function WalletPage() {
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-500 mb-1 sm:mb-2">
             My Wallet
           </h1>
-          <p className="text-gray-400 text-sm sm:text-base">Manage your SecureChain Pay assets and quick actions in HSCT.</p>
+          <p className="text-gray-400 text-sm sm:text-base">Manage your SecureChain Pay assets and quick actions in HSCT (₹1 = 1 HSCT).</p>
         </div>
 
         {/* Balance Card */}
@@ -70,13 +71,13 @@ export default function WalletPage() {
               <span className="text-gray-400 font-medium tracking-wide uppercase text-xs sm:text-sm">Available Balance</span>
               <div className="flex items-baseline flex-wrap gap-1">
                 <span className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-white break-all">
-                  {(balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {currentHsct.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-xl sm:text-2xl text-gray-400 font-bold ml-1">HSCT</span>
               </div>
               <div className="inline-flex items-center gap-2 mt-2 sm:mt-4 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full text-xs sm:text-sm font-medium">
                 <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                Casino Tokens - Fixed Supply
+                Parity: 1 HSCT = ₹1 INR
               </div>
             </div>
 
@@ -148,9 +149,9 @@ export default function WalletPage() {
             <h2 className="text-2xl font-bold text-white">Assets Overview</h2>
             <div className="bg-gray-950/50 backdrop-blur-xl border border-gray-800/80 rounded-3xl p-6 shadow-2xl space-y-6">
               {[
-                { name: 'SecureChain Token', symbol: 'HSCT', amount: (balances.USD * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: 'bg-green-500' },
-                { name: 'Ethereum', symbol: 'ETH', amount: balances.ETH.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }), color: 'bg-blue-500' },
-                { name: 'Bitcoin', symbol: 'BTC', amount: balances.BTC.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 }), color: 'bg-orange-500' },
+                { name: 'SecureChain Token', symbol: 'HSCT', amount: `${currentHsct.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`, color: 'bg-green-500' },
+                { name: 'Ethereum', symbol: 'ETH', amount: `${balances.ETH.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`, color: 'bg-blue-500' },
+                { name: 'Bitcoin', symbol: 'BTC', amount: `${balances.BTC.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 })} BTC`, color: 'bg-orange-500' },
               ].map(asset => (
                 <div key={asset.symbol} className="flex justify-between items-center p-4 rounded-xl hover:bg-gray-800/40 transition-colors border border-transparent hover:border-gray-800">
                   <div className="flex items-center gap-4">

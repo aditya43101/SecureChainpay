@@ -27,11 +27,12 @@ export default function AddMoneyPage() {
     return () => unsubscribe();
   }, []);
 
+  const availableHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
+
   const handleAction = async () => {
     if (!amount || Number(amount) <= 0) return;
     
-    // For withdrawal, check balance (balances.USD is USD value, we compare in HSCT)
-    const availableHsct = balances.USD * USD_TO_HSCT;
+    // For withdrawal, check balance in HSCT
     if (activeTab === 'withdraw' && Number(amount) > availableHsct) {
       alert("Insufficient HSCT balance to withdraw this amount.");
       return;
@@ -42,9 +43,8 @@ export default function AddMoneyPage() {
       const txType = activeTab === 'add' ? 'credit' : 'debit';
       const desc = activeTab === 'add' ? `Wallet Top-up of ${amount} HSCT` : `Wallet Withdrawal of ${amount} HSCT`;
       
-      const amountUsd = Number(amount) / USD_TO_HSCT;
-      // Instantly generate a blockchain block for this action
-      await executeTransaction(txType, amountUsd, 'USD', desc, {
+      // Execute transaction in HSCT currency (1 HSCT = 1 INR)
+      await executeTransaction(txType, Number(amount), 'HSCT', desc, {
         source: 'Bank Gateway Simulation'
       });
 
@@ -56,8 +56,6 @@ export default function AddMoneyPage() {
       setIsProcessing(false);
     }
   };
-
-  const availableHsct = balances.USD * USD_TO_HSCT;
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12 font-sans flex flex-col items-center justify-center relative">
@@ -83,8 +81,9 @@ export default function AddMoneyPage() {
               <div>
                 <h2 className="text-3xl font-bold text-white mb-2">Success!</h2>
                 <p className="text-gray-400 text-lg">
-                  Mock {Number(amount).toLocaleString()} HSCT {activeTab === 'add' ? 'added successfully to' : 'withdrawn successfully from'} wallet!
+                  {Number(amount).toLocaleString()} HSCT {activeTab === 'add' ? 'added successfully to' : 'withdrawn successfully from'} wallet!
                 </p>
+                <p className="text-xs text-emerald-400 mt-1">1 HSCT = ₹1 INR Parity</p>
               </div>
               <button onClick={() => router.push('/explorer')} className="mt-8 px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors w-full">
                 View Block in Explorer
@@ -115,8 +114,8 @@ export default function AddMoneyPage() {
                 </h1>
                 <p className="text-gray-400">
                   {activeTab === 'add' 
-                    ? 'Top up your SecureChain wallet with HSCT Casino credits.' 
-                    : 'Withdraw your HSCT tokens back to your simulator account.'}
+                    ? 'Top up your SecureChain wallet with HSCT tokens (1 HSCT = ₹1 INR).' 
+                    : 'Withdraw your HSCT tokens back to your account.'}
                 </p>
               </div>
 
@@ -159,7 +158,7 @@ export default function AddMoneyPage() {
               <div className="pt-4 space-y-4 border-t border-gray-800/80">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Amount</span>
-                  <span className="text-white font-medium">{Number(amount || 0).toLocaleString()} HSCT</span>
+                  <span className="text-white font-medium">{Number(amount || 0).toLocaleString()} HSCT (₹{Number(amount || 0).toLocaleString()} INR)</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Processing Fee</span>

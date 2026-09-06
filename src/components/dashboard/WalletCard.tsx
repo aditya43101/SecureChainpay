@@ -14,12 +14,10 @@ export function WalletCard() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const currentHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
   const cryptoHsct = (balances.ETH * prices.ETH + balances.BTC * prices.BTC) * USD_TO_HSCT;
-  const fiatHsct = (balances.USD || 0) * USD_TO_HSCT; // Current spendable HSCT balance
-  const lifetimeFiatHsct = (balances.lifetimeDeposited ?? balances.USD ?? 0) * USD_TO_HSCT;
-  // Overview shows lifetime deposited + crypto in HSCT
-  const lifetimeHsct = lifetimeFiatHsct + cryptoHsct;
-  const spendableHsct = fiatHsct; // What user can actually spend right now
+  const lifetimeHsct = currentHsct + cryptoHsct;
+  const spendableHsct = currentHsct;
 
   return (
     <div className="relative p-5 sm:p-8 md:p-10 rounded-[2rem] overflow-hidden group min-h-[300px] sm:min-h-[320px] flex flex-col justify-between border border-white/5 shadow-2xl">
@@ -75,8 +73,8 @@ export function WalletCard() {
           </div>
           <div className="hidden sm:block w-px h-8 bg-white/10" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm text-neutral-400 font-medium mb-0.5 sm:mb-1">Fiat Balance (hSCT)</p>
-            <p className="text-lg sm:text-xl font-bold text-white truncate">{showBalance ? `${fiatHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}</p>
+            <p className="text-xs sm:text-sm text-neutral-400 font-medium mb-0.5 sm:mb-1">HSCT Balance (₹1 = 1 HSCT)</p>
+            <p className="text-lg sm:text-xl font-bold text-white truncate">{showBalance ? `${currentHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}</p>
           </div>
           <div className="hidden sm:block w-px h-8 bg-white/10" />
           

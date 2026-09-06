@@ -1081,19 +1081,67 @@ export const useWalletStore = create<WalletState>()(
           const currentBalances = currentData.balances || { USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 };
           
           newBalances = { ...currentBalances, lifetimeDeposited: currentBalances.lifetimeDeposited ?? 0 } as Balances;
-          if (type === 'credit') {
-            newBalances![currency] += amount;
-            // Track lifetime deposits — only increases on credit, never on spend
-            newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + amount;
-          } else if (type === 'debit') {
-            if (newBalances![currency] < amount) throw new Error("Insufficient funds");
-            newBalances![currency] -= amount;
-          } else if (type === 'trade') {
-            if (newBalances![currency] < amount) throw new Error("Insufficient funds");
-            newBalances![currency] -= amount;
-            if (payload?.tradeAsset && payload?.tradeAmount) {
-              const asset = payload.tradeAsset as keyof Balances;
-              newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
+          
+          if (currency === 'HSCT') {
+            const currentHsct = (newBalances!.HSCT !== undefined && newBalances!.HSCT > 0) ? newBalances!.HSCT : ((newBalances!.USD || 0) * USD_TO_HSCT);
+            if (type === 'credit') {
+              newBalances!.HSCT = currentHsct + amount;
+              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
+              newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + (amount / USD_TO_HSCT);
+            } else if (type === 'debit') {
+              if (currentHsct < amount) throw new Error("Insufficient HSCT balance");
+              newBalances!.HSCT = Math.max(0, currentHsct - amount);
+              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
+            } else if (type === 'trade') {
+              if (currentHsct < amount) throw new Error("Insufficient HSCT balance");
+              newBalances!.HSCT = Math.max(0, currentHsct - amount);
+              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
+              if (payload?.tradeAsset && payload?.tradeAmount) {
+                const asset = payload.tradeAsset as keyof Balances;
+                newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
+              }
+            }
+          } else if (currency === 'USD') {
+            const currentUsd = newBalances!.USD || ((newBalances!.HSCT || 0) / USD_TO_HSCT);
+            if (type === 'credit') {
+              newBalances!.USD = currentUsd + amount;
+              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
+              newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + amount;
+            } else if (type === 'debit') {
+              if (currentUsd < amount) throw new Error("Insufficient funds");
+              newBalances!.USD = Math.max(0, currentUsd - amount);
+              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
+            } else if (type === 'trade') {
+              if (currentUsd < amount) throw new Error("Insufficient funds");
+              newBalances!.USD = Math.max(0, currentUsd - amount);
+              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
+              if (payload?.tradeAsset && payload?.tradeAmount) {
+                const asset = payload.tradeAsset as keyof Balances;
+                newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
+              }
+            }
+          } else {
+            // Crypto assets (BTC, ETH, etc.)
+            if (type === 'credit') {
+              newBalances![currency] = (newBalances![currency] || 0) + amount;
+            } else if (type === 'debit') {
+              if ((newBalances![currency] || 0) < amount) throw new Error(`Insufficient ${currency} balance`);
+              newBalances![currency] = Math.max(0, (newBalances![currency] || 0) - amount);
+            } else if (type === 'trade') {
+              if ((newBalances![currency] || 0) < amount) throw new Error(`Insufficient ${currency} balance`);
+              newBalances![currency] = Math.max(0, (newBalances![currency] || 0) - amount);
+              if (payload?.tradeAsset && payload?.tradeAmount) {
+                const asset = payload.tradeAsset as keyof Balances;
+                if (asset === 'HSCT') {
+                  newBalances!.HSCT = (newBalances!.HSCT || 0) + payload.tradeAmount;
+                  newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
+                } else if (asset === 'USD') {
+                  newBalances!.USD = (newBalances!.USD || 0) + payload.tradeAmount;
+                  newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
+                } else {
+                  newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
+                }
+              }
             }
           }
 

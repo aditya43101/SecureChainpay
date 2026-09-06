@@ -189,7 +189,7 @@ function TradeContent() {
     const priceInHsct = priceInUsd * USD_TO_HSCT;
     const totalHsct = numAmount * priceInHsct;
 
-    const availableHsct = balances.USD;
+    const availableHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
 
     if (tradeType === 'buy') {
       if (availableHsct < totalHsct) {
@@ -200,7 +200,7 @@ function TradeContent() {
         await executeTransaction(
           'trade',
           totalHsct,
-          'USD',
+          'HSCT',
           `Bought ${numAmount} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`,
           { tradeAsset: selectedAsset, tradeAmount: numAmount }
         );
@@ -219,7 +219,7 @@ function TradeContent() {
           numAmount,
           selectedAsset,
           `Sold ${numAmount} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`,
-          { tradeAsset: 'USD', tradeAmount: totalHsct }
+          { tradeAsset: 'HSCT', tradeAmount: totalHsct }
         );
       } catch (err: any) {
         setError(err.message || 'Transaction failed');
@@ -519,8 +519,8 @@ function TradeContent() {
                   <span className="font-mono text-white">{balances[selectedAsset].toFixed(4)} {selectedAsset}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Available Balance (hSCT)</span>
-                  <span className="font-mono text-white">{balances.USD.toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT</span>
+                  <span>Available Balance</span>
+                  <span className="font-mono text-white">{((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT</span>
                 </div>
               </div>
             </div>
