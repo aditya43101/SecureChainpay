@@ -178,6 +178,40 @@ export const marketDataService = {
       }
     }
 
+    // Secondary fallback: Direct Bybit Spot Kline API
+    try {
+      const bybitTfMap: Record<string, string> = {
+        '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D'
+      };
+      const bybitTf = bybitTfMap[timeframe] || '60';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${bybitTf}&limit=${fetchLimit}`, {
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.result?.list && Array.isArray(data.result.list) && data.result.list.length > 0) {
+          const fetchedCandles: Candle[] = data.result.list.map((k: any) => ({
+            symbol,
+            timeframe,
+            timestamp: new Date(parseInt(k[0], 10)).toISOString(),
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5] || '0'),
+          }));
+          this.saveCandles(fetchedCandles).catch(() => {});
+          return fetchedCandles.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        }
+      }
+    } catch {
+      // Try next
+    }
+
     // Secondary fallback: DB cache
     try {
       if (process.env.DATABASE_URL) {
