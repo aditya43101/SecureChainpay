@@ -631,12 +631,10 @@ export default function TransferPage() {
                 </div>
                 <div className="relative">
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max={availableBalanceHsct}
+                    type="text"
+                    inputMode="decimal"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     placeholder="0.00"
                     className="w-full bg-neutral-900 border border-white/10 text-white text-4xl font-black py-6 px-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center placeholder:text-neutral-700"
                     autoFocus

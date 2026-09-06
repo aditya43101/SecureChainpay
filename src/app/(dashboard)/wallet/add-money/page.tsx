@@ -128,9 +128,10 @@ export default function AddMoneyPage() {
                   </div>
                   <div className="relative">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                       className="w-full bg-gray-900 border border-gray-700 text-white text-4xl font-black py-6 px-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center"
                       placeholder="0.00"
                     />
