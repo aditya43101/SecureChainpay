@@ -654,12 +654,44 @@ RULES:
 
   const userContent = contextString ? `${request.message}\n\n${contextString}` : request.message;
 
-  // === MISTRAL API (AQ. keys) ===
-  if (apiKey && apiKey.startsWith('AQ.')) {
-    const mistralModels = [preferredModel, 'mistral-small-latest', 'mistral-large-latest', 'open-mistral-7b'];
-    const uniqueMistralModels = [...new Set(mistralModels)];
+  // === LLM CALL PIPELINE ===
+  // 1. Try Google Gemini API first (works with AIza... and AQ... Gemini keys)
+  if (apiKey && apiKey.length > 5) {
+    const geminiModels = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const model of geminiModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: userContent }] }],
+            systemInstruction: { parts: [{ text: sharedSystemPrompt }] },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text && text.trim().length > 0) {
+            aiContent = text;
+            console.log(`[AI Service] Successfully generated response via Gemini (${model})`);
+            break;
+          }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          console.warn(`[AI Service] Gemini ${model} HTTP ${response.status}:`, errData?.error?.message || response.statusText);
+        }
+      } catch (geminiErr) {
+        console.warn(`[AI Service] Gemini ${model} error:`, geminiErr);
+      }
+    }
+  }
 
-    for (const model of uniqueMistralModels) {
+  // 2. Try Mistral API as fallback if Gemini didn't return a response
+  if (!aiContent && apiKey && apiKey.length > 5) {
+    const mistralModels = ['mistral-small-latest', 'mistral-large-latest', 'open-mistral-7b'];
+    for (const model of mistralModels) {
       try {
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
           method: 'POST',
@@ -683,40 +715,12 @@ RULES:
           const text = data.choices?.[0]?.message?.content;
           if (text && text.trim().length > 0) {
             aiContent = text;
+            console.log(`[AI Service] Successfully generated response via Mistral (${model})`);
             break;
           }
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          console.warn(`[AI Service] Mistral ${model} HTTP ${response.status}:`, errData?.message || '');
         }
       } catch (mistralErr) {
         console.warn(`[AI Service] Mistral model ${model} error:`, mistralErr);
-      }
-    }
-  }
-
-  // === GOOGLE GEMINI API (AIza keys) — fallback if Mistral not used ===
-  if (!aiContent && apiKey && apiKey.startsWith('AIza')) {
-    const geminiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
-    for (const model of geminiModels) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: userContent }] }],
-            systemInstruction: { parts: [{ text: sharedSystemPrompt }] },
-            generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
-          })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text && text.trim().length > 0) { aiContent = text; break; }
-        }
-      } catch (geminiErr) {
-        console.warn(`[AI Service] Gemini ${model} error:`, geminiErr);
       }
     }
   }
