@@ -520,9 +520,28 @@ Just ask and I'll give you a direct, specific answer!`;
 }
 
 
+/**
+ * Detect if a message is purely casual/greeting and doesn't need an LLM call.
+ * These get instant built-in responses.
+ */
+function isCasualOrGreeting(message: string): boolean {
+  const lower = message.trim().toLowerCase();
+  const clean = message.trim();
+
+  // Pure greetings
+  if (/^(hi|hello|hey|hola|namaste|salam|howdy|yo|sup)[\s!.,?]*$/i.test(clean)) return true;
+  if (clean.length <= 5 && (lower.includes('hi') || lower.includes('hey'))) return true;
+
+  // Casual conversational phrases
+  if (/\b(kaise ho|kaisa ho|how are you|how r u|wassup|what'?s up|how.?s it going)\b/i.test(lower)) return true;
+  if (/\b(or batao|aur batao|batao bhai|batao yaar|bolo bhai|kya chal raha|sab theek|sab badhiya|kya scene)\b/i.test(lower)) return true;
+
+  return false;
+}
+
 export async function generateAIResponse(request: LLMRequest): Promise<LLMResponse> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
-  const preferredModel = process.env.LLM_MODEL || 'gemini-2.0-flash';
+  const preferredModel = (process.env.LLM_MODEL || 'gemini-2.0-flash').replace('gemini-3.6-flash', 'gemini-2.0-flash');
   
   // Safe User upsert (non-blocking)
   try {
@@ -581,6 +600,17 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
   // Build Context
   let contextString = '';
   let routedContext: any = null;
+
+  // === FAST PATH: Casual/Greeting messages → skip API, use built-in instantly ===
+  if (isCasualOrGreeting(request.message)) {
+    const casualContent = generateIntelligentResponse(request.message, request.mode, request.asset, null, null);
+    try {
+      await db.aIMessage.create({ data: { conversationId, role: 'ASSISTANT', content: casualContent } });
+    } catch (_) {}
+    return { content: casualContent, conversationId };
+  }
+
+  // === NON-CASUAL PATH: Build rich project context, then call Gemini ===
   try {
     routedContext = await routeAndBuildAIContext({
       userId: request.userId,
@@ -595,44 +625,64 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
 
   let aiContent = '';
 
-  // Try Google Gemini REST API if key exists
-  if (apiKey && !apiKey.startsWith('AQ.')) {
-    const candidateModels = [preferredModel, 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-    const uniqueModels = Array.from(new Set(candidateModels.filter(m => m !== 'gemini-3.6-flash')));
+  // Try Google Gemini REST API — for all non-casual queries
+  const isValidKey = apiKey && apiKey.length > 10 && !apiKey.startsWith('AQ.') || (apiKey?.startsWith('AIza'));
+  if (isValidKey) {
+    const candidateModels = [preferredModel, 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const uniqueModels = [...new Set(candidateModels)];
+
+    const geminiSystemPrompt = `You are the AI Copilot for **SecureChain Pay** — an enterprise blockchain payment and AI-assisted quantitative trading platform.
+
+YOUR IDENTITY & PERSONALITY:
+- You are a helpful, conversational, and knowledgeable assistant — NOT a rigid template-based bot.
+- Respond naturally in the user's language: Hindi, Hinglish, or English. Match their tone.
+- For casual questions, be friendly and brief. For technical questions, be detailed and precise.
+- NEVER give the same templated answer to every question. Read the actual question and answer it directly.
+
+PLATFORM KNOWLEDGE:
+- **Currency:** HSCT (High-Security Chain Token) — 1 HSCT = ₹1 INR, 1 USD = 83.50 HSCT
+- **Wallet:** Non-custodial HD wallet with AES-256-GCM encrypted keys, ECDSA secp256k1 signatures
+- **Blockchain:** Hybrid off-chain + Firestore Ledger with Merkle Tree batching and EVM anchoring
+- **Trading:** 10-step quantitative pipeline — Market Data → Technical Indicators → ML Prediction → Strategy Engine → Risk Engine → Execution
+- **Auto-Trading modes:** OFF, PAPER (simulated), LIVE. Safety gates pause if daily loss > 3%
+- **Key Pages:** /wallet, /trade, /dashboard, /explorer, /transactions, /ai-assistant, /settings, /paper-trading, /backtesting
+- **LLM:** Google Gemini 2.0 Flash is used as the primary AI model for this assistant
+
+${routedContext?.systemDirective || ''}
+
+RULES:
+1. Answer the EXACT question asked — don't redirect to unrelated topics unless asked
+2. If you don't know something specific (like the user's personal balance), say so clearly
+3. Always ground answers in SecureChain Pay context when relevant
+4. For personal questions ("mera naam", "my age") — you don't have that info, say so naturally
+5. Respond in the same language as the user's message`;
 
     for (const model of uniqueModels) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const systemPrompt = (SYSTEM_PROMPTS[request.mode] || SYSTEM_PROMPTS.learning) +
-          (routedContext?.systemDirective ? `\n\n${routedContext.systemDirective}` : '') +
-          `\n\nPlatform Currency: 1 HSCT = ₹1 INR (1 USD = 83.50 HSCT). Respond naturally in the user's language (Hindi, Hinglish, or English).`;
-
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `${request.message}\n\n${contextString}` }]
-              }
-            ],
-            systemInstruction: {
-              parts: [{ text: systemPrompt }]
-            },
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 2048,
-            }
+            contents: [{
+              role: 'user',
+              parts: [{ text: contextString ? `${request.message}\n\n${contextString}` : request.message }]
+            }],
+            systemInstruction: { parts: [{ text: geminiSystemPrompt }] },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
           })
         });
 
         if (response.ok) {
           const data = await response.json();
-          if (data.candidates && data.candidates.length > 0 && data.candidates[0].content?.parts?.length > 0) {
-            aiContent = data.candidates[0].content.parts[0].text;
-            break; // Success!
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text && text.trim().length > 0) {
+            aiContent = text;
+            break;
           }
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          console.warn(`[AI Service] Gemini ${model} HTTP ${response.status}:`, errData?.error?.message || '');
         }
       } catch (geminiErr) {
         console.warn(`[AI Service] Gemini model ${model} error:`, geminiErr);
