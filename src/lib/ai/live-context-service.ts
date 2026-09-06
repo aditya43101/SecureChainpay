@@ -13,6 +13,7 @@ import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 export interface LiveContextPayload {
   contextGeneratedAt: string;
   userId: string;
+  userProfileContext?: any;
   walletContext?: any;
   transactionContext?: any;
   tradingContext?: any;
@@ -31,6 +32,18 @@ export async function fetchLiveContextForDomains(
     contextGeneratedAt: generatedAt,
     userId
   };
+
+  // User profile context
+  try {
+    const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (dbUser) {
+      payload.userProfileContext = {
+        name: dbUser.name || dbUser.email?.split('@')[0] || null,
+        email: dbUser.email || null,
+        role: dbUser.role
+      };
+    }
+  } catch (_) {}
 
   const domainSet = new Set(domains);
 

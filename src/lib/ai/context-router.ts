@@ -58,6 +58,12 @@ MANDATORY RESPONSE GUIDELINES:
   }
 
   // Add Domain Live Contexts
+  if (liveContext.userProfileContext) {
+    parts.push(`[LOGGED IN USER PROFILE]
+User Name: ${liveContext.userProfileContext.name || 'Not set'}
+Email: ${liveContext.userProfileContext.email || 'Not set'}`);
+  }
+
   if (liveContext.walletContext) {
     parts.push(`[LIVE WALLET CONTEXT (${liveContext.contextGeneratedAt})]
 Balances: ${JSON.stringify(liveContext.walletContext.balances)}
