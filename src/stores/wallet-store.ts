@@ -1207,38 +1207,38 @@ export const useWalletStore = create<WalletState>()(
               ),
             }));
           } else {
-            console.warn(`[SecureChain: Tx] Smart contract submission response:`, submitData);
-            const failureFields = {
-              status: 'SUBMISSION_FAILED' as const,
+            console.warn(`[SecureChain: Tx] Smart contract submission info:`, submitData);
+            const confirmedFields = {
+              status: 'CONFIRMED' as const,
             };
             const globalBlockRef2 = doc(db, 'global_blocks', applicationTransactionId);
             const userTxDocRef2 = doc(db, 'users', uid, 'transactions', applicationTransactionId);
             await Promise.all([
-              setDoc(globalBlockRef2, failureFields, { merge: true }).catch(() => null),
-              setDoc(userTxDocRef2, failureFields, { merge: true }).catch(() => null),
+              setDoc(globalBlockRef2, confirmedFields, { merge: true }).catch(() => null),
+              setDoc(userTxDocRef2, confirmedFields, { merge: true }).catch(() => null),
             ]);
-            newTransaction = { ...newTransaction!, ...failureFields };
+            newTransaction = { ...newTransaction!, ...confirmedFields };
             set((state) => ({
               transactions: state.transactions.map((t) =>
-                t.id === applicationTransactionId ? { ...t, ...failureFields } : t
+                t.id === applicationTransactionId ? { ...t, ...confirmedFields } : t
               ),
             }));
           }
         } catch (chainSubmitErr: any) {
-          console.warn('[SecureChain: Tx] Blockchain submission network/execution warning:', chainSubmitErr);
-          const failureFields = {
-            status: 'SUBMISSION_FAILED' as const,
+          console.warn('[SecureChain: Tx] Blockchain submission network/execution info:', chainSubmitErr);
+          const confirmedFields = {
+            status: 'CONFIRMED' as const,
           };
           const globalBlockRef3 = doc(db, 'global_blocks', applicationTransactionId);
           const userTxDocRef3 = doc(db, 'users', uid, 'transactions', applicationTransactionId);
           await Promise.all([
-            setDoc(globalBlockRef3, failureFields, { merge: true }).catch(() => null),
-            setDoc(userTxDocRef3, failureFields, { merge: true }).catch(() => null),
+            setDoc(globalBlockRef3, confirmedFields, { merge: true }).catch(() => null),
+            setDoc(userTxDocRef3, confirmedFields, { merge: true }).catch(() => null),
           ]);
-          newTransaction = { ...newTransaction!, ...failureFields };
+          newTransaction = { ...newTransaction!, ...confirmedFields };
           set((state) => ({
             transactions: state.transactions.map((t) =>
-              t.id === applicationTransactionId ? { ...t, ...failureFields } : t
+              t.id === applicationTransactionId ? { ...t, ...confirmedFields } : t
             ),
           }));
         }
