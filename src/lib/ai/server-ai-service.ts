@@ -601,13 +601,33 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
   let contextString = '';
   let routedContext: any = null;
 
-  // === FAST PATH: Casual/Greeting messages → skip API, use built-in instantly ===
-  if (isCasualOrGreeting(request.message)) {
-    const casualContent = generateIntelligentResponse(request.message, request.mode, request.asset, null, null);
-    try {
-      await db.aIMessage.create({ data: { conversationId, role: 'ASSISTANT', content: casualContent } });
-    } catch (_) {}
-    return { content: casualContent, conversationId };
+  // Fetch recent conversation history for multi-turn chat memory
+  let historyContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+  try {
+    const recentMsgs = await db.aIMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+      take: 10
+    });
+    if (recentMsgs && recentMsgs.length > 0) {
+      historyContents = recentMsgs.map((m) => ({
+        role: m.role === 'USER' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      }));
+    }
+  } catch (hErr) {
+    console.warn('[AI Service] Failed to load history:', hErr);
+  }
+
+  const userContent = contextString ? `${request.message}\n\n${contextString}` : request.message;
+
+  if (historyContents.length === 0) {
+    historyContents = [{ role: 'user', parts: [{ text: userContent }] }];
+  } else {
+    const last = historyContents[historyContents.length - 1];
+    if (last.role !== 'user' || last.parts[0]?.text !== request.message) {
+      historyContents.push({ role: 'user', parts: [{ text: userContent }] });
+    }
   }
 
   // === NON-CASUAL PATH: Build rich project context, then call Gemini ===
@@ -629,10 +649,11 @@ export async function generateAIResponse(request: LLMRequest): Promise<LLMRespon
   const sharedSystemPrompt = `You are the AI Copilot for **SecureChain Pay** — an enterprise blockchain payment and AI-assisted quantitative trading platform.
 
 YOUR IDENTITY & PERSONALITY:
-- You are a helpful, conversational, and knowledgeable assistant — NOT a rigid template-based bot.
-- Respond naturally in the user's language: Hindi, Hinglish, or English. Match their tone.
-- For casual questions, be friendly and brief. For technical questions, be detailed and precise.
-- NEVER give the same templated answer to every question. Read the actual question and answer it directly.
+- You are a natural, conversational, intelligent assistant — NOT a rigid template bot.
+- MATCH THE USER'S LANGUAGE EXACTLY: If the user speaks Hinglish (e.g., "hinglish me baatkro", "are bhai", "or batao", "kaise ho mittar"), YOU MUST RESPOND IN NATURAL HINGLISH.
+- NEVER use rigid repeated English templates like "Ha! Things are going well on my end..." or "Got your question!".
+- Read full conversation history carefully. If the user asks you not to repeat answers ("are ek hi ans mat do"), acknowledge it in natural Hinglish and answer their question dynamically!
+- If the user asks personal questions ("mera naam batao"), answer casually in Hinglish: e.g. "Bhai, mujhe abhi aapka naam nahi pata! Aap hi bata do, main yaad rakhunga. 😄"
 
 PLATFORM KNOWLEDGE:
 - **Currency:** HSCT (High-Security Chain Token) — 1 HSCT = ₹1 INR, 1 USD = 83.50 HSCT
@@ -641,21 +662,16 @@ PLATFORM KNOWLEDGE:
 - **Trading:** 10-step quantitative pipeline — Market Data → Technical Indicators → ML Prediction → Strategy Engine → Risk Engine → Execution
 - **Auto-Trading modes:** OFF, PAPER (simulated), LIVE. Safety gates pause if daily loss > 3%
 - **Key Pages:** /wallet, /trade, /dashboard, /explorer, /transactions, /ai-assistant, /settings, /paper-trading, /backtesting
-- **AI Model:** Mistral AI (mistral-small-latest) is used as the primary LLM for this assistant
 
 ${routedContext?.systemDirective || ''}
 
 RULES:
-1. Answer the EXACT question asked — don't redirect to unrelated topics unless asked
-2. If you don't know something specific (like the user's personal balance), say so clearly
-3. Always ground answers in SecureChain Pay context when relevant
-4. For personal questions ("mera naam", "my age") — you don't have that info, say so naturally
-5. Respond in the same language as the user's message`;
-
-  const userContent = contextString ? `${request.message}\n\n${contextString}` : request.message;
+1. Respond naturally in the user's language (Hinglish/Hindi/English). Match their exact tone.
+2. Answer the user's specific request. Never repeat generic marketing copy unless requested.
+3. Keep casual chat casual and friendly. Keep technical/trading answers detailed and precise.`;
 
   // === LLM CALL PIPELINE ===
-  // 1. Try Google Gemini API first (works with AIza... and AQ... Gemini keys)
+  // 1. Try Google Gemini API first with conversation history
   if (apiKey && apiKey.length > 5) {
     const geminiModels = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-1.5-flash'];
     for (const model of geminiModels) {
@@ -665,7 +681,7 @@ RULES:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: userContent }] }],
+            contents: historyContents,
             systemInstruction: { parts: [{ text: sharedSystemPrompt }] },
             generationConfig: { temperature: 0.75, maxOutputTokens: 2048 }
           })
@@ -691,6 +707,14 @@ RULES:
   // 2. Try Mistral API as fallback if Gemini didn't return a response
   if (!aiContent && apiKey && apiKey.length > 5) {
     const mistralModels = ['mistral-small-latest', 'mistral-large-latest', 'open-mistral-7b'];
+    const mistralMessages = [
+      { role: 'system', content: sharedSystemPrompt },
+      ...historyContents.map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.parts[0]?.text || ''
+      }))
+    ];
+
     for (const model of mistralModels) {
       try {
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
@@ -701,10 +725,7 @@ RULES:
           },
           body: JSON.stringify({
             model,
-            messages: [
-              { role: 'system', content: sharedSystemPrompt },
-              { role: 'user', content: userContent }
-            ],
+            messages: mistralMessages,
             temperature: 0.75,
             max_tokens: 2048
           })
