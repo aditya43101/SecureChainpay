@@ -37,8 +37,9 @@ export async function fetchLiveContextForDomains(
   try {
     const dbUser = await prisma.user.findUnique({ where: { id: userId } });
     if (dbUser) {
+      const fullName = [dbUser.firstName, dbUser.lastName].filter(Boolean).join(' ') || dbUser.email?.split('@')[0] || null;
       payload.userProfileContext = {
-        name: dbUser.name || dbUser.email?.split('@')[0] || null,
+        name: fullName,
         email: dbUser.email || null,
         role: dbUser.role
       };
