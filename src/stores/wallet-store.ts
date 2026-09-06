@@ -200,6 +200,26 @@ export function canonicalizePayload(params: {
   return `appId:${cleanAppId}|sender:${cleanSender}|receiver:${cleanReceiver}|amount:${cleanAmount}|asset:${cleanAsset}|nonce:${cleanIdemp}|timestamp:${cleanTimestamp}`;
 }
 
+async function safeJsonFetch(url: string, init?: RequestInit) {
+  try {
+    const res = await fetch(url, init);
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return { ok: res.ok, status: res.status, data };
+    } catch {
+      console.warn(`[safeJsonFetch] ${url} returned non-JSON (${res.status}):`, text.substring(0, 200));
+      return {
+        ok: false,
+        status: res.status,
+        data: { success: false, error: res.ok ? 'Invalid JSON server response' : `Server error (${res.status}): ${text.replace(/<[^>]*>/g, '').substring(0, 150)}` }
+      };
+    }
+  } catch (err: any) {
+    return { ok: false, status: 0, data: { success: false, error: err.message || 'Network request failed' } };
+  }
+}
+
 async function createGenesisBlock(uid: string, walletAddress: string, publicKey: string): Promise<Transaction> {
   const genesisTimeISO = '1970-01-01T00:00:00.000Z';
   const appId = `TX_GENESIS_${uid}`;
@@ -510,8 +530,7 @@ export const useWalletStore = create<WalletState>()(
       
       fetchPrices: async () => {
         try {
-          const res = await fetch('https://api.coincap.io/v2/assets?limit=10');
-          const json = await res.json();
+          const { data: json } = await safeJsonFetch('https://api.coincap.io/v2/assets?limit=10');
           if (json && Array.isArray(json.data)) {
             const btcItem = json.data.find((item: any) => item.symbol === 'BTC');
             const ethItem = json.data.find((item: any) => item.symbol === 'ETH');
@@ -566,7 +585,7 @@ export const useWalletStore = create<WalletState>()(
         if (!tx) return null;
 
         try {
-          const res = await fetch('/api/reconciliation', {
+          const { data } = await safeJsonFetch('/api/reconciliation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -592,7 +611,6 @@ export const useWalletStore = create<WalletState>()(
               uid,
             }),
           });
-          const data = await res.json();
           if (data.success && data.result) {
             const result = data.result;
             const updates: Partial<Transaction> = {
@@ -1136,7 +1154,7 @@ export const useWalletStore = create<WalletState>()(
         // ─── STEP 2: REAL BLOCKCHAIN SUBMISSION & ANCHORING ───
         try {
           console.log(`[SecureChain: Tx] Submitting transaction ${applicationTransactionId} to smart contract...`);
-          const submitRes = await fetch('/api/transactions/submit', {
+          const { data: submitData } = await safeJsonFetch('/api/transactions/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1150,8 +1168,6 @@ export const useWalletStore = create<WalletState>()(
               idempotencyKey,
             }),
           });
-
-          const submitData = await submitRes.json();
 
           if (submitData.success && submitData.blockchainTransactionHash) {
             const confirmedAt = submitData.confirmedAt || new Date().toISOString();
@@ -1304,7 +1320,7 @@ export const useWalletStore = create<WalletState>()(
         }
 
         // 5. Call Atomic Server Endpoint
-        const res = await fetch('/api/wallet/transfer', {
+        const { data } = await safeJsonFetch('/api/wallet/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1323,8 +1339,6 @@ export const useWalletStore = create<WalletState>()(
             note,
           }),
         });
-
-        const data = await res.json();
         if (!data.success) {
           throw new Error(data.error || 'Transfer failed on server');
         }
