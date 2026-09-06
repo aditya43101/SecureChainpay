@@ -64,7 +64,8 @@ export function generateIntelligentResponse(
   const cleanMsg = message.trim();
   const lower = cleanMsg.toLowerCase();
   const symbol = (asset || (lower.includes('eth') || lower.includes('ethereum') ? 'ETH' : lower.includes('sol') ? 'SOL' : lower.includes('matic') || lower.includes('polygon') ? 'MATIC' : 'BTC')).toUpperCase();
-  const isHindi = lower.includes('kya') || lower.includes('kaise') || lower.includes('batao') || lower.includes('hai') || lower.includes('nhi') || lower.includes('nahi') || lower.includes('karu') || lower.includes('chahiye') || lower.includes('bata') || lower.includes('samjhao') || lower.includes('karein') || lower.includes('hoga') || lower.includes('kyu') || lower.includes('bhejna') || lower.includes('paisa');
+  // Detect Hindi/Hinglish by meaningful Hindi words (not just any common English word overlap)
+  const isHindi = lower.includes('kaise') || lower.includes('batao') || lower.includes('nahi') || lower.includes('nhi') || lower.includes('karu') || lower.includes('chahiye') || lower.includes('samjhao') || lower.includes('karein') || lower.includes('hoga') || lower.includes('bhejna') || lower.includes('paisa') || lower.includes('bhai') || lower.includes('yaar') || lower.includes('acha') || lower.includes('theek') || lower.includes('toh') || lower.includes('mujhe') || lower.includes('aap') || lower.includes('hum') || lower.includes('kyun') || lower.includes('kab') || lower.includes('kya hai') || lower.includes('kaisa') || lower.includes('lagta') || lower.includes('raha') || lower.includes('gaya') || lower.includes('bolo') || lower.includes('suno');
 
   // Helper formatting for live market prices
   const isBtc = symbol === 'BTC';
@@ -74,15 +75,21 @@ export function generateIntelligentResponse(
   const priceUsd = isBtc ? 64500 : isEth ? 3450 : isSol ? 145 : isMatic ? 0.42 : 1.0;
   const priceHsct = priceUsd * USD_TO_HSCT;
 
-  // 1. GREETINGS & CASUAL INQUIRIES ("hi", "hello", "kaise ho", "kya haal hai", "kya kar sakte ho")
-  if (/^(hi|hello|hey|hola|namaste|salam|kya haal|kaise ho|how are you|wassup|what's up)[\s!.,?]*$/i.test(cleanMsg) ||
-      cleanMsg.length <= 5 && (lower.includes('hi') || lower.includes('hey'))) {
+  // 1. GREETINGS & CASUAL INQUIRIES — match natural conversation phrases
+  const isGreeting = (
+    /^(hi|hello|hey|hola|namaste|salam|howdy|yo)[\s!.,?]*$/i.test(cleanMsg) ||
+    (cleanMsg.length <= 5 && (lower.includes('hi') || lower.includes('hey'))) ||
+    /\b(kaise ho|kaisa ho|kaisi ho|kya haal|kya hal|how are you|how r u|wassup|what'?s up|sup|how's it going|hows it going)\b/i.test(cleanMsg) ||
+    /\b(or batao|aur batao|batao bhai|batao yaar|bolo bhai|bolo yaar|kya chal raha|kya kar rahe|sab theek|sab badhiya|theek ho|badhiya ho|mazze mein|kuch naya|kya scene|kya scene hai)\b/i.test(cleanMsg)
+  );
+
+  if (isGreeting) {
     if (isHindi) {
-      return `Main bilkul badhiya hoon! 🚀
-Aap bataiye, aaj trading analysis, market signals, indicators (RSI/MACD), ya SecureChain wallet me kis topic par baat karni hai?`;
+      return `Bilkul badhiya hoon bhai! 😄🚀
+Aap bataiye — trading setup chahiye, market analysis, ya SecureChain wallet ke baare mein kuch poochhna hai? Jo bhi ho, batao!`;
     }
-    return `Hello! All systems are running smoothly. 🚀
-What market analysis, trading setup, technical indicator, or wallet query can I help you with today?`;
+    return `Hey! I'm doing great, thanks for asking! 🚀
+How can I help you today? Whether it's market analysis, a trade setup, technical indicators, or SecureChain wallet questions — I'm ready!`;
   }
 
   // 2. IDENTITY / ABOUT ("who are you", "tum kaun ho", "kya kar sakte ho")
@@ -413,25 +420,47 @@ What market analysis, trading setup, technical indicator, or wallet query can I 
 - **Security:** Non-custodial AES-256-GCM encrypted client keys with ECDSA secp256k1 digital signatures.`;
   }
 
-  // 10. DYNAMIC ADAPTIVE FALLBACK (Point-to-point answer for any custom question)
-  if (isHindi) {
-    return `### 💡 **${cleanMsg.slice(0, 45)}... par Point-to-Point Analysis**
+  // 10. OPEN-ENDED CASUAL / CONVERSATIONAL FALLBACK
+  // Detect if it looks like casual conversation (short, no financial keyword)
+  const isCasualChat = cleanMsg.split(' ').length <= 6 && !lower.includes('price') && !lower.includes('coin') && !lower.includes('crypto') && !lower.includes('trade') && !lower.includes('market') && !lower.includes('wallet') && !lower.includes('btc') && !lower.includes('eth');
 
-1. **Core Concept:** ${cleanMsg} ke context me, market data aur quantitative risk principles ko follow karna sabse zaroori hai.
-2. **Key Observation:** Har trading ya financial decision me trend direction, support/resistance levels aur volume confirmation dekhna chahiye.
-3. **Execution Tip:** Hamesha entry lene se pehle stop-loss level aur expected target calculate karein (minimum 1:2 Risk:Reward ratio).
-4. **SecureChain Integration:** Live rates aur execution ke liye aap hamare [Trade Desk](/trade) ya [Wallet](/wallet) ka upyog kar sakte hain.
-
-Aap isme se kisi specific indicator ya coin setup ke baare me detail me pooch sakte hain!`;
+  if (isCasualChat) {
+    if (isHindi) {
+      return `Haha, sab badhiya chal raha hai! 😄
+Kuch trading ya market ke baare mein poochhna hai? BTC, ETH ka setup chahiye, ya koi indicator samjhana hai — bas batao!`;
+    }
+    return `Ha! Things are going well on my end. 😄
+Feel free to ask me anything — market analysis, trade setups, crypto education, or SecureChain wallet tips. I'm here to help!`;
   }
 
-  return `### 💡 **Analysis: ${cleanMsg.slice(0, 50)}**
+  // 11. GENERIC THOUGHTFUL FALLBACK for longer/unrecognized questions
+  if (isHindi) {
+    return `Aapka sawaal samajh aaya! 🤔
 
-- **Key Focus:** Direct evaluation based on quantitative mechanics and blockchain principles.
-- **Actionable Insight:** Maintain disciplined risk-to-reward ratios (minimum 1:2) and verify volume confirmation at key levels.
-- **Platform Reference:** Trade executions and portfolio balances are tracked in real-time natively in **HSCT** on [Trade Desk](/trade) and [Wallet](/wallet).
+Is topic par main zyada depth mein jaana chahta hoon — kya aap thoda aur context de sakte hain?
 
-Let me know which specific crypto asset or technical parameter you would like to drill down into!`;
+**Ya in mein se kuch poochhna chahte hain?**
+- 📊 Kisi coin ka trade setup (BTC, ETH, SOL)
+- 📈 Technical indicator (RSI, MACD, EMA)
+- 🛡️ Risk management rules
+- 💳 SecureChain wallet / HSCT payments
+- ⛓️ Blockchain fundamentals
+
+Bas bolo, main seedha aur helpful answer dunga!`;
+  }
+
+  return `Got your question! 🤔
+
+Could you give me a bit more context so I can give you a precise answer?
+
+**Or pick a topic I can help with directly:**
+- 📊 Trade setup for BTC, ETH, or any coin
+- 📈 Technical indicator deep-dive (RSI, MACD, EMA)
+- 🛡️ Risk management & position sizing
+- 💳 SecureChain wallet & HSCT transactions
+- ⛓️ Blockchain & crypto concepts
+
+Just ask and I'll give you a direct, specific answer!`;
 }
 
 
