@@ -27,7 +27,19 @@ import {
   CreditCard,
   Sliders,
   ExternalLink,
+  QrCode,
+  Copy,
+  Check,
+  Upload,
+  Camera,
+  Share2,
+  X,
 } from 'lucide-react';
+import jsQR from 'jsqr';
+import { VerificationPopup, PaymentVerificationDetails } from '@/components/wallet/VerificationPopup';
+import { QRScannerModal } from '@/components/wallet/QRScannerModal';
+import { resolveRecipientFromQR, ResolvedRecipient } from '@/lib/payments/recipient-resolver';
+import { useWalletStore } from '@/stores/wallet-store';
 
 interface ChatMessage {
   id: string;
@@ -37,6 +49,7 @@ interface ChatMessage {
   decisionId?: string;
   actionRequired?: string;
   draft?: any;
+  paymentRequest?: any;
   preflight?: any;
   failureAnalysis?: any;
   paymentAudit?: any;
@@ -46,17 +59,19 @@ interface ChatMessage {
 }
 
 export default function CopilotDashboard() {
+  const { address: userWalletAddress, transferFunds, initializeWallet } = useWalletStore();
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-1',
       sender: 'copilot',
-      text: "👋 Hello! I'm your **AI Payment Copilot**. I can prepare instant payments, evaluate routing health, perform cryptographic security checks, and diagnose transaction issues.\n\n*How can I assist your payments today?*",
+      text: "👋 Hello! I'm your **AI Payment Copilot**.\n\nI can help you **Send Money** (by username, wallet address, or QR), **Request Money** (creating payment QR codes and shareable links), evaluate settlement routing, and perform cryptographic security checks.\n\n*What would you like to do today?*",
       intent: 'GENERAL_QUESTION',
       quickReplies: [
-        'Send $100 to alice@example.com',
-        'Check settlement route latency',
-        'Run safety check on recipient',
-        'Explain recent transaction status',
+        'Send $100 to Rahul',
+        'Request ₹500 from Rahul',
+        'Scan QR screenshot',
+        'Check route latency',
       ],
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -68,11 +83,15 @@ export default function CopilotDashboard() {
   const [isConfirmingDraft, setIsConfirmingDraft] = useState(false);
   const [selectedTimeline, setSelectedTimeline] = useState<any>(null);
   const [telemetry, setTelemetry] = useState<any>(null);
-  const [editModalDraft, setEditModalDraft] = useState<any>(null);
-  const [editAmount, setEditAmount] = useState('');
-  const [editRecipient, setEditRecipient] = useState('');
+
+  // Modal States
+  const [isVerificationOpen, setIsVerificationOpen] = useState(false);
+  const [verificationDetails, setVerificationDetails] = useState<PaymentVerificationDetails | null>(null);
+  const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const qrFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,10 +101,15 @@ export default function CopilotDashboard() {
     scrollToBottom();
   }, [messages, activeDraft]);
 
-  // Fetch active drafts & telemetry on mount
+  // Handle incoming Shareable Payment Request links (?request=REQ-... or ?pay=REQ-...)
   useEffect(() => {
-    fetchActiveDraft();
-    fetchTelemetry();
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const requestId = params.get('request') || params.get('pay') || params.get('req');
+
+    if (requestId) {
+      fetchPaymentRequestByUrl(requestId);
+    }
   }, []);
 
   // Draft TTL Countdown
@@ -109,31 +133,48 @@ export default function CopilotDashboard() {
     return () => clearInterval(interval);
   }, [activeDraft?.expiresAt]);
 
-  const fetchActiveDraft = async () => {
+  // Fetch Payment Request from URL query parameter
+  const fetchPaymentRequestByUrl = async (requestId: string) => {
     try {
-      const res = await fetch('/api/payments/draft');
+      setIsProcessing(true);
+      const res = await fetch(`/api/payments/request/${requestId}`);
       const data = await res.json();
-      if (data.drafts && data.drafts.length > 0) {
-        setActiveDraft(data.drafts[0]);
-      }
-    } catch (e) {
-      console.error('Error fetching draft:', e);
-    }
-  };
 
-  const fetchTelemetry = async () => {
-    try {
-      const res = await fetch('/api/payments/preflight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: 10, recipient: 'telemetry_probe', preferredRoute: 'ADAPTIVE' }),
-      });
-      const data = await res.json();
-      if (data?.routeHealth) {
-        setTelemetry(data);
+      if (data.success && data.request) {
+        const req = data.request;
+        const isExpired = req.status === 'EXPIRED' || (req.expiresAt && new Date(req.expiresAt) < new Date());
+        const isPaid = req.status === 'PAID' || req.status === 'CONFIRMED';
+        const isCancelled = req.status === 'CANCELLED';
+
+        let statusText = `📌 **Incoming Payment Request: ${req.requestId}**\n\n• **Receiver**: ${req.receiverName || req.requestorDisplayName}\n• **Wallet**: \`${req.receiverWalletAddress || req.requestorWalletAddress}\`\n• **Amount**: ${req.amount} **${req.currency || req.asset}**\n• **Network**: ${req.network || 'Ethereum'}\n• **Status**: **${req.status}**`;
+
+        if (isPaid) {
+          statusText += `\n\n✅ *This payment request has already been paid.*`;
+        } else if (isExpired) {
+          statusText += `\n\n⚠️ *This payment request has expired and cannot be paid.*`;
+        } else if (isCancelled) {
+          statusText += `\n\n❌ *This payment request was cancelled by the receiver.*`;
+        } else {
+          statusText += `\n\nClick **Review Payment** below to proceed to final verification & secure signing.`;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `req-url-${Date.now()}`,
+            sender: 'copilot',
+            text: statusText,
+            intent: 'REQUEST_PAYMENT',
+            paymentRequest: req,
+            quickReplies: req.status === 'PENDING' ? ['Review Payment', 'Decline Request'] : ['Send New Payment'],
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
       }
-    } catch (e) {
-      console.error('Error fetching telemetry:', e);
+    } catch (err) {
+      console.error('Error loading request from URL:', err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -168,6 +209,7 @@ export default function CopilotDashboard() {
         decisionId: data.decisionId,
         actionRequired: data.actionRequired,
         draft: data.draft,
+        paymentRequest: data.paymentRequest,
         preflight: data.preflight,
         failureAnalysis: data.failureAnalysis,
         paymentAudit: data.paymentAudit,
@@ -196,18 +238,64 @@ export default function CopilotDashboard() {
     }
   };
 
-  const handleConfirmDraft = async (draftId: string) => {
-    setIsConfirmingDraft(true);
-    try {
-      const res = await fetch(`/api/payments/draft/${draftId}/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
+  // Trigger Final Verification Popup for a draft or payment request
+  const openVerificationForDraft = (draft: any) => {
+    setVerificationDetails({
+      recipientName: draft.recipientName || draft.recipient || 'Target Recipient',
+      recipientAddress: draft.recipientAddress || draft.recipient || '0x0000000000000000000000000000000000000000',
+      recipientType: (draft.recipient || '').startsWith('0x') ? 'EXTERNAL_WALLET' : 'INTERNAL_USER',
+      amount: Number(draft.amount),
+      asset: draft.currency || 'HSCT',
+      network: draft.preferredRoute === 'INTERNAL' ? 'SecureChain Hybrid Ledger' : 'Ethereum Mainnet',
+      memo: draft.description,
+    });
+    setIsVerificationOpen(true);
+  };
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to authorize payment.');
+  const openVerificationForRequest = (req: any) => {
+    if (['PAID', 'CONFIRMED', 'EXPIRED', 'CANCELLED'].includes(req.status)) {
+      alert(`This payment request is ${req.status} and cannot be paid.`);
+      return;
+    }
+
+    setVerificationDetails({
+      recipientName: req.receiverName || req.requestorDisplayName || 'Receiver',
+      recipientAddress: req.receiverWalletAddress || req.requestorWalletAddress || '0x0000000000000000000000000000000000000000',
+      recipientType: 'INTERNAL_USER',
+      amount: Number(req.amount),
+      asset: req.asset || req.currency || 'USD',
+      network: req.network || 'Ethereum Mainnet',
+      memo: req.memo || req.note,
+      requestId: req.requestId || req.id,
+    });
+    setIsVerificationOpen(true);
+  };
+
+  // Mandatory Signing Handler called when user clicks [CONFIRM & SIGN] in VerificationPopup
+  const handleExecutePaymentSigning = async (details: PaymentVerificationDetails) => {
+    try {
+      setIsConfirmingDraft(true);
+
+      // Perform transfer with decrypted private key signature
+      const completedTx = await transferFunds({
+        receiverAddress: details.recipientAddress,
+        receiverDisplayName: details.recipientName,
+        amount: details.amount,
+        currency: (details.asset as any) || 'HSCT',
+        note: details.memo,
+      });
+
+      // Update payment request status if paying a request
+      if (details.requestId) {
+        await fetch('/api/wallet/request-money', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            requestId: details.requestId,
+            action: 'PAID',
+            transactionId: completedTx.id,
+          }),
+        }).catch(() => {});
       }
 
       setActiveDraft(null);
@@ -218,113 +306,65 @@ export default function CopilotDashboard() {
         {
           id: `conf-${Date.now()}`,
           sender: 'copilot',
-          text: `🎉 **Payment Confirmed & Settled!**\n\n• **Amount**: ${data.paymentIntent?.amount} ${data.paymentIntent?.currency}\n• **Recipient**: ${data.draft?.recipient}\n• **Settlement Route**: ${data.paymentIntent?.routeUsed}\n• **Transaction Reference**: \`${data.transaction?.id || data.paymentIntent?.id}\`\n\nCryptographic proof has been anchored to the tamper-evident ledger.`,
-          quickReplies: ['View Event Timeline', 'Send Another Payment', 'Check Balance'],
-          paymentAudit: data.paymentIntent,
+          text: `🎉 **Payment Confirmed & Signed!**\n\n• **Amount**: ${details.amount} **${details.asset}**\n• **Recipient**: ${details.recipientName}\n• **Wallet Address**: \`${details.recipientAddress}\`\n• **Block Number**: #${completedTx.blockNumber}\n• **Transaction Hash**: \`${completedTx.hash.substring(0, 16)}...\`\n\nCryptographic signature verified and anchored to the global blockchain.`,
+          quickReplies: ['Send Another Payment', 'Request Money', 'Check Balance'],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     } catch (err: any) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-conf-${Date.now()}`,
-          sender: 'copilot',
-          text: `❌ **Authorization Blocked:** ${err.message}`,
-          quickReplies: ['Edit Draft', 'Top Up Balance', 'Contact Support'],
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      console.error('Payment signing failed:', err);
+      throw err;
     } finally {
       setIsConfirmingDraft(false);
     }
   };
 
-  const handleCancelDraft = async (draftId: string) => {
-    try {
-      await fetch(`/api/payments/draft/${draftId}`, { method: 'DELETE' });
-      setActiveDraft(null);
-      setDraftCountdown(null);
+  // QR Image Screenshot Upload Handler
+  const handleQRFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `cancel-${Date.now()}`,
-          sender: 'copilot',
-          text: '🗑️ Payment draft has been cancelled. No funds were debited.',
-          quickReplies: ['Send New Payment', 'Check Route Latency'],
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch (e) {
-      console.error('Cancel draft error:', e);
-    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, img.width, img.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (code && code.data) {
+            handleQRScanSuccess(resolveRecipientFromQR(code.data).recipient!);
+          } else {
+            alert('Could not detect a valid SecureChain Pay QR code in the uploaded image.');
+          }
+        }
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleUpdateDraft = async () => {
-    if (!editModalDraft) return;
-    try {
-      const res = await fetch(`/api/payments/draft/${editModalDraft.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: editAmount ? parseFloat(editAmount) : undefined,
-          recipient: editRecipient || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setActiveDraft(data.draft);
-      setEditModalDraft(null);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `upd-${Date.now()}`,
-          sender: 'copilot',
-          text: `✏️ **Draft Updated:** ${data.draft.amount} ${data.draft.currency} to **${data.draft.recipient}**. TTL refreshed for 5 minutes.`,
-          draft: data.draft,
-          preflight: data.preflight,
-          quickReplies: ['Confirm Payment', 'Cancel Draft'],
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch (e: any) {
-      alert(e.message || 'Update failed');
-    }
+  const handleQRScanSuccess = (recipient: ResolvedRecipient) => {
+    setVerificationDetails({
+      recipientName: recipient.displayName || recipient.username || 'Scanned QR Recipient',
+      recipientAddress: recipient.walletAddress,
+      recipientType: recipient.recipientType,
+      amount: recipient.amount || 10,
+      asset: recipient.currency || 'HSCT',
+      network: 'SecureChain Hybrid Ledger',
+    });
+    setIsVerificationOpen(true);
   };
 
-  const handleFeedback = async (decisionId: string, feedback: 'HELPFUL' | 'UNHELPFUL' | 'INCORRECT') => {
-    try {
-      await fetch('/api/ai/payment-copilot/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decisionId, feedback }),
-      });
-
-      setMessages((prev) =>
-        prev.map((msg) => (msg.decisionId === decisionId ? { ...msg, feedback } : msg))
-      );
-    } catch (e) {
-      console.error('Feedback error:', e);
-    }
-  };
-
-  const inspectTimeline = async (paymentId: string) => {
-    try {
-      const res = await fetch(`/api/payments/${paymentId}/timeline`);
-      const data = await res.json();
-      setSelectedTimeline(data);
-    } catch (e) {
-      console.error('Timeline error:', e);
-    }
-  };
-
-  const formatCountdown = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  const copyShareableLink = (link: string) => {
+    const fullUrl = `${window.location.origin}${link}`;
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedLink(link);
+    setTimeout(() => setCopiedLink(null), 2000);
   };
 
   return (
@@ -338,63 +378,57 @@ export default function CopilotDashboard() {
             </span>
             AI Payment Copilot
           </h1>
-          <p className="text-neutral-400 mt-1">
-            Intelligent payment preparation, multi-path routing telemetry, and evidence-grounded risk defense.
+          <p className="text-neutral-400 mt-1 text-sm">
+            Complete Two-Way Payment System: Send, Request, QR Scan, Mandatory Verification, & Blockchain Finality.
           </p>
         </div>
 
-        {/* Live System Badge */}
-        <div className="flex items-center gap-3 bg-neutral-900/80 border border-neutral-800 px-4 py-2 rounded-xl text-sm">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span className="text-neutral-300 font-medium">Orchestration Active</span>
+        {/* Live System Badges & QR Button */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsQRScannerOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+          >
+            <QrCode size={16} /> Scan Payment QR
+          </button>
+
+          <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 px-3 py-2 rounded-xl text-xs font-medium text-neutral-300">
+            <Lock size={12} className="text-cyan-400" /> Key Signer Active
           </div>
-          <span className="text-neutral-600">|</span>
-          <span className="text-xs text-neutral-400 flex items-center gap-1">
-            <Lock className="h-3 w-3 text-cyan-400" />
-            Policy v1.0
-          </span>
         </div>
       </div>
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Chat Conversation Stream (7 or 8 cols) */}
-        <div className="lg:col-span-8 flex flex-col h-[700px] bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
-          {/* Chat Stream Header */}
+        {/* Left Column: Chat Stream */}
+        <div className="lg:col-span-8 flex flex-col h-[720px] bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
+          {/* Header */}
           <div className="p-4 border-b border-neutral-800/80 bg-neutral-950/40 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm font-semibold text-neutral-200">Conversational Payment Engine</span>
+              <span className="text-sm font-semibold text-neutral-200">Payment Copilot Assistant</span>
             </div>
-            <button
-              onClick={() =>
-                setMessages([
-                  {
-                    id: 'welcome-reset',
-                    sender: 'copilot',
-                    text: 'Conversation reset. How can I assist you with payments or routing?',
-                    quickReplies: ['Send $50 to alex@example.com', 'Check route status'],
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  },
-                ])
-              }
-              className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 transition-colors"
-            >
-              <RefreshCw className="h-3 w-3" /> Clear Chat
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={qrFileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleQRFileUpload}
+              />
+              <button
+                onClick={() => qrFileInputRef.current?.click()}
+                className="text-xs text-neutral-400 hover:text-emerald-400 flex items-center gap-1 transition-colors px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
+              >
+                <Upload className="h-3 w-3" /> Upload QR Screenshot
+              </button>
+            </div>
           </div>
 
           {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+              <div key={msg.id} className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.sender === 'copilot' && (
                   <div className="h-8 w-8 rounded-lg bg-emerald-950 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 mt-1">
                     <Bot className="h-4 w-4" />
@@ -408,7 +442,7 @@ export default function CopilotDashboard() {
                       : 'bg-neutral-800/90 text-neutral-200 rounded-bl-none border border-neutral-700/60'
                   }`}
                 >
-                  {/* Markdown-like simple rendering */}
+                  {/* Markdown Text */}
                   <div className="whitespace-pre-wrap space-y-2">
                     {msg.text.split('\n').map((line, i) => {
                       if (line.startsWith('• ') || line.startsWith('- ')) {
@@ -434,61 +468,70 @@ export default function CopilotDashboard() {
                     })}
                   </div>
 
-                  {/* Preflight Badge in Message */}
-                  {msg.preflight && (
-                    <div className="mt-3 p-2.5 rounded-xl bg-neutral-950/60 border border-neutral-700/60 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                        <span>
-                          Pre-flight: <strong className="text-white">{msg.preflight.status}</strong>
-                        </span>
-                      </div>
-                      <span className="text-neutral-400">Risk: {msg.preflight.riskScore}/100</span>
+                  {/* Payment Request Card Display */}
+                  {msg.paymentRequest && (
+                    <div className="mt-4 p-4 bg-neutral-950/90 border border-emerald-500/30 rounded-2xl space-y-4">
+                      {msg.paymentRequest.qrDataUrl && (
+                        <div className="flex flex-col items-center p-3 bg-white rounded-xl">
+                          <img
+                            src={msg.paymentRequest.qrDataUrl}
+                            alt="Payment Request QR Code"
+                            className="w-48 h-48 object-contain"
+                          />
+                          <span className="text-[10px] text-neutral-600 font-mono mt-1 font-bold">
+                            Scan to Pay Request
+                          </span>
+                        </div>
+                      )}
+
+                      {msg.paymentRequest.shareableLink && (
+                        <div className="space-y-2">
+                          <span className="text-[11px] text-neutral-400 uppercase font-semibold block">Shareable Payment Link</span>
+                          <div className="flex items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-white/10 text-xs font-mono">
+                            <span className="truncate text-emerald-400 flex-1">{`${window.location.origin}${msg.paymentRequest.shareableLink}`}</span>
+                            <button
+                              onClick={() => copyShareableLink(msg.paymentRequest.shareableLink)}
+                              className="px-2.5 py-1 bg-emerald-500 text-black font-bold text-[11px] rounded-lg hover:bg-emerald-400 transition-colors flex items-center gap-1"
+                            >
+                              {copiedLink === msg.paymentRequest.shareableLink ? <Check size={12} /> : <Copy size={12} />}
+                              {copiedLink === msg.paymentRequest.shareableLink ? 'Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.paymentRequest.status === 'PENDING' && (
+                        <button
+                          onClick={() => openVerificationForRequest(msg.paymentRequest)}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                        >
+                          Review Payment →
+                        </button>
+                      )}
                     </div>
                   )}
 
-                  {/* Payment Audit Action in Message */}
-                  {msg.paymentAudit && (
-                    <div className="mt-3">
+                  {/* Payment Draft Action Card */}
+                  {msg.draft && (
+                    <div className="mt-4 p-4 bg-neutral-950/90 border border-cyan-500/30 rounded-2xl space-y-3">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-neutral-400 font-medium">Prepared Draft</span>
+                        <span className="text-emerald-400 font-bold font-mono">
+                          {msg.draft.amount} {msg.draft.currency}
+                        </span>
+                      </div>
                       <button
-                        onClick={() =>
-                          inspectTimeline(msg.paymentAudit.id || msg.paymentAudit.paymentIntentId)
-                        }
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-950 border border-neutral-700 text-xs text-cyan-400 transition-colors"
+                        onClick={() => openVerificationForDraft(msg.draft)}
+                        className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
                       >
-                        <Clock className="h-3.5 w-3.5" /> View Cryptographic Timeline
+                        Proceed to Verification →
                       </button>
                     </div>
                   )}
 
-                  {/* Message Meta & Feedback Buttons */}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-700/40 text-[11px] text-neutral-400">
+                  {/* Meta footer */}
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-700/40 text-[11px] text-neutral-400">
                     <span>{msg.timestamp}</span>
-
-                    {msg.sender === 'copilot' && msg.decisionId && (
-                      <div className="flex items-center gap-2">
-                        {msg.feedback ? (
-                          <span className="text-emerald-400 text-[10px]">Feedback recorded</span>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleFeedback(msg.decisionId!, 'HELPFUL')}
-                              className="hover:text-emerald-400 transition-colors p-1"
-                              title="Helpful"
-                            >
-                              <ThumbsUp className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={() => handleFeedback(msg.decisionId!, 'UNHELPFUL')}
-                              className="hover:text-red-400 transition-colors p-1"
-                              title="Unhelpful"
-                            >
-                              <ThumbsDown className="h-3 w-3" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -501,7 +544,7 @@ export default function CopilotDashboard() {
                 </div>
                 <div className="bg-neutral-800/90 border border-neutral-700/60 rounded-2xl rounded-bl-none p-4 text-xs text-neutral-400 flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Analyzing risk signals, evaluating routes, and drafting payment context...
+                  Processing payment intent, resolving recipient, & preparing transaction verification...
                 </div>
               </div>
             )}
@@ -509,14 +552,14 @@ export default function CopilotDashboard() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Action Suggestion Pills */}
+          {/* Quick Replies */}
           {messages.length > 0 && messages[messages.length - 1].quickReplies && (
-            <div className="px-4 py-2 border-t border-neutral-800/60 bg-neutral-950/20 flex gap-2 overflow-x-auto no-scrollbar">
+            <div className="px-4 py-2.5 border-t border-neutral-800/60 bg-neutral-950/40 flex gap-2 overflow-x-auto no-scrollbar">
               {messages[messages.length - 1].quickReplies?.map((pill, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(pill)}
-                  className="px-3 py-1.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 whitespace-nowrap border border-neutral-700/60 transition-colors"
+                  className="px-3.5 py-1.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 border border-neutral-700/60 transition-colors whitespace-nowrap"
                 >
                   {pill}
                 </button>
@@ -537,7 +580,7 @@ export default function CopilotDashboard() {
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask Copilot: e.g. 'Send ₹500 to rahul@example.com' or 'Check network route health'..."
+                placeholder="Type payment command (e.g. 'Pay ₹500 to Rahul', 'Request $100', 'Send 0.01 ETH to 0x123...')"
                 className="flex-1 bg-neutral-900 border border-neutral-700/80 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
               <button
@@ -552,26 +595,19 @@ export default function CopilotDashboard() {
           </div>
         </div>
 
-        {/* Right Column: Active Draft & Route Telemetry Panel (4 or 5 cols) */}
+        {/* Right Column: Active Draft & Payment System Controls */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Active Payment Draft Card */}
+          {/* Active Draft Panel */}
           <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800/90 backdrop-blur-md relative overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-cyan-400" />
-                <h3 className="font-semibold text-neutral-100">Active Payment Draft</h3>
+                <h3 className="font-semibold text-neutral-100 text-sm">Active Draft</h3>
               </div>
 
               {activeDraft && draftCountdown !== null && (
-                <div
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-medium ${
-                    draftCountdown > 60
-                      ? 'bg-amber-950/60 text-amber-400 border border-amber-500/30'
-                      : 'bg-red-950/60 text-red-400 border border-red-500/30 animate-pulse'
-                  }`}
-                >
-                  <Clock className="h-3 w-3" />
-                  {formatCountdown(draftCountdown)}
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-500/30 text-xs font-mono">
+                  <Clock size={12} /> {draftCountdown}s
                 </div>
               )}
             </div>
@@ -580,7 +616,7 @@ export default function CopilotDashboard() {
               <div className="mt-4 space-y-4">
                 <div className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
                   <div className="flex justify-between items-baseline">
-                    <span className="text-xs text-neutral-400">Total Amount</span>
+                    <span className="text-xs text-neutral-400">Amount</span>
                     <span className="text-2xl font-bold text-white">
                       {activeDraft.amount}{' '}
                       <span className="text-xs font-normal text-emerald-400">{activeDraft.currency}</span>
@@ -593,219 +629,71 @@ export default function CopilotDashboard() {
                       {activeDraft.recipient}
                     </span>
                   </div>
-
-                  <div className="flex justify-between text-xs">
-                    <span className="text-neutral-400">Route Candidate</span>
-                    <span className="text-cyan-400 font-medium">{activeDraft.preferredRoute}</span>
-                  </div>
                 </div>
 
-                {/* Preflight Security Verdict */}
-                <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                    <ShieldCheck className="h-4 w-4" />
-                    Security Pre-flight Passed
-                  </div>
-                  <p className="text-neutral-400">
-                    Risk evaluated as Low (15/100). Adaptive route selected with 99.4% estimated reliability.
-                  </p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-2 pt-2">
-                  <button
-                    onClick={() => handleConfirmDraft(activeDraft.id)}
-                    disabled={isConfirmingDraft || draftCountdown === 0}
-                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-950/40"
-                  >
-                    {isConfirmingDraft ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" /> Authorizing & Executing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" /> Authorize & Pay Now
-                      </>
-                    )}
-                  </button>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => {
-                        setEditModalDraft(activeDraft);
-                        setEditAmount(String(activeDraft.amount));
-                        setEditRecipient(activeDraft.recipient);
-                      }}
-                      className="py-2 rounded-lg bg-neutral-800 hover:bg-neutral-750 text-xs text-neutral-300 font-medium transition-colors"
-                    >
-                      Edit Draft
-                    </button>
-                    <button
-                      onClick={() => handleCancelDraft(activeDraft.id)}
-                      className="py-2 rounded-lg bg-neutral-900 hover:bg-neutral-950 text-xs text-red-400 border border-red-500/20 font-medium transition-colors"
-                    >
-                      Cancel Draft
-                    </button>
-                  </div>
-                </div>
+                <button
+                  onClick={() => openVerificationForDraft(activeDraft)}
+                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                >
+                  <Lock size={14} /> Final Verification & Sign →
+                </button>
               </div>
             ) : (
-              <div className="mt-8 py-8 text-center space-y-3">
-                <div className="h-12 w-12 rounded-full bg-neutral-800/80 border border-neutral-700/60 flex items-center justify-center mx-auto text-neutral-500">
-                  <CreditCard className="h-6 w-6" />
-                </div>
-                <div className="text-sm text-neutral-300 font-medium">No Pending Draft</div>
-                <p className="text-xs text-neutral-500 max-w-[220px] mx-auto">
-                  Type a command like <span className="text-emerald-400">"Send $50 to Alice"</span> in chat to create an instant draft.
+              <div className="mt-6 py-8 text-center text-xs text-neutral-500 space-y-2">
+                <ShieldCheck className="h-8 w-8 text-neutral-700 mx-auto" />
+                <p>No active payment draft queued.</p>
+                <p className="text-[11px] text-neutral-600">
+                  Ask Copilot to send or request money to prepare a transaction.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Real-Time Route Telemetry Card */}
-          <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800/90 backdrop-blur-md space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-amber-400" />
-                <h3 className="font-semibold text-neutral-100">Settlement Route Health</h3>
-              </div>
-              <span className="text-xs text-neutral-400">Live Telemetry</span>
-            </div>
+          {/* Quick Payment Action Cards */}
+          <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800/90 space-y-4">
+            <h3 className="font-semibold text-neutral-100 text-sm flex items-center gap-2">
+              <Zap size={16} className="text-emerald-400" /> Quick Payment Tools
+            </h3>
 
-            <div className="space-y-3 text-xs">
-              {[
-                { name: 'Internal Ledger (Instant)', reliability: 99.8, latency: 12, status: 'OPTIMAL', color: 'emerald' },
-                { name: 'Lightning Network', reliability: 96.5, latency: 180, status: 'HEALTHY', color: 'cyan' },
-                { name: 'Hardhat EVM Chain', reliability: 98.2, latency: 350, status: 'HEALTHY', color: 'amber' },
-                { name: 'Stripe Fiat Gateway', reliability: 99.1, latency: 620, status: 'HEALTHY', color: 'purple' },
-              ].map((route, i) => (
-                <div key={i} className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-neutral-200">{route.name}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/20">
-                      {route.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-neutral-400 text-[11px]">
-                    <span>Reliability: {route.reliability}%</span>
-                    <span>~{route.latency}ms latency</span>
-                  </div>
-                  {/* Progress Bar */}
-                  <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 rounded-full"
-                      style={{ width: `${route.reliability}%` }}
-                    />
-                  </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => handleSendMessage('Request ₹500')}
+                className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left space-y-1 transition-colors"
+              >
+                <div className="text-xs font-bold text-white flex items-center gap-1">
+                  <QrCode size={14} className="text-emerald-400" /> Request Money
                 </div>
-              ))}
+                <p className="text-[10px] text-neutral-400">Generate Request QR & Share Link</p>
+              </button>
+
+              <button
+                onClick={() => setIsQRScannerOpen(true)}
+                className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left space-y-1 transition-colors"
+              >
+                <div className="text-xs font-bold text-white flex items-center gap-1">
+                  <Camera size={14} className="text-cyan-400" /> Scan QR Code
+                </div>
+                <p className="text-[10px] text-neutral-400">Scan camera or image screenshot</p>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Edit Draft Modal */}
-      {editModalDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-neutral-900 border border-neutral-700 rounded-2xl p-6 space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Sliders className="h-5 w-5 text-emerald-400" />
-              Edit Payment Draft
-            </h3>
-            <p className="text-xs text-neutral-400">
-              Modifying critical fields invalidates any prior confirmation and re-triggers pre-flight security evaluation.
-            </p>
+      {/* Mandatory Final Verification Popup */}
+      <VerificationPopup
+        isOpen={isVerificationOpen}
+        onClose={() => setIsVerificationOpen(false)}
+        details={verificationDetails}
+        onConfirmSign={handleExecutePaymentSigning}
+      />
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-neutral-300 font-medium">Amount</label>
-                <input
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  className="w-full mt-1 bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-300 font-medium">Recipient</label>
-                <input
-                  type="text"
-                  value={editRecipient}
-                  onChange={(e) => setEditRecipient(e.target.value)}
-                  className="w-full mt-1 bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-sm text-white"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditModalDraft(null)}
-                className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpdateDraft}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white"
-              >
-                Save & Re-evaluate
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Timeline Modal */}
-      {selectedTimeline && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-700 rounded-2xl p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-cyan-400" />
-                <h3 className="font-bold text-white">Payment Lifecycle Timeline</h3>
-              </div>
-              <button
-                onClick={() => setSelectedTimeline(null)}
-                className="p-1 rounded-lg hover:bg-neutral-800 text-neutral-400"
-              >
-                <XCircle className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800 text-xs space-y-1">
-                <div className="text-neutral-400">Payment Intent ID:</div>
-                <div className="font-mono text-cyan-400 break-all">{selectedTimeline.paymentId}</div>
-              </div>
-
-              {/* Timeline Steps */}
-              <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-neutral-800">
-                {selectedTimeline.timeline?.map((step: any, idx: number) => (
-                  <div key={idx} className="relative space-y-1">
-                    <span className="absolute -left-6 top-1 h-3.5 w-3.5 rounded-full bg-emerald-500 border-2 border-neutral-900" />
-                    <div className="text-xs font-semibold text-neutral-200">{step.eventType}</div>
-                    <div className="text-[11px] text-neutral-400">
-                      {new Date(step.timestamp).toLocaleString()}
-                    </div>
-                    {step.details && (
-                      <div className="p-2 rounded bg-neutral-950/80 font-mono text-[10px] text-neutral-300">
-                        {JSON.stringify(step.details)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={() => setSelectedTimeline(null)}
-              className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-white"
-            >
-              Close Inspector
-            </button>
-          </div>
-        </div>
-      )}
+      {/* QR Scanner Camera Modal */}
+      <QRScannerModal
+        isOpen={isQRScannerOpen}
+        onClose={() => setIsQRScannerOpen(false)}
+        onScanSuccess={handleQRScanSuccess}
+      />
     </div>
   );
 }
