@@ -120,6 +120,31 @@ export const marketDataService = {
       }
     }
 
+    // Secondary fallback: Bybit Spot Ticker API
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbol}`, { signal: controller.signal, cache: 'no-store' });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        const item = data?.result?.list?.[0];
+        if (item && item.lastPrice) {
+          return {
+            symbol,
+            price: item.lastPrice,
+            change24h: (parseFloat(item.price24hPcnt || '0.01') * 100).toFixed(2),
+            high24h: item.highPrice24h || (parseFloat(item.lastPrice) * 1.02).toFixed(2),
+            low24h: item.lowPrice24h || (parseFloat(item.lastPrice) * 0.98).toFixed(2),
+            volume24h: item.volume24h || '25000',
+            timestamp: new Date().toISOString()
+          };
+        }
+      }
+    } catch {
+      // Fallback below
+    }
+
     // Fallback default ticker
     const fallbackPrice = BASE_PRICES[symbol] || 65000;
     return {
