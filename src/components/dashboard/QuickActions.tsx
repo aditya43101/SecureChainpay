@@ -5,17 +5,17 @@ export function QuickActions() {
   const actions = [
     { 
       name: 'Send', 
-      desc: 'Instant transfer',
+      desc: 'HSCT transfer',
       href: '/wallet/transfer', 
       icon: <ArrowUpRight size={22} />, 
       bg: 'bg-[#FEEF8B] text-black',
       shadow: 'shadow-[0_0_18px_rgba(254,239,139,0.3)]',
       border: 'border-[#FEEF8B]/40',
-      badge: '0% Gas'
+      badge: 'HSCT Only'
     },
     { 
       name: 'Receive', 
-      desc: 'QR & Address',
+      desc: 'HSCT QR & Pay',
       href: '/wallet/receive', 
       icon: <ArrowDownLeft size={22} />, 
       bg: 'bg-white/10 text-white group-hover:bg-white/15',
@@ -25,13 +25,13 @@ export function QuickActions() {
     },
     { 
       name: 'Trade', 
-      desc: 'BTC & ETH pairs',
+      desc: 'All crypto pairs',
       href: '/trade', 
       icon: <RefreshCcw size={20} />, 
       bg: 'bg-white/10 text-white group-hover:bg-white/15',
       shadow: 'shadow-none',
       border: 'border-white/10',
-      badge: 'Live'
+      badge: 'Live Terminal'
     },
     { 
       name: 'Copilot', 

@@ -122,11 +122,11 @@ export default function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {cryptoData.map((asset) => {
-                    const livePrice = (asset.symbol === 'BTC' || asset.symbol === 'ETH')
-                      ? prices[asset.symbol as 'BTC' | 'ETH']
+                    const livePrice = (prices[asset.symbol] && prices[asset.symbol]! > 0)
+                      ? prices[asset.symbol]!
                       : asset.price;
-                    const liveChange = (asset.symbol === 'BTC' || asset.symbol === 'ETH')
-                      ? tickerStats[asset.symbol as 'BTC' | 'ETH'].change
+                    const liveChange = tickerStats[asset.symbol]?.change !== undefined
+                      ? tickerStats[asset.symbol].change
                       : asset.change24h;
                     const isPositive = liveChange >= 0;
                     return (

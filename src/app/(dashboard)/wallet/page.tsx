@@ -43,11 +43,24 @@ export default function WalletPage() {
 
   const ethBalance = Number(balances.ETH || 0);
   const btcBalance = Number(balances.BTC || 0);
-  const ethPrice = prices?.ETH || 2600;
-  const btcPrice = prices?.BTC || 64000;
+  const solBalance = Number(balances.SOL || 0);
+  const bnbBalance = Number(balances.BNB || 0);
+  const adaBalance = Number(balances.ADA || 0);
+
+  const ethPrice = prices?.ETH || 2550;
+  const btcPrice = prices?.BTC || 77450;
+  const solPrice = prices?.SOL || 136.5;
+  const bnbPrice = prices?.BNB || 582.2;
+  const adaPrice = prices?.ADA || 0.342;
 
   // Total HSCT portfolio value (1 HSCT = 1 INR)
-  const cryptoHsct = (ethBalance * ethPrice + btcBalance * btcPrice) * USD_TO_HSCT;
+  const cryptoHsct = (
+    ethBalance * ethPrice +
+    btcBalance * btcPrice +
+    solBalance * solPrice +
+    bnbBalance * bnbPrice +
+    adaBalance * adaPrice
+  ) * USD_TO_HSCT;
   const totalBalanceHsct = currentHsct + cryptoHsct;
   const totalBalanceInr = totalBalanceHsct;
 
@@ -201,66 +214,117 @@ export default function WalletPage() {
           <span className="text-xs text-neutral-400 font-medium">Supported Currencies</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
               name: 'SecureChain Token',
               symbol: 'HSCT',
               balance: `${currentHsct.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
               subtext: `Parity ₹${currentHsct.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR`,
-              badge: 'Native Utility',
+              badge: 'Send & Receive (0% Gas)',
               badgeColor: 'text-brand-primary bg-brand-primary/10 border-brand-primary/20',
               icon: '⚡',
-            },
-            {
-              name: 'INR Parity Token',
-              symbol: 'INR',
-              balance: `₹${currentHsct.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-              subtext: '1:1 HSCT Peg',
-              badge: 'Fiat Parity',
-              badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-              icon: '₹',
-            },
-            {
-              name: 'Ethereum',
-              symbol: 'ETH',
-              balance: `${ethBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
-              subtext: `≈ ${(ethBalance * ethPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
-              badge: `${(ethPrice * USD_TO_HSCT).toLocaleString()} HSCT`,
-              badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-              icon: 'Ξ',
+              actionLabel: 'Transfer / Send →',
+              actionHref: '/wallet/transfer',
+              isTransferable: true,
             },
             {
               name: 'Bitcoin',
               symbol: 'BTC',
               balance: `${btcBalance.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 })}`,
               subtext: `≈ ${(btcBalance * btcPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
-              badge: `${(btcPrice * USD_TO_HSCT).toLocaleString()} HSCT`,
+              badge: 'Trading Terminal',
               badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
               icon: '₿',
+              actionLabel: 'Trade BTC →',
+              actionHref: '/trade?asset=BTC',
+              isTransferable: false,
+            },
+            {
+              name: 'Ethereum',
+              symbol: 'ETH',
+              balance: `${ethBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
+              subtext: `≈ ${(ethBalance * ethPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
+              badge: 'Trading Terminal',
+              badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+              icon: 'Ξ',
+              actionLabel: 'Trade ETH →',
+              actionHref: '/trade?asset=ETH',
+              isTransferable: false,
+            },
+            {
+              name: 'Solana',
+              symbol: 'SOL',
+              balance: `${solBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
+              subtext: `≈ ${(solBalance * solPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
+              badge: 'Trading Terminal',
+              badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+              icon: '◎',
+              actionLabel: 'Trade SOL →',
+              actionHref: '/trade?asset=SOL',
+              isTransferable: false,
+            },
+            {
+              name: 'Binance Coin',
+              symbol: 'BNB',
+              balance: `${bnbBalance.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`,
+              subtext: `≈ ${(bnbBalance * bnbPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
+              badge: 'Trading Terminal',
+              badgeColor: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+              icon: 'BNB',
+              actionLabel: 'Trade BNB →',
+              actionHref: '/trade?asset=BNB',
+              isTransferable: false,
+            },
+            {
+              name: 'Cardano',
+              symbol: 'ADA',
+              balance: `${adaBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              subtext: `≈ ${(adaBalance * adaPrice * USD_TO_HSCT).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
+              badge: 'Trading Terminal',
+              badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+              icon: '₳',
+              actionLabel: 'Trade ADA →',
+              actionHref: '/trade?asset=ADA',
+              isTransferable: false,
             },
           ].map((asset) => (
             <div
               key={asset.symbol}
-              className="p-5 rounded-2xl bg-[#0a0a0a] border border-white/10 hover:border-brand-primary/30 transition-all space-y-3"
+              className="p-5 rounded-2xl bg-[#0a0a0a] border border-white/10 hover:border-brand-primary/30 transition-all space-y-3 flex flex-col justify-between"
             >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-[#121212] border border-white/10 flex items-center justify-center text-lg font-bold">
-                  {asset.icon}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-[#121212] border border-white/10 flex items-center justify-center text-sm font-black text-white">
+                    {asset.icon}
+                  </div>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${asset.badgeColor}`}>
+                    {asset.badge}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${asset.badgeColor}`}>
-                  {asset.badge}
-                </span>
+
+                <div>
+                  <h3 className="font-bold text-white text-sm">{asset.name}</h3>
+                  <p className="text-xs text-neutral-400">{asset.symbol}</p>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex justify-between items-baseline">
+                  <span className="text-base font-extrabold text-white">{asset.balance}</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">{asset.subtext}</span>
+                </div>
               </div>
 
-              <div>
-                <h3 className="font-bold text-white text-sm">{asset.name}</h3>
-                <p className="text-xs text-neutral-400">{asset.symbol}</p>
-              </div>
-
-              <div className="pt-2 border-t border-white/5 flex justify-between items-baseline">
-                <span className="text-base font-extrabold text-white">{asset.balance}</span>
-                <span className="text-[11px] text-neutral-400 font-medium">{asset.subtext}</span>
+              <div className="pt-2">
+                <Link
+                  href={asset.actionHref}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 text-center ${
+                    asset.isTransferable
+                      ? 'bg-brand-primary text-neutral-950 hover:bg-brand-pale'
+                      : 'bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/10'
+                  }`}
+                >
+                  {asset.actionLabel}
+                </Link>
               </div>
             </div>
           ))}

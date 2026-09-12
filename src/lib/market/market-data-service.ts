@@ -40,6 +40,8 @@ const BASE_PRICES: Record<string, number> = {
   'BTCUSDT': 77450,
   'ETHUSDT': 2550,
   'SOLUSDT': 136,
+  'BNBUSDT': 582,
+  'ADAUSDT': 0.34,
   'MATICUSDT': 0.42,
   'DOGEUSDT': 0.12,
 };

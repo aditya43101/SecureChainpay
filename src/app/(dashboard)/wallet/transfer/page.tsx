@@ -433,8 +433,13 @@ async function safeParseJson(res: Response): Promise<any> {
           {step === 'select_recipient' && (
             <div className="relative z-10 space-y-6 animate-in fade-in duration-300">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FEEF8B]/10 text-[#FEEF8B] rounded-full text-xs font-semibold border border-[#FEEF8B]/20 mb-3">
-                  <Sparkles size={13} /> Step 1 of 3: Recipient
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FEEF8B]/10 text-[#FEEF8B] rounded-full text-xs font-semibold border border-[#FEEF8B]/20">
+                    <Sparkles size={13} /> Step 1 of 3: Recipient
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full text-xs font-semibold border border-emerald-500/20">
+                    <span>⚡ HSCT Settlement Only (0% Gas)</span>
+                  </div>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Send Money</h1>
                 <p className="text-neutral-400 text-xs sm:text-sm mt-1">

@@ -108,6 +108,9 @@ interface Balances {
   USD: number;
   BTC: number;
   ETH: number;
+  SOL?: number;
+  BNB?: number;
+  ADA?: number;
   lifetimeDeposited: number; // cumulative deposits — only reduces on explicit withdrawal
 }
 
@@ -130,11 +133,8 @@ interface WalletState {
   transactions: Transaction[];
   lastBlockNumber: number;
   lastBlockHash: string | null;
-  prices: { BTC: number; ETH: number };
-  tickerStats: {
-    BTC: { high: number; low: number; volume: string; change: number; price: number };
-    ETH: { high: number; low: number; volume: string; change: number; price: number };
-  };
+  prices: { BTC: number; ETH: number; SOL?: number; BNB?: number; ADA?: number; [key: string]: number | undefined };
+  tickerStats: Record<string, { high: number; low: number; volume: string; change: number; price: number }>;
   marketConnectionStatus: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'ERROR';
   lastMarketDataAt: string | null;
   isMarketDataStale: boolean;
@@ -381,14 +381,17 @@ export const useWalletStore = create<WalletState>()(
       walletVersion: null,
       keyFingerprint: null,
       
-      balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
+      balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, SOL: 0, BNB: 0, ADA: 0, lifetimeDeposited: 0 },
       transactions: [],
       lastBlockNumber: 0,
       lastBlockHash: null,
-      prices: { BTC: 77450.00, ETH: 2550.00 },
+      prices: { BTC: 77450.00, ETH: 2550.00, SOL: 136.50, BNB: 582.20, ADA: 0.3420 },
       tickerStats: {
         BTC: { high: 79890, low: 76880, volume: '$31.20 Billion', change: -2.26, price: 77450.00 },
         ETH: { high: 2665, low: 2505, volume: '$16.50 Billion', change: -3.67, price: 2550.00 },
+        SOL: { high: 142.50, low: 133.10, volume: '$4.20 Billion', change: 1.85, price: 136.50 },
+        BNB: { high: 595.00, low: 575.00, volume: '$1.20 Billion', change: 0.65, price: 582.20 },
+        ADA: { high: 0.365, low: 0.335, volume: '$350.00 Million', change: -1.10, price: 0.3420 },
       },
       marketConnectionStatus: 'DISCONNECTED',
       lastMarketDataAt: null,
@@ -412,7 +415,12 @@ export const useWalletStore = create<WalletState>()(
           set({ marketConnectionStatus: retryCount > 0 ? 'RECONNECTING' : 'CONNECTING' });
           console.log('[SecureChain: WS] Connecting to Binance Live WebSocket...');
           
-          ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=btcusdt@ticker/ethusdt@ticker/btcusdt@kline_1m/ethusdt@kline_1m');
+          const streams = [
+            'btcusdt@ticker', 'ethusdt@ticker', 'solusdt@ticker', 'bnbusdt@ticker', 'adausdt@ticker',
+            'btcusdt@kline_1m', 'ethusdt@kline_1m', 'solusdt@kline_1m', 'bnbusdt@kline_1m', 'adausdt@kline_1m'
+          ].join('/');
+
+          ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
 
           ws.onopen = () => {
             if (isUnsubscribed) {
@@ -420,7 +428,7 @@ export const useWalletStore = create<WalletState>()(
               return;
             }
             retryCount = 0;
-            console.log('[SecureChain: WS] Connected to Binance Live Feed.');
+            console.log('[SecureChain: WS] Connected to Binance Live Feed for all pairs.');
             set({ marketConnectionStatus: 'CONNECTED', isMarketDataStale: false });
           };
           
@@ -435,7 +443,8 @@ export const useWalletStore = create<WalletState>()(
 
               // Handle 24h Ticker Stream
               if (msg.stream.endsWith('@ticker')) {
-                const symbol = msg.data.s; // 'BTCUSDT' or 'ETHUSDT'
+                const symbol = String(msg.data.s || ''); // e.g. 'BTCUSDT', 'SOLUSDT'
+                const cleanSym = symbol.replace('USDT', '');
                 const lastPrice = Number(msg.data.c || 0);
                 const highPrice = Number(msg.data.h || 0);
                 const lowPrice = Number(msg.data.l || 0);
@@ -446,7 +455,7 @@ export const useWalletStore = create<WalletState>()(
                   ? `$${(totalVolume / 1e9).toFixed(2)} Billion` 
                   : `$${(totalVolume / 1e6).toFixed(2)} Million`;
                   
-                const assetKey = symbol === 'BTCUSDT' ? 'BTC' : 'ETH';
+                const assetKey = cleanSym;
                 
                 const currentPrices = get().prices;
                 const currentStats = get().tickerStats;
@@ -472,8 +481,8 @@ export const useWalletStore = create<WalletState>()(
               if (msg.stream.endsWith('@kline_1m')) {
                 const kline = msg.data.k;
                 if (kline) {
-                  const symbol = kline.s; // 'BTCUSDT' or 'ETHUSDT'
-                  const assetKey = symbol === 'BTCUSDT' ? 'BTC' : 'ETH';
+                  const symbol = String(kline.s || '');
+                  const assetKey = symbol.replace('USDT', '');
                   const currentKlineMap = { ...get().latestKlineData };
                   
                   currentKlineMap[assetKey] = {
@@ -538,32 +547,23 @@ export const useWalletStore = create<WalletState>()(
         try {
           const { data: json } = await safeJsonFetch('/api/crypto/market-data');
           if (json && json.success && Array.isArray(json.data)) {
-            const btcItem = json.data.find((item: any) => item.symbol === 'BTC');
-            const ethItem = json.data.find((item: any) => item.symbol === 'ETH');
             const newPrices = { ...get().prices };
             const newStats = { ...get().tickerStats };
 
-            if (btcItem && btcItem.price > 0) {
-              newPrices.BTC = Number(btcItem.price);
-              if (newStats.BTC) {
-                newStats.BTC = {
-                  ...newStats.BTC,
-                  price: Number(btcItem.price),
-                  change: btcItem.change24h || newStats.BTC.change,
+            json.data.forEach((item: any) => {
+              const sym = item.symbol;
+              const priceNum = Number(item.price || 0);
+              if (sym && priceNum > 0) {
+                newPrices[sym] = priceNum;
+                newStats[sym] = {
+                  high: Number(item.high24h || (priceNum * 1.025)),
+                  low: Number(item.low24h || (priceNum * 0.975)),
+                  volume: item.volume24h ? (item.volume24h > 1e9 ? `$${(item.volume24h / 1e9).toFixed(2)} Billion` : `$${(item.volume24h / 1e6).toFixed(2)} Million`) : (newStats[sym]?.volume || '$1.00 Billion'),
+                  change: item.change24h !== undefined ? Number(item.change24h) : (newStats[sym]?.change || 0),
+                  price: priceNum,
                 };
               }
-            }
-
-            if (ethItem && ethItem.price > 0) {
-              newPrices.ETH = Number(ethItem.price);
-              if (newStats.ETH) {
-                newStats.ETH = {
-                  ...newStats.ETH,
-                  price: Number(ethItem.price),
-                  change: ethItem.change24h || newStats.ETH.change,
-                };
-              }
-            }
+            });
 
             set({
               prices: newPrices,

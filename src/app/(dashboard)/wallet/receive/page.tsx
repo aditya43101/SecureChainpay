@@ -30,12 +30,12 @@ export default function ReceivePage() {
 
   const [activeTab, setActiveTab] = useState<'receive' | 'request'>('receive');
   const [copied, setCopied] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<'HSCT' | 'ETH' | 'BTC'>('HSCT');
+  const selectedAsset = 'HSCT';
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   // Request Money Form States
   const [requestAmount, setRequestAmount] = useState('');
-  const [requestAsset, setRequestAsset] = useState<'HSCT' | 'ETH' | 'BTC'>('HSCT');
+  const requestAsset = 'HSCT';
   const [requestNetwork, setRequestNetwork] = useState('SecureChain PoA');
   const [requestPayer, setRequestPayer] = useState('');
   const [requestNote, setRequestNote] = useState('');
@@ -227,21 +227,18 @@ export default function ReceivePage() {
               </p>
             </div>
 
-            {/* Asset Selector Chips */}
-            <div className="flex items-center justify-center gap-2 relative z-10">
-              {(['HSCT', 'ETH', 'BTC'] as const).map((asset) => (
-                <button
-                  key={asset}
-                  onClick={() => setSelectedAsset(asset)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all min-h-[38px] ${
-                    selectedAsset === asset
-                      ? 'bg-brand-primary/20 border border-brand-primary/40 text-brand-primary'
-                      : 'bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  {asset}
-                </button>
-              ))}
+            {/* Exclusive HSCT Non-Custodial Transfer Notice */}
+            <div className="flex flex-col items-center gap-2 relative z-10">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-extrabold bg-[#FEEF8B]/15 border border-[#FEEF8B]/30 text-[#FEEF8B] shadow-[0_0_20px_rgba(254,239,139,0.15)]">
+                <span className="w-2 h-2 rounded-full bg-[#FEEF8B] animate-pulse" />
+                <span>Native HSCT Settlement (₹ 1:1 INR Parity)</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 text-center max-w-sm">
+                Peer-to-peer sending and QR payments are strictly conducted in <strong>HSCT</strong> with 0% gas fees. Bitcoin, Ethereum & other crypto assets are managed via the{' '}
+                <Link href="/trade" className="text-[#FEEF8B] hover:underline font-semibold">
+                  Trading Terminal
+                </Link>.
+              </p>
             </div>
 
             {/* Focal QR Card with Light-Yellow Aura */}
@@ -366,7 +363,7 @@ export default function ReceivePage() {
                   </label>
                   <div className="flex items-center bg-black border border-white/10 rounded-xl p-2 focus-within:border-brand-primary/50 transition-colors">
                     <span className="px-3 text-lg font-bold text-brand-primary">
-                      {requestAsset === 'ETH' ? 'Ξ' : requestAsset === 'BTC' ? '₿' : '⚡'}
+                      ⚡
                     </span>
                     <input
                       type="number"
@@ -378,15 +375,10 @@ export default function ReceivePage() {
                       onChange={(e) => setRequestAmount(e.target.value)}
                       className="bg-transparent border-none text-xl sm:text-2xl font-bold text-white focus:outline-none flex-1 placeholder:text-neutral-600"
                     />
-                    <select
-                      value={requestAsset}
-                      onChange={(e) => setRequestAsset(e.target.value as any)}
-                      className="bg-[#121212] text-white text-xs font-bold px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-brand-primary"
-                    >
-                      <option value="HSCT">HSCT</option>
-                      <option value="ETH">ETH</option>
-                      <option value="BTC">BTC</option>
-                    </select>
+                    <div className="bg-white/5 text-[#FEEF8B] text-xs font-black px-3.5 py-2 rounded-lg border border-[#FEEF8B]/30 flex items-center gap-1.5 shadow-sm">
+                      <span className="w-2 h-2 rounded-full bg-[#FEEF8B]" />
+                      <span>HSCT</span>
+                    </div>
                   </div>
 
                   {/* Preset Amount Chips */}

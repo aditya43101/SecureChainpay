@@ -9,7 +9,7 @@ import { RefreshCw, Newspaper, Info, Sparkles, Bot, CheckCircle2, TrendingUp, Al
 import { AIAssistantPanel } from '@/components/trading-ai/AIAssistantPanel';
 import { formatTime } from '@/lib/timezone-service';
 
-type CryptoAsset = 'BTC' | 'ETH';
+type CryptoAsset = 'BTC' | 'ETH' | 'SOL' | 'BNB' | 'ADA';
 
 interface NewsItem {
   title: string;
@@ -73,6 +73,75 @@ const NEWS_DATA: Record<CryptoAsset, NewsItem[]> = {
         'Decentralized applications on Ethereum rollups are processing record numbers of micro-transactions, expanding utility while maintaining mainnet security.',
     },
   ],
+  SOL: [
+    {
+      title: 'Solana DeFi Volume Surges as Firedancer Validator Client Hits Testnet',
+      source: 'Solana Floor',
+      date: 'August 24, 2026',
+      snippet:
+        'High-throughput independent validator client upgrades yield sub-second transaction finality, driving unprecedented on-chain decentralized exchange volumes.',
+    },
+    {
+      title: 'Solana Pay Enterprise Integrations Expand into Merchant Point-of-Sale',
+      source: 'Fintech Dispatch',
+      date: 'August 23, 2026',
+      snippet:
+        'Retail payment rails announce direct zero-slippage settlement using Solana decentralized consensus and instant state sync.',
+    },
+    {
+      title: 'Active Solana Wallet Addresses Reach New Network Record',
+      source: 'Blockchain Weekly',
+      date: 'August 22, 2026',
+      snippet:
+        'Ecosystem adoption accelerates with millions of active non-custodial wallets engaging in micro-settlements and high-frequency swaps.',
+    },
+  ],
+  BNB: [
+    {
+      title: 'BNB Chain Completes Quarterly Auto-Burn Removing Millions from Circulation',
+      source: 'Binance Ledger',
+      date: 'August 24, 2026',
+      snippet:
+        'The protocol auto-burn mechanism permanently burned hundreds of thousands of BNB tokens, tightening circulating supply and increasing scarce token value.',
+    },
+    {
+      title: 'BNB Greenfield Decentralized Storage Records Rapid DApp Adoption',
+      source: 'Web3 Tech Review',
+      date: 'August 23, 2026',
+      snippet:
+        'Decentralized data availability layers anchored to BNB Smart Chain process enterprise workloads with verifiable on-chain proofs.',
+    },
+    {
+      title: 'OpBNB Layer-2 Scaling Solution Lowers Gas Fees to Sub-Cent Level',
+      source: 'Crypto Developer Daily',
+      date: 'August 22, 2026',
+      snippet:
+        'Optimistic rollup transactions on BNB chain demonstrate high TPS resilience during market volatility spikes.',
+    },
+  ],
+  ADA: [
+    {
+      title: 'Cardano Chang Hardfork Phase 2 Enters Full Decentralized Governance',
+      source: 'Cardano Feed',
+      date: 'August 24, 2026',
+      snippet:
+        'Voltaire-era governance implementation transfers on-chain treasury control and protocol parameter decisions to constitutional delegate representatives.',
+    },
+    {
+      title: 'Hydra Layer-2 Heads Demonstrate Millions of Real-Time Micropayments',
+      source: 'Cardano Insights',
+      date: 'August 23, 2026',
+      snippet:
+        'State channels built on Cardano architecture enable instant, isomorphic off-chain transfers with cryptographic settlement on the base ledger.',
+    },
+    {
+      title: 'Institutional Staking Pools on Cardano Network Maintain 68% Participation',
+      source: 'PoS Validator News',
+      date: 'August 22, 2026',
+      snippet:
+        'Ouroboros consensus mechanism exhibits high capital stability with liquid delegation mechanisms providing consistent staking yields.',
+    },
+  ],
 };
 
 const DETAILS_DATA: Record<CryptoAsset, AssetDetails> = {
@@ -89,6 +158,27 @@ const DETAILS_DATA: Record<CryptoAsset, AssetDetails> = {
     circulatingSupply: '120.2 Million ETH',
     maxSupply: 'Infinite (Inflationary/Burn model)',
     allTimeHigh: '408,398 HSCT',
+  },
+  SOL: {
+    rank: 5,
+    marketCap: '64 Billion HSCT',
+    circulatingSupply: '468 Million SOL',
+    maxSupply: 'Infinite (Disinflationary 1.5%)',
+    allTimeHigh: '21,700 HSCT',
+  },
+  BNB: {
+    rank: 4,
+    marketCap: '86 Billion HSCT',
+    circulatingSupply: '145 Million BNB',
+    maxSupply: '200 Million BNB (Burn Model)',
+    allTimeHigh: '59,800 HSCT',
+  },
+  ADA: {
+    rank: 9,
+    marketCap: '12.4 Billion HSCT',
+    circulatingSupply: '35.7 Billion ADA',
+    maxSupply: '45.00 Billion ADA',
+    allTimeHigh: '258 HSCT',
   },
 };
 
@@ -128,8 +218,8 @@ function TradeContent() {
   const setActiveAsset = useAIStore((s) => s.setActiveAsset);
 
   useEffect(() => {
-    if (assetParam === 'ETH' || assetParam === 'BTC') {
-      setSelectedAsset(assetParam);
+    if (assetParam && ['BTC', 'ETH', 'SOL', 'BNB', 'ADA'].includes(assetParam.toUpperCase())) {
+      setSelectedAsset(assetParam.toUpperCase() as CryptoAsset);
     }
   }, [assetParam]);
 
@@ -162,8 +252,7 @@ function TradeContent() {
     let isMounted = true;
     const fetchStats = async () => {
       try {
-        const formattedSymbol =
-          selectedAsset === 'BTC' ? 'BTCUSDT' : selectedAsset === 'ETH' ? 'ETHUSDT' : selectedAsset;
+        const formattedSymbol = `${selectedAsset}USDT`;
         const res = await fetch(`/api/market/ticker/${formattedSymbol}`, { cache: 'no-store' });
         if (res.ok && isMounted) {
           const data = await res.json();
@@ -182,7 +271,13 @@ function TradeContent() {
     };
   }, [selectedAsset]);
 
-  const priceInUsd = prices[selectedAsset] || (selectedAsset === 'BTC' ? 77450 : 2550);
+  const priceInUsd = prices[selectedAsset] || (
+    selectedAsset === 'BTC' ? 77450 :
+    selectedAsset === 'ETH' ? 2550 :
+    selectedAsset === 'SOL' ? 136.5 :
+    selectedAsset === 'BNB' ? 582.2 :
+    0.342
+  );
   const priceInHsct = priceInUsd * USD_TO_HSCT;
 
   const availableHsct = Number(
@@ -225,8 +320,7 @@ function TradeContent() {
     setRefreshSuccess(false);
     try {
       await fetchPrices();
-      const formattedSymbol =
-        selectedAsset === 'BTC' ? 'BTCUSDT' : selectedAsset === 'ETH' ? 'ETHUSDT' : selectedAsset;
+      const formattedSymbol = `${selectedAsset}USDT`;
       const res = await fetch(`/api/market/ticker/${formattedSymbol}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
@@ -352,7 +446,13 @@ function TradeContent() {
     ? parseFloat(realStats.volume24h) * priceInUsd
     : selectedAsset === 'BTC'
     ? 24.85e9
-    : 12.4e9;
+    : selectedAsset === 'ETH'
+    ? 12.4e9
+    : selectedAsset === 'SOL'
+    ? 4.2e9
+    : selectedAsset === 'BNB'
+    ? 1.2e9
+    : 0.35e9;
   const rawVolumeHsct = rawVolumeUsd * USD_TO_HSCT;
   const dailyVolumeHsct = `${~~(rawVolumeHsct / 1e9)}B HSCT`;
 
@@ -393,28 +493,37 @@ function TradeContent() {
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Asset Selectors */}
-                <div className="flex bg-[#121212] border border-white/10 p-1 rounded-2xl shadow-inner">
-                  <button
-                    onClick={() => setSelectedAsset('BTC')}
-                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all min-h-[40px] ${
-                      selectedAsset === 'BTC'
-                        ? 'bg-brand-primary text-neutral-950 font-extrabold shadow-md'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    BTC / USD
-                  </button>
-                  <button
-                    onClick={() => setSelectedAsset('ETH')}
-                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all min-h-[40px] ${
-                      selectedAsset === 'ETH'
-                        ? 'bg-brand-primary text-neutral-950 font-extrabold shadow-md'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    ETH / USD
-                  </button>
+                {/* Asset Selectors for all Overview Cryptos */}
+                <div className="flex flex-wrap items-center bg-[#121212] border border-white/10 p-1 rounded-2xl shadow-inner gap-1">
+                  {(['BTC', 'ETH', 'SOL', 'BNB', 'ADA'] as const).map((sym) => {
+                    const isSelected = selectedAsset === sym;
+                    return (
+                      <button
+                        key={sym}
+                        onClick={() => {
+                          setSelectedAsset(sym);
+                          setMoneyInput('');
+                          setCryptoInput('');
+                          setError('');
+                          setSuccessMsg('');
+                        }}
+                        className={`px-3 sm:px-3.5 py-2 text-xs font-bold rounded-xl transition-all min-h-[40px] flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-brand-primary text-neutral-950 font-extrabold shadow-md'
+                            : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${
+                          sym === 'BTC' ? 'bg-amber-400' :
+                          sym === 'ETH' ? 'bg-blue-400' :
+                          sym === 'SOL' ? 'bg-purple-400' :
+                          sym === 'BNB' ? 'bg-yellow-400' :
+                          'bg-emerald-400'
+                        }`} />
+                        {sym} / USD
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="flex items-center gap-2">

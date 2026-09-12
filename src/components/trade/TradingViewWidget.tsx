@@ -26,8 +26,8 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
     formattedSymbol = `${rawClean}USDT`;
   }
   const cleanSymbol = formattedSymbol.replace('USDT', '');
-  const assetKey: 'BTC' | 'ETH' = cleanSymbol === 'ETH' ? 'ETH' : 'BTC';
-  const currentPrice = prices[assetKey] || (assetKey === 'BTC' ? 84500 : 2650);
+  const assetKey: any = ['BTC', 'ETH', 'SOL', 'BNB', 'ADA'].includes(cleanSymbol) ? cleanSymbol : 'BTC';
+  const currentPrice = prices[assetKey] || (assetKey === 'BTC' ? 77450 : assetKey === 'ETH' ? 2550 : assetKey === 'SOL' ? 136.5 : assetKey === 'BNB' ? 582.2 : 0.342);
 
   // Sync symbol to AI Store
   useEffect(() => {
@@ -59,8 +59,8 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
     };
   }, [formattedSymbol]);
 
-  // TradingView Embed URL constructor
-  const tvSymbol = cleanSymbol === 'ETH' ? 'BINANCE:ETHUSDT' : 'BINANCE:BTCUSDT';
+  // TradingView Embed URL constructor - Works for any valid Binance spot pair
+  const tvSymbol = `BINANCE:${cleanSymbol}USDT`;
   const tradingViewEmbedUrl = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${encodeURIComponent(
     tvSymbol
   )}&interval=60&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%22RSI%40tv-basicstudies%22%2C%22MASimple%40tv-basicstudies%22%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=securechainpay.com`;

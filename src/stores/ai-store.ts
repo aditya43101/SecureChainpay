@@ -7,7 +7,7 @@ import { create } from 'zustand';
 // ═══════════════════════════════════════════════════════════
 
 export type AIMode = 'learning' | 'market-analysis' | 'trade-setup' | 'risk-analysis';
-export type CryptoAsset = 'BTC' | 'ETH';
+export type CryptoAsset = 'BTC' | 'ETH' | 'SOL' | 'BNB' | 'ADA';
 
 export interface AIMessage {
   id: string;
