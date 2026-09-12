@@ -51,7 +51,7 @@ export default function DashboardPage() {
     const interval = setInterval(() => {
       fetchMarkets();
       fetchPrices().catch(() => null);
-    }, 1000); // refresh every 1 second as requested
+    }, 2000); // refresh every 2 seconds as requested for smooth stability
     return () => clearInterval(interval);
   }, [fetchPrices]);
 

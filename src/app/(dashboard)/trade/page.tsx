@@ -5,7 +5,7 @@ import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
 import { useAIStore } from '@/stores/ai-store';
 import { useSearchParams } from 'next/navigation';
 import { TradingViewWidget } from '@/components/trade/TradingViewWidget';
-import { RefreshCw, Newspaper, Info, Sparkles, Bot, CheckCircle2, TrendingUp, AlertCircle } from 'lucide-react';
+import { RefreshCw, Newspaper, Info, Sparkles, Bot, CheckCircle2, TrendingUp, AlertCircle, ArrowDownUp, Coins } from 'lucide-react';
 import { AIAssistantPanel } from '@/components/trading-ai/AIAssistantPanel';
 import { formatTime } from '@/lib/timezone-service';
 
@@ -93,15 +93,29 @@ const DETAILS_DATA: Record<CryptoAsset, AssetDetails> = {
 };
 
 function TradeContent() {
-  const { balances, executeTransaction, prices, fetchPrices, tickerStats, subscribeToLivePrices } = useWalletStore();
+  const {
+    balances,
+    executeTransaction,
+    prices,
+    fetchPrices,
+    tickerStats,
+    subscribeToLivePrices,
+    ownerUid,
+    syncTransactions,
+  } = useWalletStore();
   const searchParams = useSearchParams();
   const assetParam = searchParams.get('asset');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<CryptoAsset>('BTC');
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
-  const [amount, setAmount] = useState('');
+
+  // Dual Money-to-Bitcoin synchronized inputs
+  const [moneyInput, setMoneyInput] = useState('');
+  const [cryptoInput, setCryptoInput] = useState('');
+
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [realStats, setRealStats] = useState<any>(null);
@@ -140,7 +154,7 @@ function TradeContent() {
     };
 
     syncPrices();
-    const liveInterval = setInterval(syncPrices, 1000);
+    const liveInterval = setInterval(syncPrices, 2000); // 2-second smooth update as requested
     return () => clearInterval(liveInterval);
   }, [fetchPrices]);
 
@@ -150,7 +164,7 @@ function TradeContent() {
       try {
         const formattedSymbol =
           selectedAsset === 'BTC' ? 'BTCUSDT' : selectedAsset === 'ETH' ? 'ETHUSDT' : selectedAsset;
-        const res = await fetch(`/api/market/ticker/${formattedSymbol}`);
+        const res = await fetch(`/api/market/ticker/${formattedSymbol}`, { cache: 'no-store' });
         if (res.ok && isMounted) {
           const data = await res.json();
           setRealStats(data);
@@ -161,27 +175,14 @@ function TradeContent() {
     };
     fetchStats();
 
-    const interval = setInterval(fetchStats, 5000);
+    const interval = setInterval(fetchStats, 2000); // 2-second refresh for ticker stats
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [selectedAsset]);
 
-  const [inputMode, setInputMode] = useState<'CRYPTO' | 'HSCT'>('CRYPTO');
-
-  const handleManualRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await fetchPrices();
-    } catch (err) {
-      console.warn('Manual refresh failed:', err);
-    } finally {
-      setTimeout(() => setRefreshing(false), 500);
-    }
-  };
-
-  const priceInUsd = prices[selectedAsset] || (selectedAsset === 'BTC' ? 84500 : 2650);
+  const priceInUsd = prices[selectedAsset] || (selectedAsset === 'BTC' ? 77450 : 2550);
   const priceInHsct = priceInUsd * USD_TO_HSCT;
 
   const availableHsct = Number(
@@ -192,28 +193,67 @@ function TradeContent() {
       : 100000
   );
 
-  const maxAffordableCrypto = priceInHsct > 0 ? availableHsct / priceInHsct : 0;
+
+
+  // Dual conversion change handlers
+  const handleMoneyChange = (val: string) => {
+    setMoneyInput(val);
+    setError('');
+    setSuccessMsg('');
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0 && priceInHsct > 0) {
+      setCryptoInput((num / priceInHsct).toFixed(6));
+    } else {
+      setCryptoInput('');
+    }
+  };
+
+  const handleCryptoChange = (val: string) => {
+    setCryptoInput(val);
+    setError('');
+    setSuccessMsg('');
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0 && priceInHsct > 0) {
+      setMoneyInput((num * priceInHsct).toFixed(2));
+    } else {
+      setMoneyInput('');
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    setRefreshSuccess(false);
+    try {
+      await fetchPrices();
+      const formattedSymbol =
+        selectedAsset === 'BTC' ? 'BTCUSDT' : selectedAsset === 'ETH' ? 'ETHUSDT' : selectedAsset;
+      const res = await fetch(`/api/market/ticker/${formattedSymbol}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setRealStats(data);
+      }
+      if (ownerUid) {
+        await syncTransactions(ownerUid);
+      }
+      setRefreshSuccess(true);
+      setTimeout(() => setRefreshSuccess(false), 2500);
+    } catch (err) {
+      console.warn('Manual refresh failed:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handlePercentageSelect = (percentage: number) => {
     setError('');
     setSuccessMsg('');
     if (tradeType === 'buy') {
       const targetHsct = availableHsct * percentage;
-      if (inputMode === 'HSCT') {
-        setAmount(targetHsct.toFixed(2));
-      } else {
-        const targetCrypto = priceInHsct > 0 ? targetHsct / priceInHsct : 0;
-        setAmount(targetCrypto.toFixed(6));
-      }
+      handleMoneyChange(targetHsct.toFixed(2));
     } else {
       const availCrypto = balances[selectedAsset] || 0;
       const targetCrypto = availCrypto * percentage;
-      if (inputMode === 'HSCT') {
-        const targetHsct = targetCrypto * priceInHsct;
-        setAmount(targetHsct.toFixed(2));
-      } else {
-        setAmount(targetCrypto.toFixed(6));
-      }
+      handleCryptoChange(targetCrypto.toFixed(6));
     }
   };
 
@@ -222,19 +262,16 @@ function TradeContent() {
     setError('');
     setSuccessMsg('');
 
-    const rawInput = parseFloat(amount);
-    if (isNaN(rawInput) || rawInput <= 0) {
-      setError('Please enter a valid amount');
+    const parsedMoney = parseFloat(moneyInput);
+    const parsedCrypto = parseFloat(cryptoInput);
+
+    if (isNaN(parsedMoney) || parsedMoney <= 0 || isNaN(parsedCrypto) || parsedCrypto <= 0) {
+      setError(`Please enter a valid amount in Money (HSCT) or ${selectedAsset}`);
       return;
     }
 
-    let numCryptoAmount = rawInput;
-    let totalHsct = rawInput * priceInHsct;
-
-    if (inputMode === 'HSCT') {
-      totalHsct = rawInput;
-      numCryptoAmount = priceInHsct > 0 ? rawInput / priceInHsct : 0;
-    }
+    const totalHsct = parsedMoney;
+    const numCryptoAmount = parsedCrypto;
 
     if (tradeType === 'buy') {
       if (availableHsct < totalHsct) {
@@ -257,12 +294,13 @@ function TradeContent() {
         );
         await fetchPrices();
         setSuccessMsg(
-          `✓ Instant Order Filled! Bought ${numCryptoAmount.toFixed(6)} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', {
+          `✓ Order Filled! Bought ${numCryptoAmount.toFixed(6)} ${selectedAsset} with ${totalHsct.toLocaleString('en-US', {
             minimumFractionDigits: 2,
           })} HSCT.`
         );
-        setAmount('');
-        setTimeout(() => setSuccessMsg(''), 5000);
+        setMoneyInput('');
+        setCryptoInput('');
+        setTimeout(() => setSuccessMsg(''), 6000);
       } catch (err: any) {
         setError(err.message || 'Transaction failed');
         return;
@@ -286,12 +324,13 @@ function TradeContent() {
         );
         await fetchPrices();
         setSuccessMsg(
-          `✓ Instant Order Filled! Sold ${numCryptoAmount.toFixed(6)} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', {
+          `✓ Order Filled! Sold ${numCryptoAmount.toFixed(6)} ${selectedAsset} for ${totalHsct.toLocaleString('en-US', {
             minimumFractionDigits: 2,
           })} HSCT.`
         );
-        setAmount('');
-        setTimeout(() => setSuccessMsg(''), 5000);
+        setMoneyInput('');
+        setCryptoInput('');
+        setTimeout(() => setSuccessMsg(''), 6000);
       } catch (err: any) {
         setError(err.message || 'Transaction failed');
         return;
@@ -378,14 +417,22 @@ function TradeContent() {
                   </button>
                 </div>
 
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={refreshing}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all flex items-center justify-center text-white disabled:opacity-50 min-h-[44px] min-w-[44px]"
-                  aria-label="Refresh price feed"
-                >
-                  <RefreshCw size={16} className={refreshing ? 'animate-spin text-brand-primary' : ''} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {refreshSuccess && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold rounded-xl animate-fade-in shadow-sm">
+                      <CheckCircle2 size={13} /> Refreshed
+                    </span>
+                  )}
+                  <button
+                    onClick={handleManualRefresh}
+                    disabled={refreshing}
+                    className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-brand-primary/40 rounded-2xl transition-all flex items-center justify-center text-white disabled:opacity-50 min-h-[44px] min-w-[44px]"
+                    title="Refresh live terminal data and balance"
+                    aria-label="Refresh price feed"
+                  >
+                    <RefreshCw size={16} className={refreshing ? 'animate-spin text-brand-primary' : ''} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -544,103 +591,204 @@ function TradeContent() {
                   </div>
 
                   <form onSubmit={handleTrade} className="space-y-4">
-                    {/* Input Mode Toggle */}
-                    <div className="flex bg-[#121212] border border-white/5 rounded-xl p-0.5 text-[11px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setInputMode('CRYPTO');
-                          setAmount('');
-                        }}
-                        className={`flex-1 py-1.5 rounded-lg transition-all ${
-                          inputMode === 'CRYPTO'
-                            ? 'bg-white/15 text-white font-extrabold shadow-sm'
-                            : 'text-neutral-400 hover:text-neutral-200'
-                        }`}
-                      >
-                        In {selectedAsset}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setInputMode('HSCT');
-                          setAmount('');
-                        }}
-                        className={`flex-1 py-1.5 rounded-lg transition-all ${
-                          inputMode === 'HSCT'
-                            ? 'bg-white/15 text-white font-extrabold shadow-sm'
-                            : 'text-neutral-400 hover:text-neutral-200'
-                        }`}
-                      >
-                        In HSCT (₹)
-                      </button>
-                    </div>
+                    {tradeType === 'buy' ? (
+                      /* BUY MODE: Money (HSCT/₹) -> Crypto (BTC/ETH) */
+                      <div className="space-y-3">
+                        {/* 1. Money Input */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold text-neutral-400">
+                            <span className="flex items-center gap-1 text-white">
+                              <Coins size={13} className="text-amber-400" /> Enter Money to Spend (₹ / HSCT)
+                            </span>
+                            <span className="text-[10px] text-brand-primary lowercase font-mono">
+                              avail: {availableHsct.toLocaleString('en-US', { maximumFractionDigits: 0 })} HSCT
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              value={moneyInput}
+                              onChange={(e) => handleMoneyChange(e.target.value)}
+                              placeholder="e.g. 5000"
+                              className="w-full bg-black border border-white/10 text-white font-mono text-base px-4 py-3.5 rounded-xl focus:outline-none focus:border-brand-primary/60 text-center min-h-[48px]"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-primary font-bold text-xs bg-white/5 px-2 py-1 rounded-md border border-white/5">
+                              HSCT (₹)
+                            </span>
+                          </div>
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-neutral-400">
-                        <span>{inputMode === 'CRYPTO' ? `Amount (${selectedAsset})` : 'Total (HSCT)'}</span>
-                        {tradeType === 'buy' && (
-                          <span className="text-[10px] text-brand-primary lowercase font-mono">
-                            max: ~{maxAffordableCrypto.toFixed(6)} {selectedAsset}
-                          </span>
-                        )}
+                        {/* Quick Money Presets */}
+                        <div className="grid grid-cols-5 gap-1 text-[11px]">
+                          {[
+                            { label: '₹500', val: 500 },
+                            { label: '₹1K', val: 1000 },
+                            { label: '₹5K', val: 5000 },
+                            { label: '₹25K', val: 25000 },
+                            { label: 'MAX', val: availableHsct },
+                          ].map((chip) => (
+                            <button
+                              key={chip.label}
+                              type="button"
+                              onClick={() => {
+                                const roundedVal = Math.min(chip.val, availableHsct);
+                                handleMoneyChange(roundedVal.toFixed(0));
+                              }}
+                              className="py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-brand-primary/40 rounded-lg font-mono font-bold text-neutral-300 hover:text-white transition-all text-center"
+                            >
+                              {chip.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Live Conversion Rate Divider */}
+                        <div className="relative py-1 flex items-center justify-center">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-white/10" />
+                          </div>
+                          <div className="relative bg-[#0a0a0a] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono">
+                            <ArrowDownUp size={11} className="text-brand-primary" />
+                            <span>1 {selectedAsset} ≈ ₹{priceInHsct.toLocaleString('en-US', { maximumFractionDigits: 0 })} HSCT</span>
+                          </div>
+                        </div>
+
+                        {/* 2. Calculated Crypto You Receive */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold text-neutral-400">
+                            <span className="text-emerald-400 font-extrabold flex items-center gap-1">
+                              ✓ You Receive ({selectedAsset})
+                            </span>
+                            <span className="text-[10px] text-neutral-400 lowercase font-mono">
+                              live conversion
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              value={cryptoInput}
+                              onChange={(e) => handleCryptoChange(e.target.value)}
+                              placeholder="0.000000"
+                              className="w-full bg-black/70 border border-emerald-500/30 text-emerald-300 font-mono text-base px-4 py-3.5 rounded-xl focus:outline-none focus:border-emerald-500/60 text-center min-h-[48px]"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-400 font-extrabold text-xs bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
+                              {selectedAsset}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          step="any"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder={inputMode === 'CRYPTO' ? '0.001' : '5000'}
-                          className="w-full bg-black border border-white/10 text-white font-mono text-base px-4 py-3.5 rounded-xl focus:outline-none focus:border-brand-primary/50 text-center min-h-[48px]"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-xs">
-                          {inputMode === 'CRYPTO' ? selectedAsset : 'HSCT'}
-                        </span>
+                    ) : (
+                      /* SELL MODE: Crypto (BTC/ETH) -> Money (HSCT/₹) */
+                      <div className="space-y-3">
+                        {/* 1. Crypto to Sell */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold text-neutral-400">
+                            <span className="flex items-center gap-1 text-white">
+                              Sell Amount ({selectedAsset})
+                            </span>
+                            <span className="text-[10px] text-rose-400 lowercase font-mono">
+                              avail: {(balances[selectedAsset] || 0).toFixed(4)} {selectedAsset}
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              value={cryptoInput}
+                              onChange={(e) => handleCryptoChange(e.target.value)}
+                              placeholder="0.001"
+                              className="w-full bg-black border border-white/10 text-white font-mono text-base px-4 py-3.5 rounded-xl focus:outline-none focus:border-rose-500/50 text-center min-h-[48px]"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-rose-400 font-bold text-xs bg-rose-500/10 px-2 py-1 rounded-md border border-rose-500/20">
+                              {selectedAsset}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Quick Crypto Percentage Presets */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { label: '25%', value: 0.25 },
+                            { label: '50%', value: 0.5 },
+                            { label: '75%', value: 0.75 },
+                            { label: 'MAX', value: 1.0 },
+                          ].map((preset) => (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => handlePercentageSelect(preset.value)}
+                              className="py-1.5 px-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-rose-500/40 rounded-lg text-[11px] font-mono font-bold text-neutral-300 hover:text-white transition-all"
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Live Conversion Rate Divider */}
+                        <div className="relative py-1 flex items-center justify-center">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-white/10" />
+                          </div>
+                          <div className="relative bg-[#0a0a0a] px-3 py-1 rounded-full border border-white/10 flex items-center gap-1.5 text-[10px] text-neutral-400 font-mono">
+                            <ArrowDownUp size={11} className="text-rose-400" />
+                            <span>1 {selectedAsset} ≈ ₹{priceInHsct.toLocaleString('en-US', { maximumFractionDigits: 0 })} HSCT</span>
+                          </div>
+                        </div>
+
+                        {/* 2. Calculated Money You Receive */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center text-xs font-bold text-neutral-400">
+                            <span className="text-brand-primary font-extrabold flex items-center gap-1">
+                              ✓ You Receive Money (HSCT / ₹)
+                            </span>
+                            <span className="text-[10px] text-neutral-400 lowercase font-mono">
+                              instant credit
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="any"
+                              value={moneyInput}
+                              onChange={(e) => handleMoneyChange(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-black/70 border border-brand-primary/30 text-brand-primary font-mono text-base px-4 py-3.5 rounded-xl focus:outline-none focus:border-brand-primary/60 text-center min-h-[48px]"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-primary font-extrabold text-xs bg-brand-primary/10 px-2 py-1 rounded-md border border-brand-primary/20">
+                              HSCT
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Quick Percentage Presets */}
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[
-                        { label: '25%', value: 0.25 },
-                        { label: '50%', value: 0.5 },
-                        { label: '75%', value: 0.75 },
-                        { label: 'MAX', value: 1.0 },
-                      ].map((preset) => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => handlePercentageSelect(preset.value)}
-                          className="py-1.5 px-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-brand-primary/40 rounded-lg text-[11px] font-mono font-bold text-neutral-300 hover:text-white transition-all active:scale-95"
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {amount && !isNaN(parseFloat(amount)) && (
-                      <div className="p-3 bg-black border border-white/10 rounded-xl space-y-1.5 text-xs">
+                    {/* Order Summary Breakdown */}
+                    {moneyInput && !isNaN(parseFloat(moneyInput)) && parseFloat(moneyInput) > 0 && (
+                      <div className="p-3.5 bg-black border border-white/10 rounded-2xl space-y-2 text-xs">
                         <div className="flex justify-between items-center">
-                          <span className="text-neutral-400">Order Crypto Size</span>
+                          <span className="text-neutral-400">
+                            {tradeType === 'buy' ? 'Money Spending' : 'Crypto Selling'}
+                          </span>
                           <span className="font-mono font-bold text-white">
-                            {inputMode === 'CRYPTO'
-                              ? `${parseFloat(amount).toFixed(6)} ${selectedAsset}`
-                              : `${(priceInHsct > 0 ? parseFloat(amount) / priceInHsct : 0).toFixed(6)} ${selectedAsset}`}
+                            {tradeType === 'buy'
+                              ? `${parseFloat(moneyInput).toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`
+                              : `${parseFloat(cryptoInput || '0').toFixed(6)} ${selectedAsset}`}
                           </span>
                         </div>
-                        <div className="flex justify-between items-center border-t border-white/5 pt-1.5">
-                          <span className="text-neutral-400">HSCT Settlement</span>
-                          <span className="font-mono text-brand-primary font-bold">
-                            {(inputMode === 'CRYPTO'
-                              ? parseFloat(amount) * priceInHsct
-                              : parseFloat(amount)
-                            ).toLocaleString('en-US', {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}{' '}
-                            HSCT
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-400">
+                            {tradeType === 'buy' ? 'Crypto Receiving' : 'Money Credited'}
                           </span>
+                          <span className="font-mono font-bold text-emerald-400">
+                            {tradeType === 'buy'
+                              ? `≈ ${parseFloat(cryptoInput || '0').toFixed(6)} ${selectedAsset}`
+                              : `≈ ${parseFloat(moneyInput).toLocaleString('en-US', { minimumFractionDigits: 2 })} HSCT`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t border-white/5 pt-2 text-[11px]">
+                          <span className="text-neutral-400">Network Fee</span>
+                          <span className="font-mono text-emerald-400 font-bold">0.00 HSCT (Free)</span>
                         </div>
                       </div>
                     )}
@@ -663,11 +811,17 @@ function TradeContent() {
                       type="submit"
                       className={`w-full py-3.5 rounded-xl font-extrabold text-sm transition-all shadow-md min-h-[48px] ${
                         tradeType === 'buy'
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950'
-                          : 'bg-rose-500 hover:bg-rose-400 text-white'
+                          ? 'bg-emerald-500 hover:bg-emerald-400 text-neutral-950 shadow-emerald-500/10'
+                          : 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/10'
                       }`}
                     >
-                      {tradeType === 'buy' ? 'Execute Buy Order' : 'Execute Sell Order'}
+                      {tradeType === 'buy'
+                        ? cryptoInput && parseFloat(cryptoInput) > 0
+                          ? `Buy ${parseFloat(cryptoInput).toFixed(6)} ${selectedAsset} with Money`
+                          : `Buy ${selectedAsset} with Money (HSCT)`
+                        : cryptoInput && parseFloat(cryptoInput) > 0
+                        ? `Sell ${parseFloat(cryptoInput).toFixed(6)} ${selectedAsset} for Money`
+                        : `Sell ${selectedAsset}`}
                     </button>
                   </form>
 

@@ -385,10 +385,10 @@ export const useWalletStore = create<WalletState>()(
       transactions: [],
       lastBlockNumber: 0,
       lastBlockHash: null,
-      prices: { BTC: 64230.50, ETH: 3450.20 },
+      prices: { BTC: 77450.00, ETH: 2550.00 },
       tickerStats: {
-        BTC: { high: 65420, low: 63100, volume: '$24.85 Billion', change: 1.25, price: 64230.50 },
-        ETH: { high: 3520, low: 3380, volume: '$12.40 Billion', change: -0.45, price: 3450.20 },
+        BTC: { high: 79890, low: 76880, volume: '$31.20 Billion', change: -2.26, price: 77450.00 },
+        ETH: { high: 2665, low: 2505, volume: '$16.50 Billion', change: -3.67, price: 2550.00 },
       },
       marketConnectionStatus: 'DISCONNECTED',
       lastMarketDataAt: null,
@@ -541,23 +541,39 @@ export const useWalletStore = create<WalletState>()(
             const btcItem = json.data.find((item: any) => item.symbol === 'BTC');
             const ethItem = json.data.find((item: any) => item.symbol === 'ETH');
             const newPrices = { ...get().prices };
-            if (btcItem && btcItem.price > 0) newPrices.BTC = Number(btcItem.price);
-            if (ethItem && ethItem.price > 0) newPrices.ETH = Number(ethItem.price);
-            set({ prices: newPrices, lastMarketDataAt: new Date().toISOString(), isMarketDataStale: false });
-            return;
-          }
-          // Fallback to CoinCap if needed
-          const { data: coincap } = await safeJsonFetch('https://api.coincap.io/v2/assets?limit=10');
-          if (coincap && Array.isArray(coincap.data)) {
-            const btcItem = coincap.data.find((item: any) => item.symbol === 'BTC');
-            const ethItem = coincap.data.find((item: any) => item.symbol === 'ETH');
-            const newPrices = { ...get().prices };
-            if (btcItem) newPrices.BTC = Number(btcItem.priceUsd || 0);
-            if (ethItem) newPrices.ETH = Number(ethItem.priceUsd || 0);
-            set({ prices: newPrices, lastMarketDataAt: new Date().toISOString(), isMarketDataStale: false });
+            const newStats = { ...get().tickerStats };
+
+            if (btcItem && btcItem.price > 0) {
+              newPrices.BTC = Number(btcItem.price);
+              if (newStats.BTC) {
+                newStats.BTC = {
+                  ...newStats.BTC,
+                  price: Number(btcItem.price),
+                  change: btcItem.change24h || newStats.BTC.change,
+                };
+              }
+            }
+
+            if (ethItem && ethItem.price > 0) {
+              newPrices.ETH = Number(ethItem.price);
+              if (newStats.ETH) {
+                newStats.ETH = {
+                  ...newStats.ETH,
+                  price: Number(ethItem.price),
+                  change: ethItem.change24h || newStats.ETH.change,
+                };
+              }
+            }
+
+            set({
+              prices: newPrices,
+              tickerStats: newStats,
+              lastMarketDataAt: new Date().toISOString(),
+              isMarketDataStale: false,
+            });
           }
         } catch (err) {
-          console.warn('[SecureChain: Prices] Direct price fetch failed, using fallback:', err);
+          console.warn('[SecureChain: Prices] Direct price fetch failed, maintaining current state:', err);
         }
       },
       

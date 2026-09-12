@@ -37,9 +37,9 @@ const toBinanceInterval = (timeframe: string) => {
 
 // Default base prices for realistic synthetic generation fallback
 const BASE_PRICES: Record<string, number> = {
-  'BTCUSDT': 64850,
-  'ETHUSDT': 3480,
-  'SOLUSDT': 148,
+  'BTCUSDT': 77450,
+  'ETHUSDT': 2550,
+  'SOLUSDT': 136,
   'MATICUSDT': 0.42,
   'DOGEUSDT': 0.12,
 };
