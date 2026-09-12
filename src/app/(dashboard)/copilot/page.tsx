@@ -48,20 +48,20 @@ interface ChatMessage {
 }
 
 export default function CopilotDashboard() {
-  const { address: userWalletAddress, transferFunds } = useWalletStore();
+  const { address: userWalletAddress, transferFunds, ownerUid } = useWalletStore();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-1',
       sender: 'copilot',
-      text: "👋 Hello! I'm your **Payment Copilot**.\n\nI can help you prepare transactions, generate request links & QR codes, analyze routing fees, and guide you through secure blockchain verification.\n\n*What would you like to do today?*",
+      text: "👋 Hello! I'm your **Unified Payment & Trading AI Copilot**.\n\nI combine enterprise blockchain payments (with **Priority #1 for your Friends**) with real-time crypto trading intelligence (BTC & ETH live indicators, RSI, order setups, and settlement analytics).\n\n*How can I assist your finances or crypto trades today?*",
       intent: 'GENERAL_QUESTION',
       quickReplies: [
-        'Send $100 to Rahul',
-        'Request ₹500',
-        'Scan QR',
-        'Check wallet',
-        'Analyze payment',
+        'Send 100 HSCT to Friend',
+        'Analyze BTC Market & RSI',
+        'ETH Price & Trade Setup',
+        'Request ₹500 via QR',
+        'Check Settlement Routes',
       ],
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -184,7 +184,7 @@ export default function CopilotDashboard() {
       const res = await fetch('/api/ai/payment-copilot/message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query }),
+        body: JSON.stringify({ message: query, userId: ownerUid || 'demo_user' }),
       });
       const data = await res.json();
 
@@ -363,10 +363,13 @@ export default function CopilotDashboard() {
             <span className="p-2 rounded-xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary">
               <Bot className="h-6 w-6" />
             </span>
-            Payment Copilot
+            Unified AI Copilot
+            <span className="text-xs px-2.5 py-1 rounded-full bg-[#FEEF8B]/20 text-[#FEEF8B] border border-[#FEEF8B]/40 font-bold uppercase tracking-wider">
+              Payments + Trading AI
+            </span>
           </h1>
           <p className="text-neutral-400 mt-1 text-xs sm:text-sm">
-            AI-powered fintech assistant for natural-language payments, QR transfers, and instant verification.
+            Unified assistant for natural-language payments (Priority #1 for Friends), QR settlement, and real-time crypto trading intelligence.
           </p>
         </div>
 

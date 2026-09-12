@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, Wallet, History, Settings, Bell, Search, Database, User, Bot, 
-  ShieldCheck, Sliders, ShieldAlert, Activity, Fingerprint, Menu, X, ArrowUpRight, ArrowDownLeft, RefreshCcw
+  ShieldCheck, Sliders, ShieldAlert, Activity, Fingerprint, Menu, X, ArrowUpRight, ArrowDownLeft, RefreshCcw, Users
 } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
@@ -25,13 +25,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const mainNavLinks: NavLinkItem[] = [
     { href: '/dashboard', icon: <Home size={18} />, label: 'Overview', exact: true },
     { href: '/wallet', icon: <Wallet size={18} />, label: 'My Wallet' },
+    { href: '/friends', icon: <Users size={18} />, label: 'Friends & Pay' },
     { href: '/wallet/transfer', icon: <ArrowUpRight size={18} />, label: 'Send Money' },
     { href: '/wallet/receive', icon: <ArrowDownLeft size={18} />, label: 'Receive HSCT' },
     { href: '/trade', icon: <RefreshCcw size={18} />, label: 'Trade Crypto' },
   ];
 
   const toolsNavLinks: NavLinkItem[] = [
-    { href: '/copilot', icon: <Bot size={18} />, label: 'Payment Copilot' },
+    { href: '/copilot', icon: <Bot size={18} />, label: 'Unified AI Copilot' },
     { href: '/explorer', icon: <Database size={18} />, label: 'Block Explorer' },
     { href: '/transactions', icon: <History size={18} />, label: 'Transactions' },
     { href: '/ai-assistant', icon: <Bot size={18} />, label: 'AI Assistant' },

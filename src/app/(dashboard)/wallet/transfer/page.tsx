@@ -22,6 +22,8 @@ import {
   Link as LinkIcon,
   Send,
   Download,
+  Star,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScannerModal } from '@/components/wallet/QRScannerModal';
@@ -38,6 +40,17 @@ interface RecipientUser {
   email?: string | null;
 }
 
+export interface FriendItem {
+  id: string;
+  uid: string;
+  friendUid: string;
+  username: string;
+  displayName: string;
+  walletAddress: string;
+  avatarUrl?: string | null;
+  priority: number;
+}
+
 const PRESET_AMOUNTS = [100, 500, 1000, 5000];
 
 export default function TransferPage() {
@@ -46,6 +59,10 @@ export default function TransferPage() {
 
   // Multi-step Flow: 'select_recipient' -> 'enter_amount' -> 'confirm_payment' -> 'success'
   const [step, setStep] = useState<'select_recipient' | 'enter_amount' | 'confirm_payment' | 'success'>('select_recipient');
+
+  // Friends State (Priority #1)
+  const [friends, setFriends] = useState<FriendItem[]>([]);
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false);
 
   // Recipient Input Channel Tab: 'search' | 'qr' | 'address' | 'recent'
   const [recipientTab, setRecipientTab] = useState<'search' | 'qr' | 'address' | 'recent'>('search');
@@ -71,6 +88,67 @@ export default function TransferPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
+
+  // ─── FETCH USER'S FRIENDS (PRIORITY #1) ───
+  useEffect(() => {
+    async function loadFriends() {
+      setIsLoadingFriends(true);
+      try {
+        const res = await fetch(`/api/friends?uid=${ownerUid || ''}`);
+        const data = await safeParseJson(res);
+        if (data && data.success && Array.isArray(data.friends)) {
+          setFriends(data.friends);
+        }
+      } catch (err) {
+        console.warn('Could not load friends for transfer page:', err);
+      } finally {
+        setIsLoadingFriends(false);
+      }
+    }
+    loadFriends();
+  }, [ownerUid]);
+
+  // ─── AUTO-SELECT RECIPIENT FROM URL SEARCH PARAMS (?to= / ?username= / ?name=) ───
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const toAddress = params.get('to');
+    const toUsername = params.get('username');
+    const toName = params.get('name');
+    const toAmount = params.get('amount');
+
+    if (toAddress) {
+      // Check if matches a friend first (Priority #1)
+      const matchedFriend = friends.find(
+        (f) =>
+          f.walletAddress.toLowerCase() === toAddress.toLowerCase() ||
+          (toUsername && f.username.toLowerCase() === toUsername.toLowerCase())
+      );
+
+      if (matchedFriend) {
+        setSelectedRecipient({
+          uid: matchedFriend.friendUid || matchedFriend.uid,
+          username: matchedFriend.username,
+          displayName: matchedFriend.displayName,
+          walletAddress: matchedFriend.walletAddress,
+          avatarUrl: matchedFriend.avatarUrl,
+        });
+      } else {
+        setSelectedRecipient({
+          uid: '',
+          username: toUsername || 'external',
+          displayName: toName || (toUsername ? `@${toUsername}` : abbreviateAddress(toAddress)),
+          walletAddress: toAddress,
+        });
+      }
+
+      if (toAmount && Number(toAmount) > 0) {
+        setAmount(toAmount);
+      }
+
+      setStep('enter_amount');
+    }
+  }, [friends]);
 
   const availableBalanceHsct = Number(
     (balances.HSCT && balances.HSCT > 0)
@@ -147,8 +225,24 @@ async function safeParseJson(res: Response): Promise<any> {
         const data = await safeParseJson(res);
 
         if (data && data.success) {
-          setSearchResults(data.results || []);
-          if (data.results?.length === 0) {
+          const raw = (data.results || []) as RecipientUser[];
+          const sorted = [...raw].sort((a, b) => {
+            const aIsFriend = friends.some(
+              (f) =>
+                f.walletAddress.toLowerCase() === a.walletAddress.toLowerCase() ||
+                f.username.toLowerCase() === a.username.toLowerCase()
+            );
+            const bIsFriend = friends.some(
+              (f) =>
+                f.walletAddress.toLowerCase() === b.walletAddress.toLowerCase() ||
+                f.username.toLowerCase() === b.username.toLowerCase()
+            );
+            if (aIsFriend && !bIsFriend) return -1;
+            if (!aIsFriend && bIsFriend) return 1;
+            return 0;
+          });
+          setSearchResults(sorted);
+          if (sorted.length === 0) {
             setSearchError('No registered users found matching your query.');
           }
         } else {
@@ -344,8 +438,77 @@ async function safeParseJson(res: Response): Promise<any> {
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Send Money</h1>
                 <p className="text-neutral-400 text-xs sm:text-sm mt-1">
-                  Choose a recipient by username, QR code scan, wallet address, or recent contacts.
+                  Choose a recipient by username, QR code scan, wallet address, or select your verified friends.
                 </p>
+              </div>
+
+              {/* PRIORITY #1: VERIFIED FRIENDS QUICK SELECTION */}
+              <div className="p-4 bg-gradient-to-r from-[#141414] via-[#16140b] to-[#141414] border border-[#FEEF8B]/30 rounded-2xl space-y-3 shadow-[0_0_20px_rgba(254,239,139,0.06)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FEEF8B] shadow-[0_0_8px_#FEEF8B] animate-pulse" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#FEEF8B] flex items-center gap-1.5">
+                      <Star size={13} className="fill-[#FEEF8B]" /> Priority #1: Friends List
+                    </span>
+                  </div>
+                  <Link
+                    href="/friends"
+                    className="text-[11px] text-[#FEEF8B]/90 hover:text-[#FEEF8B] hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <span>Manage Friends ({friends.length})</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
+
+                {isLoadingFriends ? (
+                  <div className="flex items-center justify-center py-4 text-xs text-neutral-400 gap-2">
+                    <div className="w-4 h-4 border-2 border-[#FEEF8B] border-t-transparent rounded-full animate-spin" />
+                    <span>Loading friends priority list...</span>
+                  </div>
+                ) : friends.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {friends.map((f) => (
+                      <button
+                        key={f.walletAddress}
+                        type="button"
+                        onClick={() =>
+                          handleSelectRecipient({
+                            uid: f.friendUid || f.uid,
+                            username: f.username,
+                            displayName: f.displayName,
+                            walletAddress: f.walletAddress,
+                            avatarUrl: f.avatarUrl,
+                          })
+                        }
+                        className="p-3 bg-black/60 hover:bg-[#FEEF8B]/10 border border-white/5 hover:border-[#FEEF8B]/60 rounded-xl flex items-center gap-2.5 text-left transition-all group min-h-[52px]"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-[#FEEF8B]/20 text-[#FEEF8B] font-bold text-xs flex items-center justify-center flex-shrink-0 border border-[#FEEF8B]/40 group-hover:scale-105 transition-transform">
+                          {f.displayName?.charAt(0).toUpperCase() || 'F'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white group-hover:text-[#FEEF8B] truncate transition-colors">
+                            {f.displayName}
+                          </p>
+                          <p className="text-[10px] text-neutral-400 font-mono truncate">
+                            @{f.username}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-black/40 rounded-xl border border-white/5 flex items-center justify-between">
+                    <p className="text-xs text-neutral-400">
+                      Add friends for instant 1-tap Priority #1 transfers!
+                    </p>
+                    <Link
+                      href="/friends"
+                      className="px-2.5 py-1 bg-[#FEEF8B]/10 hover:bg-[#FEEF8B]/20 text-[#FEEF8B] border border-[#FEEF8B]/30 rounded-lg text-xs font-bold transition-colors"
+                    >
+                      + Add Friend
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* 4 Selection Tabs */}
@@ -455,9 +618,20 @@ async function safeParseJson(res: Response): Promise<any> {
                                 {u.displayName.charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-semibold text-white text-xs sm:text-sm group-hover:text-[#FEEF8B] transition-colors truncate">
-                                  {u.displayName}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-white text-xs sm:text-sm group-hover:text-[#FEEF8B] transition-colors truncate">
+                                    {u.displayName}
+                                  </p>
+                                  {friends.some(
+                                    (f) =>
+                                      f.walletAddress.toLowerCase() === u.walletAddress.toLowerCase() ||
+                                      f.username.toLowerCase() === u.username.toLowerCase()
+                                  ) && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FEEF8B]/20 text-[#FEEF8B] border border-[#FEEF8B]/40 text-[9px] font-extrabold uppercase">
+                                      <Star size={9} className="fill-[#FEEF8B]" /> Friend • Priority #1
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-[11px] text-neutral-400 font-mono truncate">
                                   @{u.username} • {abbreviateAddress(u.walletAddress)}
                                 </p>

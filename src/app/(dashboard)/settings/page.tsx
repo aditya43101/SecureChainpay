@@ -26,7 +26,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
 import { useWalletStore } from '@/stores/wallet-store';
-import { auth } from '@/lib/firebase/client';
+import { auth, db } from '@/lib/firebase/client';
+import { updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { AISettings } from '@/components/trading-ai/AISettings';
 
 export default function SettingsPage() {
@@ -47,6 +49,49 @@ export default function SettingsPage() {
   const initializationErrorMessage = useWalletStore((state) => state.initializationErrorMessage);
   const initializeWallet = useWalletStore((state) => state.initializeWallet);
   const [isRetryingWallet, setIsRetryingWallet] = useState(false);
+
+  const updateUser = useAuthStore((state) => state.updateUser);
+  const [displayNameInput, setDisplayNameInput] = useState(profileUser?.name || profileUser?.displayName || '');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [nameUpdateSuccess, setNameUpdateSuccess] = useState<string | null>(null);
+  const [nameUpdateError, setNameUpdateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profileUser?.name && !displayNameInput) {
+      setDisplayNameInput(profileUser.name);
+    }
+  }, [profileUser?.name]);
+
+  const handleUpdateName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = displayNameInput.trim();
+    if (!cleanName || cleanName.length < 2) {
+      setNameUpdateError('Name must be at least 2 characters.');
+      return;
+    }
+
+    setIsUpdatingName(true);
+    setNameUpdateError(null);
+    setNameUpdateSuccess(null);
+
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await updateProfile(currentUser, { displayName: cleanName });
+        const userRef = doc(db, 'users', currentUser.uid);
+        await setDoc(userRef, { name: cleanName, displayName: cleanName }, { merge: true });
+      }
+
+      updateUser({ name: cleanName });
+      setNameUpdateSuccess('Display name updated successfully!');
+      setTimeout(() => setNameUpdateSuccess(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to update name:', err);
+      setNameUpdateError(err.message || 'Failed to update name');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
 
   const profileUsername = profileUser?.username || profileUser?.name || 'SecureChain User';
   const profileContact = profileUser?.email || profileUser?.phoneNumber || 'No contact specified';
@@ -179,6 +224,50 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Full Name Edit Form */}
+              <form onSubmit={handleUpdateName} className="p-5 bg-[#121212] border border-white/10 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+                    Full Name / Display Name
+                  </label>
+                  {nameUpdateSuccess && (
+                    <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1 animate-in fade-in">
+                      <Check size={14} /> {nameUpdateSuccess}
+                    </span>
+                  )}
+                  {nameUpdateError && (
+                    <span className="text-xs font-semibold text-rose-400 flex items-center gap-1 animate-in fade-in">
+                      <AlertCircle size={14} /> {nameUpdateError}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    type="text"
+                    value={displayNameInput}
+                    onChange={(e) => setDisplayNameInput(e.target.value)}
+                    placeholder="Enter your display name"
+                    className="flex-1 px-4 py-3 bg-black border border-white/15 rounded-xl text-sm text-white placeholder:text-neutral-600 focus:outline-none focus:border-brand-primary/50 transition-colors min-h-[44px]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isUpdatingName || !displayNameInput.trim() || displayNameInput.trim() === profileUser?.name}
+                    className={`px-5 py-3 rounded-xl text-xs font-extrabold transition-all shadow-md min-h-[44px] flex items-center justify-center gap-2 ${
+                      isUpdatingName || !displayNameInput.trim() || displayNameInput.trim() === profileUser?.name
+                        ? 'bg-white/10 text-neutral-500 cursor-not-allowed'
+                        : 'bg-brand-primary hover:bg-brand-pale text-neutral-950 active:scale-95'
+                    }`}
+                  >
+                    {isUpdatingName ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                    <span>Save Name</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  This name is displayed in greeting headers, payment receipts, and invoices.
+                </p>
+              </form>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
