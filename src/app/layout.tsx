@@ -5,6 +5,33 @@ export const metadata: Metadata = {
   title: "SecureChain Pay | Enterprise Blockchain Payments",
   description: "Secure, instant, and scalable decentralized payment infrastructure.",
   keywords: ["Blockchain", "Payments", "Crypto", "Polygon", "Fintech"],
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/logo.svg', type: 'image/svg+xml' },
+      { url: '/logo.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/logo.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  openGraph: {
+    title: "SecureChain Pay | Enterprise Blockchain Payments",
+    description: "Secure, instant, and scalable decentralized payment infrastructure.",
+    siteName: "SecureChain Pay",
+    images: [
+      {
+        url: "/logo.png",
+        width: 512,
+        height: 512,
+        alt: "SecureChain Pay Gold Shield Logo",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

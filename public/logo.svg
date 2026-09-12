@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="shieldGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB" />
+      <stop offset="25%" stop-color="#FEF08A" />
+      <stop offset="60%" stop-color="#EAB308" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+    <linearGradient id="glowGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#CA8A04" stop-opacity="0.1" />
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#EAB308" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+    <filter id="neonShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#EAB308" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="256" r="230" fill="url(#bgGlow)" />
+
+  <!-- Shield Base Outer -->
+  <path d="M256 44 C340 44 430 80 430 190 C430 330 320 420 256 468 C192 420 82 330 82 190 C82 80 172 44 256 44 Z" 
+        fill="url(#shieldGold)" 
+        filter="url(#neonShadow)" />
+
+  <!-- Shield Inner Layer -->
+  <path d="M256 68 C324 68 398 98 398 196 C398 316 298 396 256 438 C214 396 114 316 114 196 C114 98 188 68 256 68 Z" 
+        fill="#0A0A0A" />
+
+  <!-- Shield Inner Gold Border -->
+  <path d="M256 74 C320 74 390 102 390 196 C390 310 294 388 256 428 C218 388 122 310 122 196 C122 102 192 74 256 74 Z" 
+        fill="none" 
+        stroke="url(#shieldGold)" 
+        stroke-width="6" 
+        stroke-opacity="0.5" />
+
+  <!-- Cryptographic Blockchain Nodes -->
+  <g stroke="url(#shieldGold)" stroke-width="3" stroke-opacity="0.6">
+    <line x1="256" y1="120" x2="190" y2="180" />
+    <line x1="256" y1="120" x2="322" y2="180" />
+    <line x1="190" y1="180" x2="190" y2="270" />
+    <line x1="322" y1="180" x2="322" y2="270" />
+    <line x1="190" y1="270" x2="256" y2="330" />
+    <line x1="322" y1="270" x2="256" y2="330" />
+  </g>
+
+  <!-- Node Dots -->
+  <circle cx="256" cy="120" r="8" fill="#FFFBEB" filter="url(#neonShadow)" />
+  <circle cx="190" cy="180" r="7" fill="#FEF08A" />
+  <circle cx="322" cy="180" r="7" fill="#FEF08A" />
+  <circle cx="190" cy="270" r="7" fill="#EAB308" />
+  <circle cx="322" cy="270" r="7" fill="#EAB308" />
+  <circle cx="256" cy="330" r="8" fill="#FFFBEB" />
+
+  <!-- Central Security Checkmark -->
+  <path d="M210 245 L245 280 L310 205" 
+        fill="none" 
+        stroke="url(#shieldGold)" 
+        stroke-width="24" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        filter="url(#neonShadow)" />
+</svg>

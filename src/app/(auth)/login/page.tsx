@@ -453,10 +453,8 @@ function LoginContent() {
 
         <div className="text-center mb-8 space-y-3 relative z-10">
           <div className="flex justify-center mb-3">
-            <div className="w-16 h-16 rounded-2xl bg-brand-primary/15 border-2 border-brand-primary/40 shadow-[0_0_25px_rgba(254,239,139,0.2)] flex items-center justify-center transform hover:scale-105 transition-transform duration-500">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-primary">
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-              </svg>
+            <div className="w-16 h-16 rounded-2xl bg-black/60 border border-brand-primary/30 shadow-[0_0_25px_rgba(254,239,139,0.25)] flex items-center justify-center transform hover:scale-105 transition-transform duration-500 p-2">
+              <img src="/logo.svg" alt="SecureChain Pay Logo" className="w-full h-full object-contain filter drop-shadow-[0_0_12px_rgba(254,239,139,0.4)]" />
             </div>
           </div>
           <h1 className="text-3xl font-black tracking-tight text-white">

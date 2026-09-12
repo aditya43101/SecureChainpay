@@ -60,11 +60,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen bg-black text-[#F8FAFC] flex flex-col md:flex-row antialiased selection:bg-[#FEEF8B]/30 selection:text-[#FEEF8B]">
         {/* Sidebar - Desktop */}
         <aside className="hidden md:flex w-64 lg:w-72 flex-col border-r border-white/5 bg-[#0a0a0a]/95 backdrop-blur-2xl sticky top-0 h-screen z-30 flex-shrink-0">
-          {/* Logo Header */}
           <div className="h-20 flex items-center px-6 border-b border-white/5">
             <Link href="/dashboard" className="flex items-center gap-3 hover:opacity-95 transition-opacity">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FEF9C3] via-[#FEEF8B] to-[#F5C542] shadow-[0_0_16px_rgba(254,239,139,0.3)] flex items-center justify-center flex-shrink-0">
-                <ShieldCheck size={20} className="text-black" strokeWidth={2.5} />
+              <div className="w-10 h-10 rounded-xl bg-black/80 border border-[#FEEF8B]/30 shadow-[0_0_16px_rgba(254,239,139,0.25)] flex items-center justify-center flex-shrink-0 p-1.5">
+                <img src="/logo.svg" alt="SecureChain Pay Logo" className="w-full h-full object-contain filter drop-shadow-[0_0_8px_rgba(254,239,139,0.35)]" />
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold tracking-tight text-base text-white">

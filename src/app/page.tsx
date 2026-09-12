@@ -47,8 +47,8 @@ export default function LandingPage() {
 
       {/* Navigation */}
       <nav className="w-full max-w-7xl mx-auto px-6 py-4 flex items-center justify-between z-50 glass-panel rounded-b-2xl relative mb-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-8 h-8 text-brand-gold" />
+        <div className="flex items-center gap-3">
+          <img src="/logo.svg" alt="SecureChain Pay Logo" className="w-8 h-8 object-contain filter drop-shadow-[0_0_8px_rgba(254,239,139,0.3)]" />
           <span className="text-xl font-bold tracking-tight text-white">
             SecureChain<span className="text-brand-gold">Pay</span>
           </span>
