@@ -11,23 +11,29 @@ import {
   Trash2,
   Check,
   Copy,
-  ExternalLink,
-  ShieldCheck,
   Sparkles,
   RefreshCw,
   AlertCircle,
   Star,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useAuthStore } from '@/stores/auth-store';
+import { useWalletStore } from '@/stores/wallet-store';
 import { auth } from '@/lib/firebase/client';
 import { FriendRecord } from '@/app/api/friends/route';
+import { UserSuggestion } from '@/app/api/users/suggestions/route';
 
 export default function FriendsPage() {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
+  const authStoreUser = useAuthStore((state) => state.user);
+  const walletOwnerUid = useWalletStore((state) => state.ownerUid);
 
   const [friends, setFriends] = useState<FriendRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [isLoadingFriends, setIsLoadingFriends] = useState(true);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -35,40 +41,96 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isAddingFriend, setIsAddingFriend] = useState(false);
+  const [addingFriendUid, setAddingFriendUid] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+
+  // Helper to resolve current UID
+  const getActiveUid = useCallback(() => {
+    return (
+      auth.currentUser?.uid ||
+      authStoreUser?.id ||
+      walletOwnerUid ||
+      (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null) ||
+      ''
+    );
+  }, [authStoreUser?.id, walletOwnerUid]);
+
+  // Helper to get auth headers
+  const getAuthHeaders = useCallback(async () => {
+    const uid = getActiveUid();
+    let token: string | null = null;
+    try {
+      token = (await auth.currentUser?.getIdToken()) || null;
+    } catch {
+      // ignore token read failures
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (uid) headers['x-user-id'] = uid;
+
+    return headers;
+  }, [getActiveUid]);
 
   // Fetch Friends List
   const fetchFriends = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+    setIsLoadingFriends(true);
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
+      const headers = await getAuthHeaders();
+      const uid = getActiveUid();
 
-      const res = await fetch('/api/friends', {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`/api/friends${uid ? `?userId=${encodeURIComponent(uid)}` : ''}`, {
+        headers,
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.friends)) {
         setFriends(data.friends);
-      } else {
-        setError(data.error || 'Failed to load friends');
       }
     } catch (err: any) {
-      console.error('Fetch friends error:', err);
-      setError(err.message || 'Error loading friends');
+      console.warn('Fetch friends warning:', err);
     } finally {
-      setIsLoading(false);
+      setIsLoadingFriends(false);
     }
-  }, []);
+  }, [getAuthHeaders, getActiveUid]);
 
+  // Fetch Friend Suggestions (All platform users)
+  const fetchSuggestions = useCallback(async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const headers = await getAuthHeaders();
+      const uid = getActiveUid();
+
+      const res = await fetch(
+        `/api/users/suggestions${uid ? `?currentUid=${encodeURIComponent(uid)}` : ''}`,
+        { headers }
+      );
+      const data = await res.json();
+      if (data.success && Array.isArray(data.suggestions)) {
+        setSuggestions(data.suggestions);
+      }
+    } catch (err) {
+      console.warn('Fetch suggestions warning:', err);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [getAuthHeaders, getActiveUid]);
+
+  // Initial load and sync on Firebase Auth state changes
   useEffect(() => {
     fetchFriends();
-  }, [fetchFriends]);
+    fetchSuggestions();
+
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      if (u) {
+        fetchFriends();
+        fetchSuggestions();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [fetchFriends, fetchSuggestions]);
 
   // Live User Search for Adding
   useEffect(() => {
@@ -82,7 +144,10 @@ export default function FriendsPage() {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}&currentUid=${auth.currentUser?.uid || ''}`);
+        const uid = getActiveUid();
+        const res = await fetch(
+          `/api/users/search?q=${encodeURIComponent(query)}&currentUid=${encodeURIComponent(uid)}`
+        );
         const data = await res.json();
         if (data.success && Array.isArray(data.results)) {
           setSearchResults(data.results);
@@ -92,39 +157,59 @@ export default function FriendsPage() {
       } finally {
         setIsSearching(false);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, getActiveUid]);
 
   // Add Friend Handler
-  const handleAddFriend = async (targetUser: any) => {
-    setIsAddingFriend(true);
+  const handleAddFriend = async (targetUser: {
+    uid: string;
+    username: string;
+    displayName?: string;
+    walletAddress: string;
+  }) => {
+    const targetUid = targetUser.uid;
+    setAddingFriendUid(targetUid);
     setError(null);
     setSuccess(null);
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Authentication required');
+      const headers = await getAuthHeaders();
+      const currentUid = getActiveUid();
 
       const res = await fetch('/api/friends', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
-          friendUid: targetUser.uid,
+          friendUid: targetUid,
           username: targetUser.username,
           walletAddress: targetUser.walletAddress,
+          currentUid,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        setSuccess(`Added @${data.friend.username} to your friends!`);
+        setSuccess(`Added @${data.friend?.username || targetUser.username} to your friends!`);
         setSearchQuery('');
         setSearchResults([]);
+
+        // Optimistically add to local friends list
+        setFriends((prev) => {
+          if (prev.some((f) => f.friendUid === targetUid)) return prev;
+          return [
+            {
+              friendUid: targetUid,
+              username: targetUser.username,
+              displayName: targetUser.displayName || targetUser.username,
+              walletAddress: targetUser.walletAddress,
+              addedAt: new Date().toISOString(),
+            },
+            ...prev,
+          ];
+        });
+
         await fetchFriends();
         setTimeout(() => setSuccess(null), 4000);
       } else {
@@ -133,7 +218,7 @@ export default function FriendsPage() {
     } catch (err: any) {
       setError(err.message || 'Failed to add friend');
     } finally {
-      setIsAddingFriend(false);
+      setAddingFriendUid(null);
     }
   };
 
@@ -142,13 +227,18 @@ export default function FriendsPage() {
     if (!confirm(`Are you sure you want to remove ${name} from friends?`)) return;
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Authentication required');
+      const headers = await getAuthHeaders();
+      const currentUid = getActiveUid();
 
-      const res = await fetch(`/api/friends?friendUid=${encodeURIComponent(friendUid)}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `/api/friends?friendUid=${encodeURIComponent(friendUid)}&currentUid=${encodeURIComponent(
+          currentUid
+        )}`,
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
 
       const data = await res.json();
       if (data.success) {
@@ -169,9 +259,16 @@ export default function FriendsPage() {
     setTimeout(() => setCopiedAddress(null), 2000);
   };
 
+  const isFriend = (uid: string, username: string) => {
+    return friends.some(
+      (f) =>
+        f.friendUid === uid ||
+        f.username?.toLowerCase() === username?.toLowerCase()
+    );
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-32 md:pb-12 text-white px-2 sm:px-0">
-      
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -182,13 +279,13 @@ export default function FriendsPage() {
             Friends & P2P Contacts
           </h1>
           <p className="text-neutral-400 text-xs sm:text-sm mt-1">
-            Send instant zero-gas payments to friends with highest priority execution.
+            Send instant zero-gas payments to friends with Priority #1 sub-second execution.
           </p>
         </div>
 
         <Link
           href="/wallet/transfer"
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#FEEF8B] hover:bg-[#FEF08A] text-neutral-950 font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md w-fit"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#FEEF8B] hover:bg-[#FEF08A] text-neutral-950 font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md w-fit active:scale-95"
         >
           <Send size={15} /> Quick Pay Transfer
         </Link>
@@ -199,12 +296,12 @@ export default function FriendsPage() {
         <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-2xl space-y-1">
           <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400">Total Friends</span>
           <p className="text-2xl font-black text-white">{friends.length}</p>
-          <p className="text-[11px] text-neutral-500">Saved for 1-click payment</p>
+          <p className="text-[11px] text-neutral-500">Saved for 1-click zero-fee payment</p>
         </div>
         <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-2xl space-y-1">
           <span className="text-[10px] uppercase font-bold tracking-wider text-[#FEEF8B]">Priority Level</span>
           <p className="text-2xl font-black text-[#FEEF8B]">Priority #1</p>
-          <p className="text-[11px] text-neutral-500">Top auto-routing priority</p>
+          <p className="text-[11px] text-neutral-500">Highest auto-routing transaction priority</p>
         </div>
         <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-2xl space-y-1">
           <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">P2P Network</span>
@@ -220,7 +317,7 @@ export default function FriendsPage() {
             <UserPlus size={18} className="text-[#FEEF8B]" /> Add New Friend
           </h2>
           <span className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded-full text-neutral-400">
-            Search by username or address
+            Search by username or 0x address
           </span>
         </div>
 
@@ -230,7 +327,7 @@ export default function FriendsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Type username (e.g. rahul, aditya) or 0x address..."
+            placeholder="Type username (e.g. aditya, rahul, priya) or 0x address..."
             className="w-full bg-black border border-white/10 pl-11 pr-4 py-3.5 rounded-2xl text-white text-sm placeholder:text-neutral-500 focus:outline-none focus:border-[#FEEF8B]/50 transition-colors"
           />
           {isSearching && (
@@ -240,9 +337,9 @@ export default function FriendsPage() {
 
         {/* Search Results Dropdown */}
         {searchResults.length > 0 && (
-          <div className="space-y-2 p-3 bg-black/80 border border-white/10 rounded-2xl max-h-60 overflow-y-auto custom-scrollbar">
+          <div className="space-y-2 p-3 bg-black/90 border border-white/10 rounded-2xl max-h-60 overflow-y-auto custom-scrollbar">
             {searchResults.map((userResult) => {
-              const alreadyFriend = friends.some((f) => f.friendUid === userResult.uid);
+              const alreadyFriend = isFriend(userResult.uid, userResult.username);
               return (
                 <div
                   key={userResult.uid}
@@ -258,27 +355,41 @@ export default function FriendsPage() {
                     </div>
                   </div>
 
-                  {alreadyFriend ? (
-                    <span className="text-[11px] text-emerald-400 font-semibold px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20 flex items-center gap-1">
-                      <Check size={12} /> Already Friend
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isAddingFriend}
-                      onClick={() => handleAddFriend(userResult)}
-                      className="px-3.5 py-1.5 bg-[#FEEF8B] hover:bg-[#FEF08A] text-neutral-950 text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                  <div className="flex items-center gap-2">
+                    {alreadyFriend ? (
+                      <span className="text-[11px] text-emerald-400 font-semibold px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20 flex items-center gap-1">
+                        <Check size={12} /> Friend
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={addingFriendUid === userResult.uid}
+                        onClick={() => handleAddFriend(userResult)}
+                        className="px-3.5 py-1.5 bg-[#FEEF8B] hover:bg-[#FEF08A] text-neutral-950 text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                      >
+                        {addingFriendUid === userResult.uid ? (
+                          <RefreshCw size={12} className="animate-spin" />
+                        ) : (
+                          <UserPlus size={13} />
+                        )}
+                        Add Friend
+                      </button>
+                    )}
+
+                    <Link
+                      href={`/wallet/transfer?to=${encodeURIComponent(userResult.username)}`}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition-all flex items-center gap-1"
                     >
-                      <UserPlus size={13} /> Add Friend
-                    </button>
-                  )}
+                      <Send size={11} /> Pay
+                    </Link>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Alerts */}
+        {/* Status Alerts */}
         {error && (
           <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs p-3 rounded-xl flex items-center gap-2">
             <AlertCircle size={14} className="shrink-0 text-rose-400" />
@@ -293,8 +404,151 @@ export default function FriendsPage() {
         )}
       </div>
 
-      {/* Friends List Grid */}
+      {/* ─── SUGGESTED FRIENDS / PLATFORM COMMUNITY ─── */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
+              <Sparkles size={18} className="text-[#FEEF8B]" />
+              <span>Suggested Friends & App Users</span>
+              <span className="text-xs font-mono bg-[#FEEF8B]/10 border border-[#FEEF8B]/20 text-[#FEEF8B] px-2 py-0.5 rounded-full">
+                {suggestions.length} available
+              </span>
+            </h2>
+            <p className="text-xs text-neutral-400">
+              Users registered on SecureChain Pay. Connect with them for instant 1-click zero-fee transfers.
+            </p>
+          </div>
+
+          <button
+            onClick={fetchSuggestions}
+            disabled={isLoadingSuggestions}
+            className="text-xs text-neutral-400 hover:text-white flex items-center gap-1.5 transition-colors"
+          >
+            <RefreshCw size={12} className={isLoadingSuggestions ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
+
+        {isLoadingSuggestions ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="h-44 bg-white/[0.02] border border-white/5 rounded-3xl animate-pulse" />
+            ))}
+          </div>
+        ) : suggestions.length === 0 ? (
+          <div className="text-center py-10 px-4 bg-[#0a0a0a] border border-white/10 rounded-3xl text-xs text-neutral-400">
+            No suggestions available at the moment.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {suggestions.map((suggestion) => {
+              const alreadyFriend = isFriend(suggestion.uid, suggestion.username);
+              const isAdding = addingFriendUid === suggestion.uid;
+
+              return (
+                <div
+                  key={suggestion.uid}
+                  className="p-5 bg-[#0a0a0a] border border-white/10 hover:border-[#FEEF8B]/30 rounded-3xl space-y-3.5 transition-all hover:shadow-[0_0_20px_rgba(254,239,139,0.06)] group relative flex flex-col justify-between"
+                >
+                  {/* Top row: Avatar + Name + Badge */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FEF9C3] via-[#FEEF8B] to-[#F5C542] text-neutral-950 font-black text-base flex items-center justify-center shadow-md shrink-0">
+                          {suggestion.displayName?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        {suggestion.isOnline && (
+                          <span
+                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full"
+                            title="Online"
+                          />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 space-y-0.5">
+                        <h4 className="text-sm font-extrabold text-white truncate group-hover:text-[#FEEF8B] transition-colors">
+                          {suggestion.displayName}
+                        </h4>
+                        <p className="text-xs text-neutral-400 font-mono truncate">@{suggestion.username}</p>
+                      </div>
+                    </div>
+
+                    {suggestion.badge && (
+                      <span className="text-[10px] font-bold text-[#FEEF8B] bg-[#FEEF8B]/10 border border-[#FEEF8B]/20 px-2 py-0.5 rounded-full shrink-0">
+                        {suggestion.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Bio / Tagline */}
+                  {suggestion.bio && (
+                    <p className="text-[11px] text-neutral-400 line-clamp-1 italic">
+                      &quot;{suggestion.bio}&quot;
+                    </p>
+                  )}
+
+                  {/* Address Pill */}
+                  <div className="flex items-center justify-between p-2.5 bg-black rounded-xl border border-white/5 text-[11px] font-mono">
+                    <span className="text-neutral-400 truncate max-w-[180px]">
+                      {suggestion.walletAddress
+                        ? `${suggestion.walletAddress.substring(0, 8)}...${suggestion.walletAddress.substring(
+                            suggestion.walletAddress.length - 6
+                          )}`
+                        : '0xAddress'}
+                    </span>
+                    {suggestion.walletAddress && (
+                      <button
+                        onClick={() => copyAddress(suggestion.walletAddress)}
+                        className="text-neutral-400 hover:text-white p-1 transition-colors"
+                        title="Copy Wallet Address"
+                      >
+                        {copiedAddress === suggestion.walletAddress ? (
+                          <Check size={12} className="text-emerald-400" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {alreadyFriend ? (
+                      <span className="flex-1 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                        <Check size={13} /> Friend
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isAdding}
+                        onClick={() => handleAddFriend(suggestion)}
+                        className="flex-1 py-2 bg-[#FEEF8B] hover:bg-[#FEF08A] text-neutral-950 text-xs font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                      >
+                        {isAdding ? (
+                          <RefreshCw size={13} className="animate-spin" />
+                        ) : (
+                          <UserPlus size={13} />
+                        )}
+                        Add Friend
+                      </button>
+                    )}
+
+                    <Link
+                      href={`/wallet/transfer?to=${encodeURIComponent(suggestion.username)}`}
+                      className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1 active:scale-95 shrink-0"
+                    >
+                      <Send size={12} /> Pay
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── YOUR FRIENDS LIST ─── */}
+      <div className="space-y-4 pt-4 border-t border-white/10">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <span>Your Friends List</span>
@@ -304,27 +558,27 @@ export default function FriendsPage() {
           </h2>
           <button
             onClick={fetchFriends}
-            disabled={isLoading}
+            disabled={isLoadingFriends}
             className="text-xs text-neutral-400 hover:text-white flex items-center gap-1.5 transition-colors"
           >
-            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} /> Refresh
+            <RefreshCw size={12} className={isLoadingFriends ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
 
-        {isLoading ? (
+        {isLoadingFriends ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3].map((n) => (
               <div key={n} className="h-36 bg-white/[0.02] border border-white/5 rounded-3xl animate-pulse" />
             ))}
           </div>
         ) : friends.length === 0 ? (
-          <div className="text-center py-16 px-4 bg-[#0a0a0a] border border-white/10 rounded-3xl space-y-3">
+          <div className="text-center py-14 px-4 bg-[#0a0a0a] border border-white/10 rounded-3xl space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-neutral-500">
               <Users size={28} />
             </div>
             <h3 className="text-base font-bold text-white">No Friends Added Yet</h3>
             <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-              Search for friends by their @username or wallet address in the search box above to send money instantly with Priority #1.
+              Choose from the <span className="text-[#FEEF8B] font-semibold">Suggested Friends</span> section above or search by username to add your first friend for instant Priority #1 payments!
             </p>
           </div>
         ) : (
@@ -355,7 +609,9 @@ export default function FriendsPage() {
                 <div className="flex items-center justify-between p-2.5 bg-black rounded-xl border border-white/5 text-[11px] font-mono">
                   <span className="text-neutral-400 truncate max-w-[200px]">
                     {friend.walletAddress
-                      ? `${friend.walletAddress.substring(0, 8)}...${friend.walletAddress.substring(friend.walletAddress.length - 8)}`
+                      ? `${friend.walletAddress.substring(0, 8)}...${friend.walletAddress.substring(
+                          friend.walletAddress.length - 8
+                        )}`
                       : 'Address pending'}
                   </span>
                   {friend.walletAddress && (
