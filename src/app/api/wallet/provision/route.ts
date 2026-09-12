@@ -62,11 +62,11 @@ export async function POST(request: Request) {
         walletVersion: walletVersion || '1.0',
         keyFingerprint: keyFingerprint || 'Verified',
         balances: {
-          HSCT: 100000,
-          USD: 1197.60,
+          HSCT: 0,
+          USD: 0,
           BTC: 0,
           ETH: 0,
-          lifetimeDeposited: 1197.60,
+          lifetimeDeposited: 0,
         },
       };
 

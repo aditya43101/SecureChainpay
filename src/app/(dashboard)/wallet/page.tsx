@@ -38,7 +38,7 @@ export default function WalletPage() {
       ? balances.HSCT
       : balances.USD && balances.USD > 0
       ? balances.USD * USD_TO_HSCT
-      : 100000
+      : 0
   );
 
   const ethBalance = Number(balances.ETH || 0);

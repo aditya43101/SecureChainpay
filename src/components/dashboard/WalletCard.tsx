@@ -16,7 +16,7 @@ export function WalletCard() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const currentHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
+  const currentHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 0));
   const cryptoHsct = (balances.ETH * prices.ETH + balances.BTC * prices.BTC) * USD_TO_HSCT;
   const lifetimeHsct = currentHsct + cryptoHsct;
   const spendableHsct = currentHsct;

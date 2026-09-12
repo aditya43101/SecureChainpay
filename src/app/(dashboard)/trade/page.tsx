@@ -190,7 +190,7 @@ function TradeContent() {
       ? balances.HSCT
       : balances.USD && balances.USD > 0
       ? balances.USD * USD_TO_HSCT
-      : 100000
+      : 0
   );
 
 
@@ -839,7 +839,7 @@ function TradeContent() {
                           ? balances.HSCT
                           : balances.USD && balances.USD > 0
                           ? balances.USD * USD_TO_HSCT
-                          : 100000
+                          : 0
                         ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
                         HSCT
                       </span>

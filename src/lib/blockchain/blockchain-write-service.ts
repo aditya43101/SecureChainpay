@@ -330,8 +330,8 @@ export class BlockchainWriteService {
         // Read Sender Wallet
         const senderWalletSnap = await transaction.get(senderWalletRef);
         let senderBalances = senderWalletSnap.exists
-          ? senderWalletSnap.data()?.balances || { HSCT: 100000, BTC: 0, ETH: 0 }
-          : { HSCT: 100000, BTC: 0, ETH: 0 };
+          ? senderWalletSnap.data()?.balances || { HSCT: 0, BTC: 0, ETH: 0 }
+          : { HSCT: 0, BTC: 0, ETH: 0 };
 
         const currentSenderBalance = Number(senderBalances[resolvedCurrency] ?? senderBalances.HSCT ?? 0);
 

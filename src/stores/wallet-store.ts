@@ -805,7 +805,7 @@ export const useWalletStore = create<WalletState>()(
                   const rawBalances = data.balances || {};
                   const hsctVal = Number(rawBalances.HSCT || 0);
                   const usdVal = Number(rawBalances.USD || 0);
-                  const resolvedHsct = hsctVal > 0 ? hsctVal : (usdVal > 0 ? usdVal * USD_TO_HSCT : 100000);
+                  const resolvedHsct = hsctVal > 0 ? hsctVal : (usdVal > 0 ? usdVal * USD_TO_HSCT : 0);
                   const resolvedUsd = usdVal > 0 ? usdVal : (resolvedHsct / USD_TO_HSCT);
                   return {
                     HSCT: resolvedHsct,
@@ -944,7 +944,7 @@ export const useWalletStore = create<WalletState>()(
               algorithm: 'ECDSA/secp256k1',
               walletVersion: '1.0',
               keyFingerprint: fingerprint,
-              balances: { HSCT: 100000, USD: 1197.60, BTC: 0, ETH: 0, lifetimeDeposited: 1197.60 },
+              balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 },
             };
 
             // Pre-verify before persisting
@@ -1187,7 +1187,7 @@ export const useWalletStore = create<WalletState>()(
         // 2. Balance Check
         const currentBalance = Number(
           (state.balances as any)[currency] ??
-          (state.balances.HSCT || (state.balances.USD || 0) * USD_TO_HSCT || 100000)
+          (state.balances.HSCT || (state.balances.USD || 0) * USD_TO_HSCT || 0)
         );
         if (currentBalance < amount) {
           throw new Error(`Insufficient balance. You have ${currentBalance.toLocaleString()} ${currency}.`);

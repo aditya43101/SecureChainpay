@@ -27,7 +27,7 @@ export default function AddMoneyPage() {
     return () => unsubscribe();
   }, []);
 
-  const availableHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000));
+  const availableHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 0));
 
   const handleAction = async () => {
     if (!amount || Number(amount) <= 0) return;

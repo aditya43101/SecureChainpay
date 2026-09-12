@@ -153,7 +153,7 @@ export default function TransferPage() {
   const availableBalanceHsct = Number(
     (balances.HSCT && balances.HSCT > 0)
       ? balances.HSCT
-      : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 100000)
+      : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 0)
   );
   const numericAmount = Number(amount || 0);
 
