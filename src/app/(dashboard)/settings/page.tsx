@@ -367,65 +367,150 @@ export default function SettingsPage() {
           {/* TAB 3: WALLET */}
           {activeTab === 'wallet' && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="pb-4 border-b border-white/10">
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Wallet Configuration</h2>
-                <p className="text-xs sm:text-sm text-neutral-400">
-                  Public address and cryptographic verification identifiers.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white">Wallet Identity</h2>
+                  <p className="text-xs sm:text-sm text-neutral-400">
+                    Your non-custodial public credentials — safe to share.
+                  </p>
+                </div>
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 w-fit border ${
+                  address
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${address ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  {address ? 'Wallet Active' : 'Wallet Initializing'}
+                </span>
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                    Wallet Public Address
-                  </label>
-                  <div className="flex items-center bg-black border border-white/10 rounded-xl overflow-hidden p-1">
-                    <input
-                      type="text"
-                      readOnly
-                      value={address || '0x...'}
-                      className="px-3 py-2 bg-transparent text-xs sm:text-sm font-mono text-white flex-1 focus:outline-none truncate"
-                    />
-                    <button
-                      onClick={() => address && copyToClipboard('addr', address)}
-                      className="px-3 py-2 bg-brand-primary text-neutral-950 font-bold rounded-lg text-xs flex items-center gap-1.5 hover:bg-brand-pale min-h-[38px]"
-                    >
-                      {copiedKey === 'addr' ? <Check size={14} /> : <Copy size={14} />}
-                      {copiedKey === 'addr' ? 'Copied' : 'Copy'}
-                    </button>
+              <div className="space-y-5">
+
+                {/* ── Wallet Address Card ── */}
+                <div className="p-5 bg-[#121212] border border-brand-primary/20 rounded-2xl space-y-3 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-2xl pointer-events-none" />
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-xl bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center">
+                      <Wallet size={16} className="text-brand-primary" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider">Wallet Address</span>
+                      <p className="text-[10px] text-neutral-500">Your public on-chain identifier — safe to share for receiving payments</p>
+                    </div>
                   </div>
+
+                  {address ? (
+                    <>
+                      {/* Full address scrollable box */}
+                      <div className="bg-black border border-white/10 rounded-xl p-3 overflow-x-auto">
+                        <p className="font-mono text-sm text-brand-primary whitespace-nowrap tracking-wide select-all">
+                          {address}
+                        </p>
+                      </div>
+                      {/* Short preview + copy button */}
+                      <div className="flex items-center gap-2">
+                        <span className="flex-1 font-mono text-xs text-neutral-400 bg-white/5 border border-white/5 px-3 py-2 rounded-lg truncate">
+                          {address.substring(0, 10)}...{address.substring(address.length - 8)}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard('addr', address)}
+                          className="px-4 py-2 bg-brand-primary hover:bg-brand-pale text-neutral-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 min-h-[38px] shrink-0"
+                        >
+                          {copiedKey === 'addr' ? <Check size={13} /> : <Copy size={13} />}
+                          {copiedKey === 'addr' ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-black border border-white/10 rounded-xl p-4 text-center text-xs text-neutral-500 animate-pulse">
+                      Generating wallet address...
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                    Public Key
-                  </label>
-                  <div className="flex items-center bg-black border border-white/10 rounded-xl overflow-hidden p-1">
-                    <input
-                      type="text"
-                      readOnly
-                      value={publicKey || address || '0x...'}
-                      className="px-3 py-2 bg-transparent text-xs sm:text-sm font-mono text-white flex-1 focus:outline-none truncate"
-                    />
-                    <button
-                      onClick={() => (publicKey || address) && copyToClipboard('pubkey', publicKey || address || '')}
-                      className="px-3 py-2 bg-white/10 hover:bg-white/15 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 min-h-[38px]"
-                    >
-                      {copiedKey === 'pubkey' ? <Check size={14} /> : <Copy size={14} />}
-                      {copiedKey === 'pubkey' ? 'Copied' : 'Copy'}
-                    </button>
+                {/* ── Public Key Card ── */}
+                <div className="p-5 bg-[#121212] border border-purple-500/20 rounded-2xl space-y-3 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                      <Key size={16} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold text-white uppercase tracking-wider">Public Key</span>
+                      <p className="text-[10px] text-neutral-500">ECDSA/secp256k1 — used to verify your transaction signatures</p>
+                    </div>
                   </div>
+
+                  {(publicKey || address) ? (
+                    <>
+                      {/* Full public key scrollable box */}
+                      <div className="bg-black border border-white/10 rounded-xl p-3 overflow-x-auto max-h-24 overflow-y-auto">
+                        <p className="font-mono text-xs text-purple-300 whitespace-pre-wrap break-all select-all leading-relaxed">
+                          {publicKey || address}
+                        </p>
+                      </div>
+                      {/* Short preview + copy button */}
+                      <div className="flex items-center gap-2">
+                        <span className="flex-1 font-mono text-xs text-neutral-400 bg-white/5 border border-white/5 px-3 py-2 rounded-lg truncate">
+                          {(publicKey || address || '').substring(0, 14)}...{(publicKey || address || '').substring((publicKey || address || '').length - 8)}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard('pubkey', publicKey || address || '')}
+                          className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-300 font-extrabold rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 min-h-[38px] shrink-0"
+                        >
+                          {copiedKey === 'pubkey' ? <Check size={13} /> : <Copy size={13} />}
+                          {copiedKey === 'pubkey' ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-black border border-white/10 rounded-xl p-4 text-center text-xs text-neutral-500 animate-pulse">
+                      Generating key pair...
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Key Metadata Grid ── */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3.5 bg-[#121212] border border-white/10 rounded-xl space-y-1">
+                    <span className="text-neutral-500 uppercase font-semibold text-[10px] block">Algorithm</span>
+                    <span className="font-mono font-bold text-white text-[11px]">{algorithm || 'ECDSA/secp256k1'}</span>
+                  </div>
+                  <div className="p-3.5 bg-[#121212] border border-white/10 rounded-xl space-y-1">
+                    <span className="text-neutral-500 uppercase font-semibold text-[10px] block">Key Version</span>
+                    <span className="font-mono font-bold text-white text-[11px]">v{walletVersion || '1.0'}</span>
+                  </div>
+                  <div className="p-3.5 bg-[#121212] border border-white/10 rounded-xl space-y-1">
+                    <span className="text-neutral-500 uppercase font-semibold text-[10px] block">Fingerprint</span>
+                    <span className="font-mono font-bold text-brand-primary text-[11px] truncate block">{keyFingerprint ? `${keyFingerprint.substring(0, 12)}...` : 'Verified'}</span>
+                  </div>
+                  {keyGeneratedAt && (
+                    <div className="p-3.5 bg-[#121212] border border-white/10 rounded-xl space-y-1 col-span-2 sm:col-span-3">
+                      <span className="text-neutral-500 uppercase font-semibold text-[10px] block">Key Generated</span>
+                      <span className="font-mono font-bold text-neutral-300 text-[11px]">
+                        {new Date(keyGeneratedAt).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Security Note ── */}
+                <div className="flex items-start gap-3 p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-xl text-xs text-neutral-400">
+                  <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <p>
+                    Your <span className="text-white font-semibold">private key is never shown here</span> — it stays AES-256-GCM encrypted inside your secure vault and is only accessed in-memory during transaction signing.
+                  </p>
                 </div>
 
                 {identityStatus === 'error' && (
                   <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs flex items-center justify-between gap-3">
                     <span className="text-amber-200">
-                      Wallet cloud verification notice: {initializationErrorMessage || 'Local initialization only'}
+                      Wallet cloud verification: {initializationErrorMessage || 'Local initialization only'}
                     </span>
                     <button
                       onClick={retryWalletInitialization}
                       disabled={isRetryingWallet}
-                      className="px-3 py-1.5 bg-amber-500 text-neutral-950 font-bold rounded-lg"
+                      className="px-3 py-1.5 bg-amber-500 text-neutral-950 font-bold rounded-lg shrink-0"
                     >
                       {isRetryingWallet ? 'Retrying...' : 'Retry'}
                     </button>
