@@ -227,7 +227,7 @@ export async function reconcileTransaction(
             reconciliationStatus: 'MATCHED',
             blockchainTransactionHash: anchorRes.blockchainTransactionHash,
             blockHash: anchorRes.blockHash,
-            blockNumber: anchorRes.blockNumber,
+            onChainBlockNumber: anchorRes.blockNumber,
             chainId: anchorRes.chainId,
             contractAddress: anchorRes.contractAddress,
             confirmedAt: new Date().toISOString(),
