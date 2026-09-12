@@ -21,27 +21,27 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="p-4 border-t border-white/5">
+    <div className="p-3.5 border-t border-white/5">
       <div 
         onClick={() => router.push('/settings')}
         title="View Profile Settings"
-        className="flex items-center gap-3 px-3 py-3 rounded-xl bg-white/5 border border-white/10 mb-3 cursor-pointer hover:bg-emerald-500/10 hover:border-emerald-500/30 transition-all duration-200 group"
+        className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white/[0.03] border border-white/10 mb-2 cursor-pointer hover:bg-white/[0.07] hover:border-[#FEEF8B]/30 transition-all duration-200 group"
       >
-        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 p-[2px] group-hover:scale-105 transition-transform">
-          <div className="w-full h-full bg-neutral-900 rounded-full border-2 border-transparent flex items-center justify-center">
-            <UserIcon size={16} className="text-emerald-400" />
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#FEEF8B] to-[#F5C542] p-[1.5px] group-hover:scale-105 transition-transform flex-shrink-0 shadow-[0_0_12px_rgba(254,239,139,0.2)]">
+          <div className="w-full h-full bg-[#0a0a0a] rounded-[10px] flex items-center justify-center text-[#FEEF8B] font-bold text-xs">
+            {displayUsername.charAt(0).toUpperCase()}
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white truncate group-hover:text-emerald-400 transition-colors">{displayUsername}</p>
-          <p className="text-xs text-neutral-500 group-hover:text-emerald-400/80 transition-colors">Profile Settings →</p>
+          <p className="text-sm font-semibold text-white truncate group-hover:text-[#FEEF8B] transition-colors">{displayUsername}</p>
+          <p className="text-[11px] text-neutral-400 group-hover:text-neutral-300 transition-colors">Non-custodial • Settings →</p>
         </div>
       </div>
       <button 
         onClick={handleLogout}
-        className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-neutral-400 hover:text-red-400 transition-colors w-full rounded-lg hover:bg-red-500/10"
+        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-rose-400 transition-colors w-full rounded-xl hover:bg-rose-500/10 min-h-[38px]"
       >
-        <LogOut size={16} />
+        <LogOut size={15} />
         Log out
       </button>
     </div>

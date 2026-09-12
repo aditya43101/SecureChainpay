@@ -1,38 +1,75 @@
-import { Send, Download, RefreshCcw, Database } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, RefreshCcw, Bot } from 'lucide-react';
 import Link from 'next/link';
 
 export function QuickActions() {
   const actions = [
-    { name: 'Send', href: '/wallet/transfer', icon: <Send size={24} />, color: 'from-emerald-400 to-teal-500', shadow: 'shadow-emerald-500/20' },
-    { name: 'Receive', href: '/wallet/receive', icon: <Download size={24} />, color: 'from-blue-400 to-cyan-500', shadow: 'shadow-blue-500/20' },
-    { name: 'Swap', href: '/trade', icon: <RefreshCcw size={24} />, color: 'from-purple-400 to-pink-500', shadow: 'shadow-purple-500/20' },
-    { name: 'Explorer', href: '/explorer', icon: <Database size={24} />, color: 'from-orange-400 to-rose-500', shadow: 'shadow-orange-500/20' },
+    { 
+      name: 'Send', 
+      desc: 'Instant transfer',
+      href: '/wallet/transfer', 
+      icon: <ArrowUpRight size={22} />, 
+      bg: 'bg-[#FEEF8B] text-black',
+      shadow: 'shadow-[0_0_18px_rgba(254,239,139,0.3)]',
+      border: 'border-[#FEEF8B]/40',
+      badge: '0% Gas'
+    },
+    { 
+      name: 'Receive', 
+      desc: 'QR & Address',
+      href: '/wallet/receive', 
+      icon: <ArrowDownLeft size={22} />, 
+      bg: 'bg-white/10 text-white group-hover:bg-white/15',
+      shadow: 'shadow-none',
+      border: 'border-white/10',
+      badge: 'Instant'
+    },
+    { 
+      name: 'Trade', 
+      desc: 'BTC & ETH pairs',
+      href: '/trade', 
+      icon: <RefreshCcw size={20} />, 
+      bg: 'bg-white/10 text-white group-hover:bg-white/15',
+      shadow: 'shadow-none',
+      border: 'border-white/10',
+      badge: 'Live'
+    },
+    { 
+      name: 'Copilot', 
+      desc: 'AI Assistant',
+      href: '/copilot', 
+      icon: <Bot size={22} />, 
+      bg: 'bg-white/10 text-[#FEEF8B] group-hover:bg-[#FEEF8B]/10',
+      shadow: 'shadow-none',
+      border: 'border-[#FEEF8B]/20',
+      badge: 'Smart'
+    },
   ];
 
   return (
-    <div className="bg-neutral-900/40 border border-white/5 rounded-[2rem] p-6 sm:p-8 h-full flex flex-col justify-between backdrop-blur-xl shadow-xl">
-      <div className="flex items-center justify-between mb-8">
-        <h3 className="text-xl font-bold text-white tracking-tight">Quick Actions</h3>
+    <div className="bg-[#0a0a0a] border border-white/5 rounded-3xl p-6 sm:p-7 h-full flex flex-col justify-between shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">Quick Actions</h3>
+        <span className="text-[11px] font-semibold text-neutral-400 bg-white/[0.04] px-2.5 py-1 rounded-full border border-white/5">
+          Fast Access
+        </span>
       </div>
       
-      <div className="grid grid-cols-2 gap-4 flex-1">
+      <div className="grid grid-cols-2 gap-3 sm:gap-3.5 flex-1">
         {actions.map((action) => (
           <Link 
             key={action.name}
             href={action.href}
-            className="flex flex-col items-center justify-center gap-4 p-5 rounded-3xl bg-neutral-950/50 border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-300 group relative overflow-hidden"
+            className="flex flex-col items-center justify-center text-center p-3.5 sm:p-4 rounded-2xl bg-[#121212] border border-white/5 hover:border-[#FEEF8B]/30 hover:bg-[#1a1a1a] transition-all duration-200 group min-h-[90px]"
           >
-            {/* Hover Glow Effect */}
-            <div className={`absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-            
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-br ${action.color} shadow-lg ${action.shadow} group-hover:scale-110 transition-transform duration-300 ease-out z-10`}>
-              <div className="text-white drop-shadow-md">
-                {action.icon}
-              </div>
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${action.bg} ${action.shadow} ${action.border} border transition-all duration-200 group-hover:scale-105 mb-2`}>
+              {action.icon}
             </div>
             
-            <span className="text-sm font-semibold text-neutral-300 group-hover:text-white transition-colors z-10">
+            <span className="text-xs sm:text-sm font-bold text-white group-hover:text-[#FEEF8B] transition-colors leading-tight">
               {action.name}
+            </span>
+            <span className="text-[10px] text-neutral-400 font-medium mt-0.5 hidden sm:block">
+              {action.desc}
             </span>
           </Link>
         ))}

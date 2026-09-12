@@ -3,7 +3,7 @@ import React from 'react';
 const stats = [
   { name: 'Total Users', value: '12,345', change: '+12%', changeType: 'positive' },
   { name: 'Active Wallets', value: '8,234', change: '+5.4%', changeType: 'positive' },
-  { name: 'Total Volume', value: '$45.2M', change: '+23%', changeType: 'positive' },
+  { name: 'Total Volume', value: '45.2M HSCT', change: '+23%', changeType: 'positive' },
   { name: 'Failed TXs', value: '23', change: '-2%', changeType: 'negative' },
 ];
 

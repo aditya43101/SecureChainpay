@@ -39,8 +39,8 @@ const scheduledPayments = [
 
 export default function ScheduledPayments() {
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+    <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 via-brand-pale/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
       
       <div className="flex justify-between items-center mb-6 relative z-10">
         <div>
@@ -96,7 +96,7 @@ export default function ScheduledPayments() {
         ))}
       </div>
       
-      <button className="w-full mt-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-500/25 relative z-10 flex items-center justify-center gap-2">
+      <button className="w-full mt-6 py-3 bg-brand-primary hover:bg-brand-pale text-black rounded-xl font-extrabold transition-all shadow-lg shadow-brand-primary/20 relative z-10 flex items-center justify-center gap-2">
         <Calendar className="w-4 h-4" />
         Schedule New Payment
       </button>

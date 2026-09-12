@@ -28,14 +28,14 @@ export default function AuditLogsPage() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex gap-4">
+      <div className="bg-white dark:bg-[#0a0a0a] rounded-xl shadow-sm border border-slate-200 dark:border-white/10 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-white/10 flex gap-4">
           <input 
             type="text" 
             placeholder="Search by ID, User, or Action..." 
-            className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 bg-slate-50 dark:bg-black border border-slate-200 dark:border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary"
           />
-          <select className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <select className="bg-slate-50 dark:bg-black border border-slate-200 dark:border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary">
             <option>All Statuses</option>
             <option>Success</option>
             <option>Warning</option>
@@ -43,8 +43,8 @@ export default function AuditLogsPage() {
           </select>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-medium border-b border-slate-200 dark:border-slate-700">
+          <table className="w-full text-left text-sm text-slate-600 dark:text-neutral-300">
+            <thead className="bg-slate-50 dark:bg-black text-slate-500 dark:text-neutral-400 font-medium border-b border-slate-200 dark:border-white/10">
               <tr>
                 <th className="px-6 py-4">Log ID</th>
                 <th className="px-6 py-4">User / Actor</th>
@@ -54,14 +54,14 @@ export default function AuditLogsPage() {
                 <th className="px-6 py-4">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+            <tbody className="divide-y divide-slate-200 dark:divide-white/5">
               {MOCK_AUDIT_LOGS.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-[#121212] transition-colors">
                   <td className="px-6 py-4 font-mono text-xs">{log.id}</td>
                   <td className="px-6 py-4 font-medium">{log.user}</td>
                   <td className="px-6 py-4">{log.action}</td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{log.ip}</td>
-                  <td className="px-6 py-4 text-slate-500">{new Date(log.timestamp).toLocaleString()}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500 dark:text-neutral-500">{log.ip}</td>
+                  <td className="px-6 py-4 text-slate-500 dark:text-neutral-400">{new Date(log.timestamp).toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span className={"px-2.5 py-1 rounded-full text-xs font-medium " + getStatusClass(log.status)}>
                       {log.status}
@@ -72,13 +72,13 @@ export default function AuditLogsPage() {
             </tbody>
           </table>
         </div>
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-500">
+        <div className="p-4 border-t border-slate-200 dark:border-white/10 flex justify-between items-center text-sm text-slate-500 dark:text-neutral-400">
           <span>Showing 1 to 5 of 1,245 entries</span>
           <div className="flex gap-2">
-            <button className="px-3 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50" disabled>Previous</button>
-            <button className="px-3 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800">1</button>
-            <button className="px-3 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">2</button>
-            <button className="px-3 py-1 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800">Next</button>
+            <button className="px-3 py-1 border border-slate-200 dark:border-white/10 rounded hover:bg-slate-50 dark:hover:bg-[#121212] disabled:opacity-50" disabled>Previous</button>
+            <button className="px-3 py-1 border border-slate-200 dark:border-brand-primary rounded bg-brand-primary text-black font-bold">1</button>
+            <button className="px-3 py-1 border border-slate-200 dark:border-white/10 rounded hover:bg-slate-50 dark:hover:bg-[#121212]">2</button>
+            <button className="px-3 py-1 border border-slate-200 dark:border-white/10 rounded hover:bg-slate-50 dark:hover:bg-[#121212]">Next</button>
           </div>
         </div>
       </div>

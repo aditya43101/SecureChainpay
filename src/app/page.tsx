@@ -120,7 +120,7 @@ export default function LandingPage() {
           {/* Stats Banner to Fill Space */}
           <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl mt-20 border-t border-b border-brand-gold/20 py-8 glass-panel rounded-3xl">
             <div className="flex flex-col items-center">
-              <span className="text-4xl font-black text-white mb-2">$500M+</span>
+              <span className="text-4xl font-black text-white mb-2">500M+ HSCT</span>
               <span className="text-sm text-brand-gold tracking-widest uppercase">Processed Volume</span>
             </div>
             <div className="flex flex-col items-center border-y md:border-y-0 md:border-x border-brand-gold/20 py-4 md:py-0">
@@ -283,8 +283,8 @@ export default function LandingPage() {
                     {'  '}network: <span className="text-green-400">'polygon-mainnet'</span><br/>
                     {'}'});<br/><br/>
                     <span className="text-purple-400">const</span> session = <span className="text-purple-400">await</span> pay.checkout.<span className="text-blue-300">create</span>({'{'}<br/>
-                    {'  '}amount: <span className="text-orange-400">100.00</span>,<br/>
-                    {'  '}currency: <span className="text-green-400">'USD'</span>,<br/>
+                    {'  '}amount: <span className="text-orange-400">1000.00</span>,<br/>
+                    {'  '}currency: <span className="text-green-400">'HSCT'</span>,<br/>
                     {'  '}successUrl: <span className="text-green-400">'https://your-app.com/success'</span><br/>
                     {'}'});<br/>
                   </pre>

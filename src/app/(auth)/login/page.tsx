@@ -445,21 +445,21 @@ function LoginContent() {
     <div className="w-full relative animate-in fade-in zoom-in-95 duration-700 max-w-md mx-auto px-2 sm:px-0">
       
       {/* Premium Glass Card */}
-      <div className="backdrop-blur-2xl bg-white/[0.03] border border-white/10 p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_12px_40px_0_rgba(0,0,0,0.5)] relative overflow-hidden">
+      <div className="backdrop-blur-2xl bg-[#0a0a0a] border border-white/10 p-6 sm:p-8 md:p-10 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden">
         
         {/* Subtle inner glow */}
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-brand-primary/40 to-transparent" />
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-primary/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="text-center mb-8 space-y-3 relative z-10">
           <div className="flex justify-center mb-3">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-500 shadow-[0_0_30px_rgba(52,211,153,0.3)] flex items-center justify-center transform hover:scale-105 transition-transform duration-500">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-neutral-950">
+            <div className="w-16 h-16 rounded-2xl bg-brand-primary/15 border-2 border-brand-primary/40 shadow-[0_0_25px_rgba(254,239,139,0.2)] flex items-center justify-center transform hover:scale-105 transition-transform duration-500">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-primary">
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
               </svg>
             </div>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/70">
+          <h1 className="text-3xl font-black tracking-tight text-white">
             SecureChain Pay
           </h1>
           <p className="text-xs text-neutral-400 font-medium">
@@ -473,7 +473,7 @@ function LoginContent() {
             <div className="text-center mb-4">
               <h2 className="text-lg font-bold text-white mb-1">Verify Phone Number</h2>
               <p className="text-neutral-400 text-xs">
-                We sent a 6-digit verification code to <span className="font-semibold text-emerald-400">{formatToE164(phone)}</span>
+                We sent a 6-digit verification code to <span className="font-semibold text-brand-primary">{formatToE164(phone)}</span>
               </p>
             </div>
 
@@ -492,7 +492,7 @@ function LoginContent() {
                 placeholder="000000"
                 autoFocus
                 maxLength={6}
-                className="w-full text-center tracking-[0.6em] font-mono px-4 py-4 bg-[#121212] border border-neutral-800 rounded-2xl text-white placeholder-neutral-600 focus:outline-none focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 transition-all text-2xl font-bold"
+                className="w-full text-center tracking-[0.6em] font-mono px-4 py-4 bg-black border border-neutral-800 rounded-2xl text-white placeholder-neutral-600 focus:outline-none focus:border-brand-primary/60 focus:ring-2 focus:ring-brand-primary/20 transition-all text-2xl font-bold"
               />
               {error && (
                 <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3.5 py-3 rounded-xl mt-2 text-center flex items-center justify-center gap-2 animate-in fade-in">
@@ -505,7 +505,7 @@ function LoginContent() {
             <button
               type="submit"
               disabled={isLoading || otp.length < 6}
-              className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 disabled:opacity-40 text-neutral-950 font-bold text-base rounded-2xl transition-all duration-200 shadow-[0_0_25px_rgba(52,211,153,0.25)] disabled:cursor-not-allowed mt-2"
+              className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-brand-primary hover:bg-brand-pale disabled:opacity-40 text-neutral-950 font-extrabold text-base rounded-2xl transition-all duration-200 shadow-md disabled:cursor-not-allowed mt-2 min-h-[48px]"
             >
               {isLoading ? (
                 <span className="w-5 h-5 border-2 border-neutral-950/30 border-t-neutral-950 rounded-full animate-spin" />
@@ -518,7 +518,7 @@ function LoginContent() {
               <button
                 type="button"
                 onClick={handleChangePhone}
-                className="text-neutral-400 hover:text-white transition-colors"
+                className="text-neutral-400 hover:text-white transition-colors min-h-[40px]"
               >
                 ← Change number
               </button>
@@ -527,7 +527,7 @@ function LoginContent() {
                 type="button"
                 onClick={handleResendOtp}
                 disabled={resendCooldown > 0 || isLoading}
-                className="text-emerald-400 hover:text-emerald-300 disabled:text-neutral-600 disabled:cursor-not-allowed transition-colors"
+                className="text-brand-primary hover:text-brand-pale disabled:text-neutral-600 disabled:cursor-not-allowed transition-colors min-h-[40px]"
               >
                 {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Code'}
               </button>
@@ -537,7 +537,7 @@ function LoginContent() {
           /* ============ LOGIN / REGISTER VIEW ============ */
           <>
             {/* Mode Toggle */}
-            <div className="flex p-1 bg-black/50 rounded-2xl mb-6 relative z-10 border border-white/5">
+            <div className="flex p-1 bg-black rounded-2xl mb-6 relative z-10 border border-white/10">
               <button 
                 type="button"
                 onClick={() => { setMode('login'); setError(null); setSuccess(null); }}
@@ -573,9 +573,9 @@ function LoginContent() {
                     onChange={handleUsernameChange}
                     placeholder="e.g. aditya_singh"
                     maxLength={20}
-                    className={`w-full px-4 py-3.5 bg-[#121212] border ${
+                    className={`w-full px-4 py-3.5 bg-black border ${
                       usernameError ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/30' : 
-                      usernameValid ? 'border-emerald-500/50 focus:border-emerald-500 focus:ring-emerald-500/30' :
+                      usernameValid ? 'border-brand-primary/50 focus:border-brand-primary focus:ring-brand-primary/30' :
                       'border-neutral-800 focus:border-neutral-600 focus:ring-neutral-600'
                     } rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:ring-1 transition-all text-sm`}
                   />
@@ -585,7 +585,7 @@ function LoginContent() {
                     </p>
                   )}
                   {usernameValid && username.length >= 3 && !usernameError && (
-                    <p className="text-emerald-400 text-xs px-1 animate-in fade-in flex items-center gap-1 mt-1">
+                    <p className="text-brand-primary text-xs px-1 animate-in fade-in flex items-center gap-1 mt-1">
                       <CheckCircle size={12} /> Username is available
                     </p>
                   )}
@@ -600,7 +600,7 @@ function LoginContent() {
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setError(null); }}
                   placeholder="+91 98765 43210"
-                  className="w-full px-4 py-3.5 bg-[#121212] border border-neutral-800 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all text-sm font-mono"
+                  className="w-full px-4 py-3.5 bg-black border border-neutral-800 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-brand-primary/50 focus:ring-1 focus:ring-brand-primary/50 transition-all text-sm font-mono"
                 />
               </div>
 
@@ -627,9 +627,9 @@ function LoginContent() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`w-full flex items-center justify-center gap-2 py-4 px-6 font-bold text-base rounded-2xl transition-all duration-200 shadow-sm ${
+                className={`w-full flex items-center justify-center gap-2 py-4 px-6 font-extrabold text-base rounded-2xl transition-all duration-200 shadow-sm min-h-[48px] ${
                   isPhoneFormValid() 
-                    ? 'bg-white hover:bg-neutral-200 text-neutral-950 cursor-pointer shadow-[0_0_20px_rgba(255,255,255,0.15)]' 
+                    ? 'bg-brand-primary hover:bg-brand-pale text-neutral-950 cursor-pointer shadow-md' 
                     : 'bg-white/10 text-white/40 cursor-pointer hover:bg-white/15'
                 } disabled:cursor-wait`}
               >
@@ -650,7 +650,7 @@ function LoginContent() {
                 <span className="w-full border-t border-white/10" />
               </div>
               <div className="relative flex justify-center text-xs uppercase tracking-wider">
-                <span className="bg-[#0c0c0c] px-3 text-neutral-500 font-medium">Or continue with</span>
+                <span className="bg-[#0a0a0a] px-3 text-neutral-500 font-medium">Or continue with</span>
               </div>
             </div>
 
@@ -659,7 +659,7 @@ function LoginContent() {
               type="button"
               onClick={handleGoogleSignIn}
               disabled={isLoading}
-              className="w-full relative z-10 flex items-center justify-center gap-3 py-3.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium rounded-2xl transition-all duration-200 disabled:cursor-wait hover:border-white/20"
+              className="w-full relative z-10 flex items-center justify-center gap-3 py-3.5 px-6 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-medium rounded-2xl transition-all duration-200 disabled:cursor-wait hover:border-white/20 min-h-[48px]"
             >
               {isLoading ? (
                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -682,7 +682,7 @@ function LoginContent() {
                 type="button"
                 onClick={handleDevBypass}
                 disabled={isLoading}
-                className="w-full mt-4 relative z-10 flex items-center justify-center gap-2 py-3 px-6 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 font-semibold rounded-2xl transition-all duration-200 text-xs"
+                className="w-full mt-4 relative z-10 flex items-center justify-center gap-2 py-3 px-6 bg-brand-primary/10 border border-brand-primary/20 hover:bg-brand-primary/20 text-brand-primary font-bold rounded-2xl transition-all duration-200 text-xs min-h-[44px]"
               >
                 <Sparkles size={14} /> Dev Mode Quick Login
               </button>
@@ -696,7 +696,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center items-center h-screen bg-[#050505]"><span className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" /></div>}>
+    <Suspense fallback={<div className="flex justify-center items-center h-screen bg-black"><span className="w-8 h-8 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" /></div>}>
       <LoginContent />
     </Suspense>
   );

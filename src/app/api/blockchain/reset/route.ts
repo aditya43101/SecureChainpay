@@ -1,14 +1,36 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase/admin';
-import { generateHash } from '@/stores/wallet-store';
+import { requireAdminUser } from '@/lib/auth/require-admin-user';
+import { SecurityAuditLogger } from '@/lib/security/audit-logger';
+import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
+    // 1. Enforce Admin Authorization
+    let adminUser: any;
+    try {
+      adminUser = await requireAdminUser(request);
+    } catch (authErr: any) {
+      await SecurityAuditLogger.log({
+        type: 'PRIVILEGE_ESCALATION_ATTEMPT',
+        userId: 'UNKNOWN',
+        resource: '/api/blockchain/reset',
+        action: 'resetBlockchain',
+        result: 'DENIED',
+        severity: 'CRITICAL',
+        metadata: { error: authErr.message },
+      });
+      return NextResponse.json(
+        { success: false, error: authErr.message || 'Unauthorized: Admin access required' },
+        { status: authErr.status || 403 }
+      );
+    }
+
     const adminDb = getAdminDb();
     
-    // 1. Delete existing global_blocks
+    // 2. Delete existing global_blocks
     const blocksSnap = await adminDb.collection('global_blocks').get();
     const batch = adminDb.batch();
     blocksSnap.forEach((doc) => {
@@ -16,9 +38,9 @@ export async function POST(request: Request) {
     });
     await batch.commit();
 
-    // 2. Initialize fresh global Genesis Block #0
+    // 3. Initialize fresh global Genesis Block #0 deterministically
     const genesisTimeISO = '1970-01-01T00:00:00.000Z';
-    const genesisHash = await generateHash('genesis:securechainpay:global:v1');
+    const genesisHash = await sha256Hex('genesis:securechainpay:global:v1');
 
     const genesisBlock = {
       id: 'GENESIS',
@@ -36,8 +58,8 @@ export async function POST(request: Request) {
       signature: 'Genesis Block - System Generated',
       type: 'genesis',
       amount: 0,
-      currency: 'USD',
-      asset: 'USD',
+      currency: 'HSCT',
+      asset: 'HSCT',
       status: 'CONFIRMED',
       date: genesisTimeISO,
       createdAt: genesisTimeISO,
@@ -59,6 +81,16 @@ export async function POST(request: Request) {
 
     await adminDb.collection('global_blocks').doc('GENESIS').set(genesisBlock);
     await adminDb.collection('global_chain_meta').doc('chain_state').set(chainState);
+
+    await SecurityAuditLogger.log({
+      type: 'ADMIN_BLOCKCHAIN_RESET',
+      userId: adminUser.uid,
+      resource: 'global_blocks',
+      action: 'reset',
+      result: 'COMMITTED',
+      severity: 'HIGH',
+      metadata: { initiatedBy: adminUser.uid },
+    });
 
     return NextResponse.json({
       success: true,

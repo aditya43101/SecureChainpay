@@ -49,21 +49,21 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+      <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 px-6 py-5 border-b border-slate-800 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+        <div className="bg-[#121212] px-6 py-5 border-b border-white/10 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-primary/10 border border-brand-primary/30 flex items-center justify-center text-brand-primary">
             <Shield className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               Enable Auto-Trading & All-Time Mode
-              <span className="px-2 py-0.5 text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 rounded-md">
+              <span className="px-2 py-0.5 text-xs font-semibold bg-brand-primary/20 text-brand-primary border border-brand-primary/40 rounded-md">
                 REAL EXECUTION GATE
               </span>
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-neutral-400">
               Confirm risk parameters and safety policy before activating automated execution.
             </p>
           </div>
@@ -73,34 +73,34 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Strategy & Model info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3.5 flex items-start gap-3">
-              <Cpu className="w-5 h-5 text-indigo-400 mt-0.5" />
+            <div className="bg-[#121212] border border-white/10 rounded-xl p-3.5 flex items-start gap-3">
+              <Cpu className="w-5 h-5 text-brand-primary mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-slate-400">Active Champion Model</div>
+                <div className="text-xs font-medium text-neutral-400">Active Champion Model</div>
                 <div className="text-sm font-semibold text-white">LOG_v1 (Scikit-Learn ML)</div>
-                <div className="text-[11px] text-slate-400">Directional Probability Engine</div>
+                <div className="text-[11px] text-neutral-400">Directional Probability Engine</div>
               </div>
             </div>
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3.5 flex items-start gap-3">
+            <div className="bg-[#121212] border border-white/10 rounded-xl p-3.5 flex items-start gap-3">
               <BarChart2 className="w-5 h-5 text-emerald-400 mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-slate-400">Validated Strategy</div>
+                <div className="text-xs font-medium text-neutral-400">Validated Strategy</div>
                 <div className="text-sm font-semibold text-white">HYBRID_v1 (Active Champion)</div>
-                <div className="text-[11px] text-slate-400">EMA Trend + RSI + MACD + ATR SL/TP</div>
+                <div className="text-[11px] text-neutral-400">EMA Trend + RSI + MACD + ATR SL/TP</div>
               </div>
             </div>
           </div>
 
           {/* Risk Settings Form */}
-          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="bg-black border border-white/10 rounded-xl p-4 space-y-4">
+            <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-brand-primary" />
               Execution Risk Parameters
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Risk Per Trade (%)</label>
+                <label className="text-xs text-neutral-400 mb-1 block">Risk Per Trade (%)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -108,12 +108,12 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                   max="5.0"
                   value={riskPerTrade}
                   onChange={e => setRiskPerTrade(parseFloat(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-brand-primary"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Max Daily Loss (%)</label>
+                <label className="text-xs text-neutral-400 mb-1 block">Max Daily Loss (%)</label>
                 <input
                   type="number"
                   step="0.5"
@@ -121,12 +121,12 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                   max="10.0"
                   value={maxDailyLoss}
                   onChange={e => setMaxDailyLoss(parseFloat(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-brand-primary"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">Max Exposure (%)</label>
+                <label className="text-xs text-neutral-400 mb-1 block">Max Exposure (%)</label>
                 <input
                   type="number"
                   step="1.0"
@@ -134,30 +134,30 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                   max="50.0"
                   value={maxPortfolioExposure}
                   onChange={e => setMaxPortfolioExposure(parseFloat(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-sm font-medium text-white focus:outline-none focus:border-brand-primary"
                 />
               </div>
             </div>
 
             {/* Allowed Assets */}
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Approved Trading Assets</label>
+              <label className="text-xs text-neutral-400 mb-1.5 block">Approved Trading Assets</label>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white">
+                <label className="flex items-center gap-2 cursor-pointer bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-xs font-medium text-white">
                   <input
                     type="checkbox"
                     checked={btcEnabled}
                     onChange={e => setBtcEnabled(e.target.checked)}
-                    className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                    className="rounded border-white/20 text-brand-primary focus:ring-0"
                   />
                   BTC / HSCT
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs font-medium text-white">
+                <label className="flex items-center gap-2 cursor-pointer bg-[#121212] border border-white/10 rounded-lg px-3 py-2 text-xs font-medium text-white">
                   <input
                     type="checkbox"
                     checked={ethEnabled}
                     onChange={e => setEthEnabled(e.target.checked)}
-                    className="rounded border-slate-700 text-cyan-500 focus:ring-0"
+                    className="rounded border-white/20 text-brand-primary focus:ring-0"
                   />
                   ETH / HSCT
                 </label>
@@ -165,10 +165,10 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
             </div>
 
             {/* All-Time Mode Toggle */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between pt-2 border-t border-white/10">
               <div>
                 <div className="text-sm font-semibold text-white">All-Time Mode</div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-neutral-400">
                   Continuously monitor markets & trade only when valid setups pass all safety gates.
                 </div>
               </div>
@@ -177,8 +177,8 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                 onClick={() => setAllTimeMode(!allTimeMode)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                   allTimeMode
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    ? 'bg-brand-primary text-black font-extrabold shadow-sm'
+                    : 'bg-[#1a1a1a] text-neutral-400 border border-white/10'
                 }`}
               >
                 {allTimeMode ? 'ALL-TIME ON' : 'ALL-TIME OFF'}
@@ -202,7 +202,7 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                 onChange={e => setConfirmRisk(e.target.checked)}
                 className="mt-0.5 rounded border-amber-500/40 text-amber-500 focus:ring-0"
               />
-              <span className="text-xs text-slate-300">
+              <span className="text-xs text-neutral-300">
                 I confirm the risk parameters ({riskPerTrade}% per trade, {maxDailyLoss}% max daily loss, {maxPortfolioExposure}% max portfolio exposure).
               </span>
             </label>
@@ -214,7 +214,7 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
                 onChange={e => setConfirmSafety(e.target.checked)}
                 className="mt-0.5 rounded border-amber-500/40 text-amber-500 focus:ring-0"
               />
-              <span className="text-xs text-slate-300">
+              <span className="text-xs text-neutral-300">
                 I understand that Auto-Trading can be paused at any time via Circuit Breaker or Emergency Stop.
               </span>
             </label>
@@ -222,11 +222,11 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
         </div>
 
         {/* Footer Actions */}
-        <div className="bg-slate-950 px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+        <div className="bg-black px-6 py-4 border-t border-white/10 flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+            className="px-4 py-2 text-xs font-semibold text-neutral-400 hover:text-white transition-colors"
           >
             Cancel
           </button>
@@ -234,7 +234,7 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
             type="button"
             disabled={!confirmRisk || !confirmSafety || isSubmitting || (!btcEnabled && !ethEnabled)}
             onClick={handleConfirm}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-brand-primary hover:bg-brand-pale text-black shadow-lg shadow-brand-primary/20 disabled:opacity-40 disabled:pointer-events-none transition-all flex items-center gap-2"
           >
             <CheckCircle2 className="w-4 h-4" />
             {isSubmitting ? 'ENABLING...' : 'CONFIRM & ENABLE AUTO-TRADING'}

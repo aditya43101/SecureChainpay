@@ -7,33 +7,22 @@ import {
   Zap,
   Shield,
   ShieldCheck,
-  ShieldAlert,
-  AlertTriangle,
   Clock,
   CheckCircle2,
-  XCircle,
-  ArrowRight,
-  RefreshCw,
   Sparkles,
-  DollarSign,
-  UserCheck,
-  Cpu,
   Lock,
-  ThumbsUp,
-  ThumbsDown,
-  Info,
   ChevronRight,
-  TrendingUp,
-  CreditCard,
-  Sliders,
-  ExternalLink,
   QrCode,
   Copy,
   Check,
   Upload,
   Camera,
-  Share2,
-  X,
+  ArrowRight,
+  CreditCard,
+  ExternalLink,
+  DollarSign,
+  User,
+  Info,
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { VerificationPopup, PaymentVerificationDetails } from '@/components/wallet/VerificationPopup';
@@ -59,19 +48,20 @@ interface ChatMessage {
 }
 
 export default function CopilotDashboard() {
-  const { address: userWalletAddress, transferFunds, initializeWallet } = useWalletStore();
+  const { address: userWalletAddress, transferFunds } = useWalletStore();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-1',
       sender: 'copilot',
-      text: "👋 Hello! I'm your **AI Payment Copilot**.\n\nI can help you **Send Money** (by username, wallet address, or QR), **Request Money** (creating payment QR codes and shareable links), evaluate settlement routing, and perform cryptographic security checks.\n\n*What would you like to do today?*",
+      text: "👋 Hello! I'm your **Payment Copilot**.\n\nI can help you prepare transactions, generate request links & QR codes, analyze routing fees, and guide you through secure blockchain verification.\n\n*What would you like to do today?*",
       intent: 'GENERAL_QUESTION',
       quickReplies: [
         'Send $100 to Rahul',
-        'Request ₹500 from Rahul',
-        'Scan QR screenshot',
-        'Check route latency',
+        'Request ₹500',
+        'Scan QR',
+        'Check wallet',
+        'Analyze payment',
       ],
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
@@ -81,8 +71,6 @@ export default function CopilotDashboard() {
   const [activeDraft, setActiveDraft] = useState<any>(null);
   const [draftCountdown, setDraftCountdown] = useState<number | null>(null);
   const [isConfirmingDraft, setIsConfirmingDraft] = useState(false);
-  const [selectedTimeline, setSelectedTimeline] = useState<any>(null);
-  const [telemetry, setTelemetry] = useState<any>(null);
 
   // Modal States
   const [isVerificationOpen, setIsVerificationOpen] = useState(false);
@@ -133,7 +121,6 @@ export default function CopilotDashboard() {
     return () => clearInterval(interval);
   }, [activeDraft?.expiresAt]);
 
-  // Fetch Payment Request from URL query parameter
   const fetchPaymentRequestByUrl = async (requestId: string) => {
     try {
       setIsProcessing(true);
@@ -213,7 +200,12 @@ export default function CopilotDashboard() {
         preflight: data.preflight,
         failureAnalysis: data.failureAnalysis,
         paymentAudit: data.paymentAudit,
-        quickReplies: data.quickReplies,
+        quickReplies: data.quickReplies || [
+          'Send money',
+          'Request money',
+          'Scan QR',
+          'Check wallet',
+        ],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -229,7 +221,7 @@ export default function CopilotDashboard() {
           id: `err-${Date.now()}`,
           sender: 'copilot',
           text: `⚠️ Could not process request: ${err.message || 'Connection timeout.'}`,
-          quickReplies: ['Retry', 'Check Route Status'],
+          quickReplies: ['Retry', 'Send money', 'Check wallet'],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -238,7 +230,6 @@ export default function CopilotDashboard() {
     }
   };
 
-  // Trigger Final Verification Popup for a draft or payment request
   const openVerificationForDraft = (draft: any) => {
     setVerificationDetails({
       recipientName: draft.recipientName || draft.recipient || 'Target Recipient',
@@ -246,7 +237,7 @@ export default function CopilotDashboard() {
       recipientType: (draft.recipient || '').startsWith('0x') ? 'EXTERNAL_WALLET' : 'INTERNAL_USER',
       amount: Number(draft.amount),
       asset: draft.currency || 'HSCT',
-      network: draft.preferredRoute === 'INTERNAL' ? 'SecureChain Hybrid Ledger' : 'Ethereum Mainnet',
+      network: draft.preferredRoute === 'INTERNAL' ? 'SecureChain PoA' : 'Ethereum Mainnet',
       memo: draft.description,
     });
     setIsVerificationOpen(true);
@@ -263,20 +254,18 @@ export default function CopilotDashboard() {
       recipientAddress: req.receiverWalletAddress || req.requestorWalletAddress || '0x0000000000000000000000000000000000000000',
       recipientType: 'INTERNAL_USER',
       amount: Number(req.amount),
-      asset: req.asset || req.currency || 'USD',
-      network: req.network || 'Ethereum Mainnet',
+      asset: req.asset === 'USD' || req.currency === 'USD' ? 'HSCT' : (req.asset || req.currency || 'HSCT'),
+      network: req.network || 'SecureChain Hybrid Ledger',
       memo: req.memo || req.note,
       requestId: req.requestId || req.id,
     });
     setIsVerificationOpen(true);
   };
 
-  // Mandatory Signing Handler called when user clicks [CONFIRM & SIGN] in VerificationPopup
   const handleExecutePaymentSigning = async (details: PaymentVerificationDetails) => {
     try {
       setIsConfirmingDraft(true);
 
-      // Perform transfer with decrypted private key signature
       const completedTx = await transferFunds({
         receiverAddress: details.recipientAddress,
         receiverDisplayName: details.recipientName,
@@ -285,7 +274,6 @@ export default function CopilotDashboard() {
         note: details.memo,
       });
 
-      // Update payment request status if paying a request
       if (details.requestId) {
         await fetch('/api/wallet/request-money', {
           method: 'PUT',
@@ -306,8 +294,8 @@ export default function CopilotDashboard() {
         {
           id: `conf-${Date.now()}`,
           sender: 'copilot',
-          text: `🎉 **Payment Confirmed & Signed!**\n\n• **Amount**: ${details.amount} **${details.asset}**\n• **Recipient**: ${details.recipientName}\n• **Wallet Address**: \`${details.recipientAddress}\`\n• **Block Number**: #${completedTx.blockNumber}\n• **Transaction Hash**: \`${completedTx.hash.substring(0, 16)}...\`\n\nCryptographic signature verified and anchored to the global blockchain.`,
-          quickReplies: ['Send Another Payment', 'Request Money', 'Check Balance'],
+          text: `🎉 **Payment Confirmed & Signed!**\n\n• **Amount**: ${details.amount} **${details.asset}**\n• **Recipient**: ${details.recipientName}\n• **Wallet Address**: \`${details.recipientAddress}\`\n• **Block Number**: #${completedTx.blockNumber}\n• **Transaction Hash**: \`${completedTx.hash.substring(0, 16)}...\`\n\nCryptographic signature verified and recorded in the blockchain ledger.`,
+          quickReplies: ['Send Another Payment', 'Request Money', 'Check wallet'],
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -319,7 +307,6 @@ export default function CopilotDashboard() {
     }
   };
 
-  // QR Image Screenshot Upload Handler
   const handleQRFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -355,7 +342,7 @@ export default function CopilotDashboard() {
       recipientType: recipient.recipientType,
       amount: recipient.amount || 10,
       asset: recipient.currency || 'HSCT',
-      network: 'SecureChain Hybrid Ledger',
+      network: 'SecureChain PoA',
     });
     setIsVerificationOpen(true);
   };
@@ -368,45 +355,44 @@ export default function CopilotDashboard() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 max-w-7xl mx-auto pb-28 md:pb-12 text-white">
+      {/* Top Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-emerald-400">
-              <Bot className="h-7 w-7 animate-pulse" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary">
+              <Bot className="h-6 w-6" />
             </span>
-            AI Payment Copilot
+            Payment Copilot
           </h1>
-          <p className="text-neutral-400 mt-1 text-sm">
-            Complete Two-Way Payment System: Send, Request, QR Scan, Mandatory Verification, & Blockchain Finality.
+          <p className="text-neutral-400 mt-1 text-xs sm:text-sm">
+            AI-powered fintech assistant for natural-language payments, QR transfers, and instant verification.
           </p>
         </div>
 
-        {/* Live System Badges & QR Button */}
-        <div className="flex items-center gap-3">
+        {/* Live Controls */}
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsQRScannerOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+            className="flex items-center gap-2 px-3.5 py-2 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary border border-brand-primary/20 rounded-xl text-xs font-bold transition-all min-h-[44px]"
           >
             <QrCode size={16} /> Scan Payment QR
           </button>
-
-          <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 px-3 py-2 rounded-xl text-xs font-medium text-neutral-300">
-            <Lock size={12} className="text-cyan-400" /> Key Signer Active
+          <div className="hidden sm:flex items-center gap-1.5 bg-[#121212] border border-white/10 px-3 py-2 rounded-xl text-xs font-medium text-neutral-300">
+            <Lock size={13} className="text-brand-primary" /> Key Signer Active
           </div>
         </div>
       </div>
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Chat Stream */}
-        <div className="lg:col-span-8 flex flex-col h-[720px] bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden backdrop-blur-md">
-          {/* Header */}
-          <div className="p-4 border-b border-neutral-800/80 bg-neutral-950/40 flex items-center justify-between">
+        {/* Left Column: Chat Area */}
+        <div className="lg:col-span-8 flex flex-col h-[680px] sm:h-[720px] bg-[#0a0a0a] border border-white/10 rounded-3xl overflow-hidden shadow-xl relative">
+          {/* Header Strip */}
+          <div className="p-3.5 sm:p-4 border-b border-white/10 bg-[#121212]/70 flex items-center justify-between backdrop-blur-md">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-400" />
-              <span className="text-sm font-semibold text-neutral-200">Payment Copilot Assistant</span>
+              <Sparkles className="h-4 w-4 text-brand-primary" />
+              <span className="text-xs sm:text-sm font-bold text-white">Payment Copilot Assistant</span>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -418,37 +404,41 @@ export default function CopilotDashboard() {
               />
               <button
                 onClick={() => qrFileInputRef.current?.click()}
-                className="text-xs text-neutral-400 hover:text-emerald-400 flex items-center gap-1 transition-colors px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
+                className="text-xs text-neutral-300 hover:text-white flex items-center gap-1.5 transition-colors px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 min-h-[36px]"
               >
-                <Upload className="h-3 w-3" /> Upload QR Screenshot
+                <Upload className="h-3.5 w-3.5 text-brand-primary" />
+                <span className="hidden sm:inline">Upload QR Screenshot</span>
+                <span className="sm:hidden">Upload QR</span>
               </button>
             </div>
           </div>
 
-          {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Messages Scroll View */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
             {messages.map((msg) => (
               <div key={msg.id} className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.sender === 'copilot' && (
-                  <div className="h-8 w-8 rounded-lg bg-emerald-950 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 mt-1">
+                  <div className="h-8 w-8 rounded-xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary shrink-0 mt-1">
                     <Bot className="h-4 w-4" />
                   </div>
                 )}
 
                 <div
-                  className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed ${
+                  className={`max-w-[90%] sm:max-w-[80%] rounded-2xl p-4 text-xs sm:text-sm leading-relaxed ${
                     msg.sender === 'user'
-                      ? 'bg-emerald-600 text-white rounded-br-none shadow-lg shadow-emerald-900/20'
-                      : 'bg-neutral-800/90 text-neutral-200 rounded-bl-none border border-neutral-700/60'
+                      ? 'bg-brand-primary text-neutral-950 font-medium rounded-br-none shadow-md'
+                      : 'bg-[#121212] text-neutral-200 rounded-bl-none border border-white/10'
                   }`}
                 >
-                  {/* Markdown Text */}
+                  {/* Markdown Lines */}
                   <div className="whitespace-pre-wrap space-y-2">
                     {msg.text.split('\n').map((line, i) => {
                       if (line.startsWith('• ') || line.startsWith('- ')) {
                         return (
                           <div key={i} className="flex items-start gap-2 pl-2">
-                            <span className="text-emerald-400 mt-1">•</span>
+                            <span className={msg.sender === 'user' ? 'text-neutral-800' : 'text-brand-primary'}>
+                              •
+                            </span>
                             <span
                               dangerouslySetInnerHTML={{
                                 __html: line.slice(2).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'),
@@ -468,15 +458,67 @@ export default function CopilotDashboard() {
                     })}
                   </div>
 
-                  {/* Payment Request Card Display */}
+                  {/* SECTION 14: STRUCTURED PAYMENT CARD FOR DRAFT */}
+                  {msg.draft && (
+                    <div className="mt-4 p-4 bg-black border border-brand-primary/30 rounded-2xl space-y-3.5 shadow-lg">
+                      <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-brand-primary flex items-center gap-1">
+                          <CreditCard size={14} /> Send Payment
+                        </span>
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-brand-primary/10 text-brand-primary border border-brand-primary/20 font-bold">
+                          Draft
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="text-neutral-400 block text-[10px] uppercase font-semibold">To</span>
+                          <span className="text-white font-bold truncate block">
+                            {msg.draft.recipientName || msg.draft.recipient || 'Recipient'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-neutral-400 block text-[10px] uppercase font-semibold">Amount</span>
+                          <span className="text-brand-primary font-extrabold text-sm">
+                            {msg.draft.amount} {msg.draft.currency || 'HSCT'}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-neutral-400 block text-[10px] uppercase font-semibold">Address</span>
+                          <span className="text-neutral-300 font-mono text-[11px] truncate block bg-white/5 px-2 py-1 rounded">
+                            {msg.draft.recipientAddress || msg.draft.recipient || '0x...'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-neutral-400 block text-[10px] uppercase font-semibold">Asset</span>
+                          <span className="text-white font-semibold">{msg.draft.currency || 'HSCT'}</span>
+                        </div>
+                        <div>
+                          <span className="text-neutral-400 block text-[10px] uppercase font-semibold">Network</span>
+                          <span className="text-white font-semibold">
+                            {msg.draft.preferredRoute === 'INTERNAL' ? 'SecureChain PoA' : 'Ethereum'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => openVerificationForDraft(msg.draft)}
+                        className="w-full py-3 bg-brand-primary hover:bg-brand-pale text-neutral-950 font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 min-h-[44px]"
+                      >
+                        <Lock size={14} /> Review Payment
+                      </button>
+                    </div>
+                  )}
+
+                  {/* PAYMENT REQUEST CARD */}
                   {msg.paymentRequest && (
-                    <div className="mt-4 p-4 bg-neutral-950/90 border border-emerald-500/30 rounded-2xl space-y-4">
+                    <div className="mt-4 p-4 bg-black border border-brand-primary/30 rounded-2xl space-y-4">
                       {msg.paymentRequest.qrDataUrl && (
-                        <div className="flex flex-col items-center p-3 bg-white rounded-xl">
+                        <div className="flex flex-col items-center p-3 bg-white rounded-xl shadow-md">
                           <img
                             src={msg.paymentRequest.qrDataUrl}
                             alt="Payment Request QR Code"
-                            className="w-48 h-48 object-contain"
+                            className="w-40 h-40 object-contain"
                           />
                           <span className="text-[10px] text-neutral-600 font-mono mt-1 font-bold">
                             Scan to Pay Request
@@ -485,16 +527,26 @@ export default function CopilotDashboard() {
                       )}
 
                       {msg.paymentRequest.shareableLink && (
-                        <div className="space-y-2">
-                          <span className="text-[11px] text-neutral-400 uppercase font-semibold block">Shareable Payment Link</span>
-                          <div className="flex items-center gap-2 bg-black/60 p-2.5 rounded-xl border border-white/10 text-xs font-mono">
-                            <span className="truncate text-emerald-400 flex-1">{`${window.location.origin}${msg.paymentRequest.shareableLink}`}</span>
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] text-neutral-400 uppercase font-semibold block">
+                            Shareable Payment Link
+                          </span>
+                          <div className="flex items-center gap-2 bg-[#121212] p-2 rounded-xl border border-white/10 text-xs font-mono">
+                            <span className="truncate text-brand-primary flex-1">
+                              {`${typeof window !== 'undefined' ? window.location.origin : ''}${
+                                msg.paymentRequest.shareableLink
+                              }`}
+                            </span>
                             <button
                               onClick={() => copyShareableLink(msg.paymentRequest.shareableLink)}
-                              className="px-2.5 py-1 bg-emerald-500 text-black font-bold text-[11px] rounded-lg hover:bg-emerald-400 transition-colors flex items-center gap-1"
+                              className="px-2.5 py-1 bg-brand-primary text-neutral-950 font-bold text-[11px] rounded-lg hover:bg-brand-pale transition-colors flex items-center gap-1"
                             >
-                              {copiedLink === msg.paymentRequest.shareableLink ? <Check size={12} /> : <Copy size={12} />}
-                              {copiedLink === msg.paymentRequest.shareableLink ? 'Copied!' : 'Copy'}
+                              {copiedLink === msg.paymentRequest.shareableLink ? (
+                                <Check size={12} />
+                              ) : (
+                                <Copy size={12} />
+                              )}
+                              {copiedLink === msg.paymentRequest.shareableLink ? 'Copied' : 'Copy'}
                             </button>
                           </div>
                         </div>
@@ -503,7 +555,7 @@ export default function CopilotDashboard() {
                       {msg.paymentRequest.status === 'PENDING' && (
                         <button
                           onClick={() => openVerificationForRequest(msg.paymentRequest)}
-                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                          className="w-full py-3 bg-brand-primary hover:bg-brand-pale text-neutral-950 font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 min-h-[44px]"
                         >
                           Review Payment →
                         </button>
@@ -511,27 +563,13 @@ export default function CopilotDashboard() {
                     </div>
                   )}
 
-                  {/* Payment Draft Action Card */}
-                  {msg.draft && (
-                    <div className="mt-4 p-4 bg-neutral-950/90 border border-cyan-500/30 rounded-2xl space-y-3">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-neutral-400 font-medium">Prepared Draft</span>
-                        <span className="text-emerald-400 font-bold font-mono">
-                          {msg.draft.amount} {msg.draft.currency}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => openVerificationForDraft(msg.draft)}
-                        className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        Proceed to Verification →
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Meta footer */}
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-700/40 text-[11px] text-neutral-400">
-                    <span>{msg.timestamp}</span>
+                  {/* Timestamp footer */}
+                  <div
+                    className={`mt-2 text-[10px] ${
+                      msg.sender === 'user' ? 'text-neutral-800 font-semibold' : 'text-neutral-500'
+                    }`}
+                  >
+                    {msg.timestamp}
                   </div>
                 </div>
               </div>
@@ -539,12 +577,12 @@ export default function CopilotDashboard() {
 
             {isProcessing && (
               <div className="flex gap-3 justify-start">
-                <div className="h-8 w-8 rounded-lg bg-emerald-950 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                  <Bot className="h-4 w-4 animate-spin" />
+                <div className="h-8 w-8 rounded-xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary shrink-0">
+                  <Bot className="h-4 w-4 animate-pulse" />
                 </div>
-                <div className="bg-neutral-800/90 border border-neutral-700/60 rounded-2xl rounded-bl-none p-4 text-xs text-neutral-400 flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Processing payment intent, resolving recipient, & preparing transaction verification...
+                <div className="bg-[#121212] border border-white/10 rounded-2xl rounded-bl-none p-3.5 text-xs text-neutral-400 flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-brand-primary animate-pulse" />
+                  Processing payment intent & resolving recipient parameters...
                 </div>
               </div>
             )}
@@ -552,61 +590,67 @@ export default function CopilotDashboard() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Replies */}
-          {messages.length > 0 && messages[messages.length - 1].quickReplies && (
-            <div className="px-4 py-2.5 border-t border-neutral-800/60 bg-neutral-950/40 flex gap-2 overflow-x-auto no-scrollbar">
-              {messages[messages.length - 1].quickReplies?.map((pill, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSendMessage(pill)}
-                  className="px-3.5 py-1.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 border border-neutral-700/60 transition-colors whitespace-nowrap"
-                >
-                  {pill}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Quick Action Suggestion Chips (Prompt Section 13) */}
+          <div className="px-4 py-2 border-t border-white/10 bg-[#121212]/50 flex gap-2 overflow-x-auto no-scrollbar">
+            {(
+              messages[messages.length - 1]?.quickReplies || [
+                'Send money',
+                'Request money',
+                'Scan QR',
+                'Check wallet',
+                'Analyze payment',
+              ]
+            ).map((chip, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSendMessage(chip)}
+                className="px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/10 text-xs font-semibold transition-all whitespace-nowrap min-h-[34px]"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
 
-          {/* Input Bar */}
-          <div className="p-4 border-t border-neutral-800 bg-neutral-950/80">
+          {/* Chat Input Bar */}
+          <div className="p-3 sm:p-4 border-t border-white/10 bg-black">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="flex gap-2"
+              className="flex items-center gap-2"
             >
               <input
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type payment command (e.g. 'Pay ₹500 to Rahul', 'Request $100', 'Send 0.01 ETH to 0x123...')"
-                className="flex-1 bg-neutral-900 border border-neutral-700/80 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                placeholder="Type command (e.g. 'Pay ₹500 to Rahul', 'Request 50 HSCT', 'Send $10 to 0x12...')"
+                className="flex-1 bg-[#121212] border border-white/10 rounded-xl px-4 py-3 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-brand-primary/50 min-h-[44px]"
               />
               <button
                 type="submit"
                 disabled={!inputMessage.trim() || isProcessing}
-                className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/30"
+                className="px-4 sm:px-5 py-3 rounded-xl bg-brand-primary hover:bg-brand-pale disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 font-extrabold flex items-center gap-2 transition-all min-h-[44px]"
               >
                 <Send className="h-4 w-4" />
-                <span className="hidden sm:inline">Send</span>
+                <span className="hidden sm:inline text-xs">Send</span>
               </button>
             </form>
           </div>
         </div>
 
-        {/* Right Column: Active Draft & Payment System Controls */}
+        {/* Right Column: Context & Quick Tools Panel */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Active Draft Panel */}
-          <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800/90 backdrop-blur-md relative overflow-hidden">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+          {/* Active Prepared Draft Card */}
+          <div className="p-5 rounded-3xl bg-[#0a0a0a] border border-white/10 backdrop-blur-md relative overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-cyan-400" />
-                <h3 className="font-semibold text-neutral-100 text-sm">Active Draft</h3>
+                <CreditCard className="h-5 w-5 text-brand-primary" />
+                <h3 className="font-bold text-white text-sm">Active Draft</h3>
               </div>
 
               {activeDraft && draftCountdown !== null && (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-500/30 text-xs font-mono">
+                <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 text-xs font-mono">
                   <Clock size={12} /> {draftCountdown}s
                 </div>
               )}
@@ -614,18 +658,17 @@ export default function CopilotDashboard() {
 
             {activeDraft && activeDraft.status === 'DRAFT' ? (
               <div className="mt-4 space-y-4">
-                <div className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-2">
+                <div className="p-4 rounded-2xl bg-black border border-white/10 space-y-2.5">
                   <div className="flex justify-between items-baseline">
-                    <span className="text-xs text-neutral-400">Amount</span>
-                    <span className="text-2xl font-bold text-white">
-                      {activeDraft.amount}{' '}
-                      <span className="text-xs font-normal text-emerald-400">{activeDraft.currency}</span>
+                    <span className="text-xs text-neutral-400">Total Amount</span>
+                    <span className="text-2xl font-extrabold text-brand-primary">
+                      {activeDraft.amount} <span className="text-xs text-white">{activeDraft.currency}</span>
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-xs pt-2 border-t border-neutral-800/60">
+                  <div className="flex justify-between text-xs pt-2 border-t border-white/5">
                     <span className="text-neutral-400">Recipient</span>
-                    <span className="text-neutral-200 font-medium truncate max-w-[180px]">
+                    <span className="text-white font-medium truncate max-w-[160px]">
                       {activeDraft.recipient}
                     </span>
                   </div>
@@ -633,16 +676,16 @@ export default function CopilotDashboard() {
 
                 <button
                   onClick={() => openVerificationForDraft(activeDraft)}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                  className="w-full py-3 bg-brand-primary hover:bg-brand-pale text-neutral-950 font-extrabold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 min-h-[44px]"
                 >
-                  <Lock size={14} /> Final Verification & Sign →
+                  <Lock size={14} /> Review Payment
                 </button>
               </div>
             ) : (
               <div className="mt-6 py-8 text-center text-xs text-neutral-500 space-y-2">
-                <ShieldCheck className="h-8 w-8 text-neutral-700 mx-auto" />
-                <p>No active payment draft queued.</p>
-                <p className="text-[11px] text-neutral-600">
+                <ShieldCheck className="h-8 w-8 text-neutral-600 mx-auto" />
+                <p className="font-medium text-neutral-400">No active payment draft</p>
+                <p className="text-[11px] text-neutral-500">
                   Ask Copilot to send or request money to prepare a transaction.
                 </p>
               </div>
@@ -650,30 +693,30 @@ export default function CopilotDashboard() {
           </div>
 
           {/* Quick Payment Action Cards */}
-          <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800/90 space-y-4">
-            <h3 className="font-semibold text-neutral-100 text-sm flex items-center gap-2">
-              <Zap size={16} className="text-emerald-400" /> Quick Payment Tools
+          <div className="p-5 rounded-3xl bg-[#0a0a0a] border border-white/10 space-y-4">
+            <h3 className="font-bold text-white text-sm flex items-center gap-2">
+              <Zap size={16} className="text-brand-primary" /> Quick Payment Tools
             </h3>
 
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleSendMessage('Request ₹500')}
-                className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left space-y-1 transition-colors"
+                className="p-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-left space-y-1 transition-all min-h-[70px]"
               >
-                <div className="text-xs font-bold text-white flex items-center gap-1">
-                  <QrCode size={14} className="text-emerald-400" /> Request Money
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <QrCode size={14} className="text-brand-primary" /> Request Money
                 </div>
-                <p className="text-[10px] text-neutral-400">Generate Request QR & Share Link</p>
+                <p className="text-[11px] text-neutral-400">Create request QR & link</p>
               </button>
 
               <button
                 onClick={() => setIsQRScannerOpen(true)}
-                className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left space-y-1 transition-colors"
+                className="p-3.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-left space-y-1 transition-all min-h-[70px]"
               >
-                <div className="text-xs font-bold text-white flex items-center gap-1">
-                  <Camera size={14} className="text-cyan-400" /> Scan QR Code
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Camera size={14} className="text-brand-primary" /> Scan QR
                 </div>
-                <p className="text-[10px] text-neutral-400">Scan camera or image screenshot</p>
+                <p className="text-[11px] text-neutral-400">Camera or screenshot</p>
               </button>
             </div>
           </div>

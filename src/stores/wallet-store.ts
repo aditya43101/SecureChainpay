@@ -5,7 +5,7 @@ import { doc, getDoc, getDocFromCache, collection, getDocs, runTransaction, addD
 import { ethers } from 'ethers';
 import { encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto/client-aes';
 import { getWalletSigner } from '@/lib/wallet/key-access';
-import { initializeGlobalGenesis, appendBlockToGlobalChain } from '@/lib/blockchain/global-chain';
+import { initializeGlobalGenesis } from '@/lib/blockchain/global-chain';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL INITIALIZATION LOCK (Idempotent per UID)
@@ -73,6 +73,8 @@ export interface Transaction {
 
   // Real EVM On-Chain Proof
   blockchainTransactionHash?: string | null;
+  onChainTxHash?: string | null;
+  chainRoot?: string | null;
   blockNumber: number;
   blockHash?: string | null;
   chainId?: number | null;
@@ -192,7 +194,7 @@ export function canonicalizePayload(params: {
   const cleanSender = (params.sender || '').trim().toLowerCase();
   const cleanReceiver = (params.receiver || 'system').trim().toLowerCase();
   const cleanAmount = Number(params.amount).toFixed(6);
-  const cleanAsset = (params.asset || 'USD').trim().toUpperCase();
+  const cleanAsset = (params.asset || 'HSCT').trim().toUpperCase();
   const cleanAppId = (params.applicationTransactionId || '').trim();
   const cleanIdemp = (params.idempotencyKey || '').trim();
   const cleanTimestamp = (params.timestamp || '').trim();
@@ -244,8 +246,8 @@ async function createGenesisBlock(uid: string, walletAddress: string, publicKey:
     signature: 'Genesis Block - System Generated',
     type: 'genesis',
     amount: 0,
-    currency: 'USD',
-    asset: 'USD',
+    currency: 'HSCT',
+    asset: 'HSCT',
     status: 'CONFIRMED',
     date: genesisTimeISO,
     createdAt: genesisTimeISO,
@@ -534,15 +536,25 @@ export const useWalletStore = create<WalletState>()(
       
       fetchPrices: async () => {
         try {
-          const { data: json } = await safeJsonFetch('https://api.coincap.io/v2/assets?limit=10');
-          if (json && Array.isArray(json.data)) {
+          const { data: json } = await safeJsonFetch('/api/crypto/market-data');
+          if (json && json.success && Array.isArray(json.data)) {
             const btcItem = json.data.find((item: any) => item.symbol === 'BTC');
             const ethItem = json.data.find((item: any) => item.symbol === 'ETH');
             const newPrices = { ...get().prices };
+            if (btcItem && btcItem.price > 0) newPrices.BTC = Number(btcItem.price);
+            if (ethItem && ethItem.price > 0) newPrices.ETH = Number(ethItem.price);
+            set({ prices: newPrices, lastMarketDataAt: new Date().toISOString(), isMarketDataStale: false });
+            return;
+          }
+          // Fallback to CoinCap if needed
+          const { data: coincap } = await safeJsonFetch('https://api.coincap.io/v2/assets?limit=10');
+          if (coincap && Array.isArray(coincap.data)) {
+            const btcItem = coincap.data.find((item: any) => item.symbol === 'BTC');
+            const ethItem = coincap.data.find((item: any) => item.symbol === 'ETH');
+            const newPrices = { ...get().prices };
             if (btcItem) newPrices.BTC = Number(btcItem.priceUsd || 0);
             if (ethItem) newPrices.ETH = Number(ethItem.priceUsd || 0);
-            set({ prices: newPrices });
-            console.log('[SecureChain: Prices] Direct client-side price sync successful:', newPrices);
+            set({ prices: newPrices, lastMarketDataAt: new Date().toISOString(), isMarketDataStale: false });
           }
         } catch (err) {
           console.warn('[SecureChain: Prices] Direct price fetch failed, using fallback:', err);
@@ -932,27 +944,42 @@ export const useWalletStore = create<WalletState>()(
             }
 
             let created = false;
+            let provisionedWalletData: any = null;
 
-            // Atomic Firestore Transaction for Wallet Data (no per-user genesis)
-            await runTransaction(db, async (transaction) => {
-              const existing = await transaction.get(walletRef);
-              if (existing.exists()) {
-                // Another tab or process already created the wallet
-                return;
-              }
-              transaction.set(walletRef, initData);
-              created = true;
+            // Authoritative server-side wallet provisioning with Bearer ID Token
+            const idToken = await auth.currentUser?.getIdToken();
+            const { ok, data: provData } = await safeJsonFetch('/api/wallet/provision', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+              },
+              body: JSON.stringify({
+                address: newWallet.address,
+                publicKey: newPublicKey,
+                encryptedPrivateKey: encryptedPrivKey,
+                algorithm: 'ECDSA/secp256k1',
+                walletVersion: '1.0',
+                keyFingerprint: fingerprint,
+              }),
             });
 
-            if (!created) {
-              // Concurrently created by another process, restore that one
-              const concurrentWallet = await getDoc(walletRef);
-              if (concurrentWallet.exists()) {
-                await restoreWalletState(concurrentWallet.data() ?? {}, 'CLOUD');
-                console.info('[WalletInit] Concurrent wallet creation detected; restored existing wallet.');
+            if (ok && provData?.success) {
+              created = provData.created;
+              provisionedWalletData = provData.wallet;
+            } else {
+              // Fallback to client check if endpoint was unreachable
+              const existingCheck = await getDoc(walletRef).catch(() => null);
+              if (existingCheck && existingCheck.exists()) {
+                await restoreWalletState(existingCheck.data() ?? {}, 'CLOUD');
                 return;
               }
-              throw new Error('Wallet creation was not committed. Please retry.');
+              throw new Error(provData?.error || 'Server wallet provisioning failed');
+            }
+
+            if (!created && provisionedWalletData) {
+              await restoreWalletState(provisionedWalletData, 'CLOUD');
+              return;
             }
 
             // Initialize global genesis (idempotent — only creates once for entire system)
@@ -1067,238 +1094,46 @@ export const useWalletStore = create<WalletState>()(
         let newBlockNumber = 0;
         let newBlockHash = '';
 
-        // ─── STEP 1: BALANCE UPDATE (per-user) + DUAL-WRITE TO GLOBAL CHAIN ───
-        // Step 1a: Atomically update user balances
-        await runTransaction(db, async (transaction) => {
-          const walletRef = doc(db, 'users', uid, 'wallet', 'data');
-          const walletSnap = await transaction.get(walletRef);
-          
-          if (!walletSnap.exists()) {
-            throw new Error("Wallet data not found in Firestore!");
-          }
-          
-          const currentData = walletSnap.data();
-          const currentBalances = currentData.balances || { USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 };
-          
-          newBalances = { ...currentBalances, lifetimeDeposited: currentBalances.lifetimeDeposited ?? 0 } as Balances;
-          
-          if (currency === 'HSCT') {
-            const currentHsct = (newBalances!.HSCT !== undefined && newBalances!.HSCT > 0) ? newBalances!.HSCT : ((newBalances!.USD || 0) * USD_TO_HSCT);
-            if (type === 'credit') {
-              newBalances!.HSCT = currentHsct + amount;
-              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
-              newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + (amount / USD_TO_HSCT);
-            } else if (type === 'debit') {
-              if (currentHsct < amount) throw new Error("Insufficient HSCT balance");
-              newBalances!.HSCT = Math.max(0, currentHsct - amount);
-              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
-            } else if (type === 'trade') {
-              if (currentHsct < amount) throw new Error("Insufficient HSCT balance");
-              newBalances!.HSCT = Math.max(0, currentHsct - amount);
-              newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
-              if (payload?.tradeAsset && payload?.tradeAmount) {
-                const asset = payload.tradeAsset as keyof Balances;
-                newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
-              }
-            }
-          } else if (currency === 'USD') {
-            const currentUsd = newBalances!.USD || ((newBalances!.HSCT || 0) / USD_TO_HSCT);
-            if (type === 'credit') {
-              newBalances!.USD = currentUsd + amount;
-              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
-              newBalances!.lifetimeDeposited = (newBalances!.lifetimeDeposited || 0) + amount;
-            } else if (type === 'debit') {
-              if (currentUsd < amount) throw new Error("Insufficient funds");
-              newBalances!.USD = Math.max(0, currentUsd - amount);
-              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
-            } else if (type === 'trade') {
-              if (currentUsd < amount) throw new Error("Insufficient funds");
-              newBalances!.USD = Math.max(0, currentUsd - amount);
-              newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
-              if (payload?.tradeAsset && payload?.tradeAmount) {
-                const asset = payload.tradeAsset as keyof Balances;
-                newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
-              }
-            }
-          } else {
-            // Crypto assets (BTC, ETH, etc.)
-            if (type === 'credit') {
-              newBalances![currency] = (newBalances![currency] || 0) + amount;
-            } else if (type === 'debit') {
-              if ((newBalances![currency] || 0) < amount) throw new Error(`Insufficient ${currency} balance`);
-              newBalances![currency] = Math.max(0, (newBalances![currency] || 0) - amount);
-            } else if (type === 'trade') {
-              if ((newBalances![currency] || 0) < amount) throw new Error(`Insufficient ${currency} balance`);
-              newBalances![currency] = Math.max(0, (newBalances![currency] || 0) - amount);
-              if (payload?.tradeAsset && payload?.tradeAmount) {
-                const asset = payload.tradeAsset as keyof Balances;
-                if (asset === 'HSCT') {
-                  newBalances!.HSCT = (newBalances!.HSCT || 0) + payload.tradeAmount;
-                  newBalances!.USD = Number((newBalances!.HSCT / USD_TO_HSCT).toFixed(2));
-                } else if (asset === 'USD') {
-                  newBalances!.USD = (newBalances!.USD || 0) + payload.tradeAmount;
-                  newBalances!.HSCT = Number((newBalances!.USD * USD_TO_HSCT).toFixed(2));
-                } else {
-                  newBalances![asset] = (newBalances![asset] || 0) + payload.tradeAmount;
-                }
-              }
-            }
-          }
-
-          transaction.update(walletRef, {
-            balances: newBalances,
-          });
+        // ─── STEP 1: EXECUTE VIA TRUSTED SERVER ENDPOINT ───
+        const idToken = await auth.currentUser?.getIdToken();
+        const { ok, data: execResult } = await safeJsonFetch('/api/transactions/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({
+            amount,
+            currency,
+            type,
+            description,
+            idempotencyKey,
+            canonicalPayload: canonical,
+            signature: digitalSignature,
+            tradeAsset: payload?.tradeAsset,
+            tradeAmount: payload?.tradeAmount,
+            receiverAddress: receiverWallet,
+            note: payload?.note,
+          }),
         });
 
-        // Step 1b: Build provisional transaction record
-        // Block number, previousHash, and hash will be assigned by the global chain
-        const provisionalTransaction: Transaction = {
-          id: applicationTransactionId,
-          applicationTransactionId,
-          userId: uid,
-          sender: senderWallet,
-          receiver: receiverWallet,
-          amount,
-          currency,
-          asset: currency,
-          type,
-          status: 'SUBMITTED',
-          date: serverTimeISO,
-          createdAt: serverTimeISO,
-          submittedAt: serverTimeISO,
-          description,
-          idempotencyKey,
-
-          canonicalPayload: canonical,
-          transactionHash: canonicalHash,
-          hash: '', // Will be set by global chain
-          previousHash: '', // Will be set by global chain
-          walletAddress: senderWallet,
-          senderPublicKey: state.publicKey || tempWallet.address,
-          digitalSignature: digitalSignature,
-          signature: digitalSignature,
-
-          blockNumber: 0, // Will be set by global chain
-          payload: { ...payload, canonicalPayload: canonical, idempotencyKey },
-          difficulty: 2,
-          nonce: Math.floor(Math.random() * 1000000),
-          blockSize: 512,
-        };
-
-        // Step 1c: Append to the GLOBAL chain (atomic, concurrency-safe)
-        // This assigns the correct blockNumber, previousHash, and hash
-        const globalBlock = await appendBlockToGlobalChain(provisionalTransaction);
-        newTransaction = globalBlock;
-        newBlockNumber = globalBlock.blockNumber;
-        newBlockHash = globalBlock.hash;
-
-        // Step 1d: Dual-write — also store in user's transaction subcollection (for "My Transactions")
-        const userTxRef = doc(db, 'users', uid, 'transactions', applicationTransactionId);
-        await setDoc(userTxRef, globalBlock).catch((err) => {
-          console.warn('[SecureChain: Tx] Non-fatal user transaction index write warning:', err);
-        });
-
-        if (newTransaction && newBalances) {
-          set((state) => ({
-            balances: newBalances!,
-            transactions: [newTransaction!, ...state.transactions.filter(t => t.id !== newTransaction!.id)],
-            lastBlockNumber: newBlockNumber,
-            lastBlockHash: newBlockHash
-          }));
-          console.log(`[SecureChain: Tx] ✓ Transaction #${newBlockNumber} recorded in GLOBAL chain and user index.`);
+        if (!ok || !execResult?.success || !execResult?.block) {
+          throw new Error(execResult?.error || 'Server transaction execution failed');
         }
 
-        // ─── STEP 2: REAL BLOCKCHAIN SUBMISSION & ANCHORING ───
-        try {
-          console.log(`[SecureChain: Tx] Submitting transaction ${applicationTransactionId} to smart contract...`);
-          const { data: submitData } = await safeJsonFetch('/api/transactions/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              applicationTransactionId,
-              sender: senderWallet,
-              receiver: receiverWallet,
-              amount,
-              currency,
-              canonicalPayload: canonical,
-              signature: digitalSignature,
-              idempotencyKey,
-            }),
-          });
+        const authoritativeBlock = execResult.block as Transaction;
+        newTransaction = authoritativeBlock;
+        newBalances = execResult.balances || state.balances;
+        newBlockNumber = authoritativeBlock.blockNumber;
+        newBlockHash = authoritativeBlock.hash;
 
-          if (submitData.success && submitData.blockchainTransactionHash) {
-            const confirmedAt = submitData.confirmedAt || new Date().toISOString();
-            console.log(`[SecureChain: Tx] ✓ Blockchain Anchored! EVM Hash: ${submitData.blockchainTransactionHash} (Block #${submitData.blockNumber})`);
-            
-            const confirmedFields = {
-              status: 'CONFIRMED' as const,
-              blockchainTransactionHash: submitData.blockchainTransactionHash,
-              blockNumber: newBlockNumber,
-              blockHash: submitData.blockHash || null,
-              chainId: submitData.chainId || 31337,
-              contractAddress: submitData.contractAddress || null,
-              confirmedAt,
-            };
-
-            // Update Firestore with confirmed on-chain proof (DUAL WRITE: global + user)
-            const globalBlockRef = doc(db, 'global_blocks', applicationTransactionId);
-            const userTxDocRef = doc(db, 'users', uid, 'transactions', applicationTransactionId);
-            await Promise.all([
-              setDoc(globalBlockRef, confirmedFields, { merge: true }).catch((err) => {
-                console.warn('[SecureChain: Tx] Non-fatal global chain confirmation update warning:', err);
-              }),
-              setDoc(userTxDocRef, confirmedFields, { merge: true }).catch((err) => {
-                console.warn('[SecureChain: Tx] Non-fatal user tx confirmation update warning:', err);
-              }),
-            ]);
-
-            // Update local state with confirmed proof
-            newTransaction = {
-              ...newTransaction!,
-              ...confirmedFields,
-            };
-
-            set((state) => ({
-              transactions: state.transactions.map((t) =>
-                t.id === applicationTransactionId ? { ...t, ...confirmedFields } : t
-              ),
-            }));
-          } else {
-            console.warn(`[SecureChain: Tx] Smart contract submission info:`, submitData);
-            const confirmedFields = {
-              status: 'CONFIRMED' as const,
-            };
-            const globalBlockRef2 = doc(db, 'global_blocks', applicationTransactionId);
-            const userTxDocRef2 = doc(db, 'users', uid, 'transactions', applicationTransactionId);
-            await Promise.all([
-              setDoc(globalBlockRef2, confirmedFields, { merge: true }).catch(() => null),
-              setDoc(userTxDocRef2, confirmedFields, { merge: true }).catch(() => null),
-            ]);
-            newTransaction = { ...newTransaction!, ...confirmedFields };
-            set((state) => ({
-              transactions: state.transactions.map((t) =>
-                t.id === applicationTransactionId ? { ...t, ...confirmedFields } : t
-              ),
-            }));
-          }
-        } catch (chainSubmitErr: any) {
-          console.warn('[SecureChain: Tx] Blockchain submission network/execution info:', chainSubmitErr);
-          const confirmedFields = {
-            status: 'CONFIRMED' as const,
-          };
-          const globalBlockRef3 = doc(db, 'global_blocks', applicationTransactionId);
-          const userTxDocRef3 = doc(db, 'users', uid, 'transactions', applicationTransactionId);
-          await Promise.all([
-            setDoc(globalBlockRef3, confirmedFields, { merge: true }).catch(() => null),
-            setDoc(userTxDocRef3, confirmedFields, { merge: true }).catch(() => null),
-          ]);
-          newTransaction = { ...newTransaction!, ...confirmedFields };
-          set((state) => ({
-            transactions: state.transactions.map((t) =>
-              t.id === applicationTransactionId ? { ...t, ...confirmedFields } : t
-            ),
-          }));
-        }
+        set((s) => ({
+          balances: newBalances!,
+          transactions: [authoritativeBlock, ...s.transactions.filter((t) => t.id !== authoritativeBlock.id)],
+          lastBlockNumber: newBlockNumber,
+          lastBlockHash: newBlockHash,
+        }));
+        console.log(`[SecureChain: Tx] ✓ Authoritative Block #${newBlockNumber} committed by server.`);
 
         return newTransaction!;
       },
@@ -1374,10 +1209,14 @@ export const useWalletStore = create<WalletState>()(
           throw new Error("Failed to sign transfer with private key");
         }
 
-        // 5. Call Atomic Server Endpoint
+        // 5. Call Atomic Server Endpoint with Bearer token
+        const idToken = await auth.currentUser?.getIdToken();
         const { data } = await safeJsonFetch('/api/wallet/transfer', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
           body: JSON.stringify({
             applicationTransactionId,
             senderUid: uid,

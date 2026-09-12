@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { QRScannerModal } from '@/components/wallet/QRScannerModal';
+import { VerificationPopup, PaymentVerificationDetails } from '@/components/wallet/VerificationPopup';
 import { ResolvedRecipient, abbreviateAddress, resolveRecipientFromPayload, resolveRecipientFromQR } from '@/lib/payments/recipient-resolver';
 import type { PaymentRiskAssessment } from '@/lib/payments/payment-risk-engine';
 
@@ -49,6 +50,7 @@ export default function TransferPage() {
   // Recipient Input Channel Tab: 'search' | 'qr' | 'address' | 'recent'
   const [recipientTab, setRecipientTab] = useState<'search' | 'qr' | 'address' | 'recent'>('search');
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
 
   // Manual Address State
   const [manualAddress, setManualAddress] = useState('');
@@ -309,51 +311,51 @@ async function safeParseJson(res: Response): Promise<any> {
   };
 
   return (
-    <div className="min-h-screen bg-[#070707] text-white p-4 sm:p-6 md:p-12 font-sans flex flex-col items-center justify-center relative pb-28 md:pb-12">
+    <div className="min-h-screen bg-black text-white p-4 sm:p-6 md:p-12 font-sans flex flex-col items-center justify-center relative pb-28 md:pb-12">
       <div className="w-full max-w-xl">
         
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <Link
             href="/wallet"
-            className="inline-flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs sm:text-sm font-medium min-h-[44px]"
+            className="inline-flex items-center gap-2 text-neutral-400 hover:text-[#FEEF8B] transition-colors text-xs sm:text-sm font-semibold min-h-[44px]"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={16} />
             Back to Wallet
           </Link>
 
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-xs text-neutral-500 font-mono">SecureChain PoA Ledger</span>
+          <div className="flex items-center gap-2 bg-[#FEEF8B]/10 px-3 py-1 rounded-full border border-[#FEEF8B]/20">
+            <span className="w-2 h-2 rounded-full bg-[#FEEF8B] animate-pulse"></span>
+            <span className="text-[11px] text-[#FEEF8B] font-mono font-bold">SecureChain PoA Ledger</span>
           </div>
         </div>
 
-        <div className="bg-neutral-950/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="bg-[#0a0a0a] border border-[#FEEF8B]/20 rounded-3xl p-5 sm:p-8 md:p-10 shadow-[0_12px_48px_rgba(0,0,0,0.5)] relative overflow-hidden">
           {/* Ambient Lighting */}
-          <div className="absolute -top-32 -left-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#FEEF8B]/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-32 -right-32 w-80 h-80 bg-[#F5C542]/5 rounded-full blur-3xl pointer-events-none" />
 
           {/* STEP 1: RECIPIENT SELECTION & CHANNELS */}
           {step === 'select_recipient' && (
             <div className="relative z-10 space-y-6 animate-in fade-in duration-300">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold border border-indigo-500/20 mb-3">
-                  <Sparkles size={13} /> Step 1 of 3: Recipient Selection
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FEEF8B]/10 text-[#FEEF8B] rounded-full text-xs font-semibold border border-[#FEEF8B]/20 mb-3">
+                  <Sparkles size={13} /> Step 1 of 3: Recipient
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Send Money</h1>
                 <p className="text-neutral-400 text-xs sm:text-sm mt-1">
-                  Choose a recipient using registered user search, camera QR scan, wallet address, or recent contacts.
+                  Choose a recipient by username, QR code scan, wallet address, or recent contacts.
                 </p>
               </div>
 
-              {/* 4 Selection Tabs - 2x2 on mobile, 4 in a row on sm+ */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-neutral-900 border border-white/10 rounded-2xl">
+              {/* 4 Selection Tabs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-[#121212] border border-white/5 rounded-2xl">
                 <button
                   type="button"
                   onClick={() => setRecipientTab('search')}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'search'
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-[#FEEF8B] text-black shadow-[0_0_12px_rgba(254,239,139,0.25)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -369,7 +371,7 @@ async function safeParseJson(res: Response): Promise<any> {
                   }}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'qr'
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-[#FEEF8B] text-black shadow-[0_0_12px_rgba(254,239,139,0.25)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -382,7 +384,7 @@ async function safeParseJson(res: Response): Promise<any> {
                   onClick={() => setRecipientTab('address')}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'address'
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-[#FEEF8B] text-black shadow-[0_0_12px_rgba(254,239,139,0.25)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -395,7 +397,7 @@ async function safeParseJson(res: Response): Promise<any> {
                   onClick={() => setRecipientTab('recent')}
                   className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
                     recipientTab === 'recent'
-                      ? 'bg-indigo-600 text-white shadow-md'
+                      ? 'bg-[#FEEF8B] text-black shadow-[0_0_12px_rgba(254,239,139,0.25)]'
                       : 'text-neutral-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -412,18 +414,18 @@ async function safeParseJson(res: Response): Promise<any> {
                       Search Registered User
                     </label>
                     <div className="relative">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={20} />
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500" size={18} />
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Enter @username, Name, or email..."
-                        className="w-full bg-neutral-900 border border-white/10 text-white py-4 pl-12 pr-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600 text-sm"
+                        placeholder="Enter @username, Name, or contact..."
+                        className="w-full bg-[#121212] border border-white/10 text-white py-3.5 pl-11 pr-4 rounded-2xl focus:outline-none focus:border-[#FEEF8B]/60 focus:ring-1 focus:ring-[#FEEF8B]/30 transition-all placeholder:text-neutral-600 text-sm font-medium"
                         autoFocus
                       />
                       {isSearching && (
                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                          <div className="w-5 h-5 border-2 border-[#FEEF8B] border-t-transparent rounded-full animate-spin"></div>
                         </div>
                       )}
                     </div>
@@ -440,37 +442,30 @@ async function safeParseJson(res: Response): Promise<any> {
                   {/* Search Results List */}
                   {searchResults.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Registered Users</p>
+                      <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Verified Contacts</p>
                       <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                        {searchResults.map((user) => (
+                        {searchResults.map((u) => (
                           <div
-                            key={user.uid}
-                            onClick={() => handleSelectRecipient(user)}
-                            className="flex items-center justify-between p-3.5 bg-neutral-900/80 hover:bg-indigo-950/30 border border-white/10 hover:border-indigo-500/40 rounded-2xl cursor-pointer transition-all group shadow-sm"
+                            key={u.uid}
+                            onClick={() => handleSelectRecipient(u)}
+                            className="flex items-center justify-between p-3.5 bg-[#121212] hover:bg-[#1a1a1a] border border-white/5 hover:border-[#FEEF8B]/40 rounded-2xl cursor-pointer transition-all group shadow-sm min-h-[56px]"
                           >
-                            <div className="flex items-center gap-3.5 min-w-0">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-sm shadow-md flex-shrink-0">
-                                {user.displayName?.charAt(0).toUpperCase() || user.username.charAt(0).toUpperCase()}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-[#FEEF8B]/10 text-[#FEEF8B] border border-[#FEEF8B]/20 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                {u.displayName.charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-white text-sm truncate">{user.displayName}</span>
-                                  <UserCheck size={14} className="text-emerald-400 flex-shrink-0" />
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-neutral-400 font-mono">
-                                  <span>@{user.username}</span>
-                                  <span>•</span>
-                                  <span className="text-neutral-500">{abbreviateAddress(user.walletAddress)}</span>
-                                </div>
+                                <p className="font-semibold text-white text-xs sm:text-sm group-hover:text-[#FEEF8B] transition-colors truncate">
+                                  {u.displayName}
+                                </p>
+                                <p className="text-[11px] text-neutral-400 font-mono truncate">
+                                  @{u.username} • {abbreviateAddress(u.walletAddress)}
+                                </p>
                               </div>
                             </div>
-
-                            <Button
-                              size="sm"
-                              className="bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white border border-indigo-500/30 text-xs font-semibold rounded-xl"
-                            >
-                              Pay <ArrowRight size={14} className="ml-1" />
-                            </Button>
+                            <div className="p-2 rounded-xl bg-white/5 group-hover:bg-[#FEEF8B] group-hover:text-black text-neutral-400 transition-colors">
+                              <ArrowRight size={14} />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -479,27 +474,25 @@ async function safeParseJson(res: Response): Promise<any> {
                 </div>
               )}
 
-              {/* TAB 2: SCAN QR */}
+              {/* TAB 2: QR SCANNER */}
               {recipientTab === 'qr' && (
-                <div className="text-center space-y-4 py-4">
-                  <div className="p-6 rounded-2xl bg-neutral-900 border border-white/10 flex flex-col items-center justify-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-lg">
-                      <QrCode size={36} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white text-lg">Scan SecureChain Pay QR Code</h3>
-                      <p className="text-neutral-400 text-xs mt-1 max-w-xs mx-auto">
-                        Use live camera video feed or upload a QR image file to instantly resolve recipient details.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => setIsQRModalOpen(true)}
-                      className="py-6 px-8 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-2xl text-sm shadow-[0_0_20px_rgba(99,102,241,0.3)]"
-                    >
-                      <QrCode size={18} className="mr-2" /> Launch Camera Scanner
-                    </Button>
+                <div className="p-6 bg-[#121212] border border-white/5 rounded-2xl text-center space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-[#FEEF8B]/10 text-[#FEEF8B] border border-[#FEEF8B]/20 flex items-center justify-center mx-auto">
+                    <QrCode size={26} />
                   </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base">Scan Payment QR</h3>
+                    <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto">
+                      Hold up the recipient&apos;s SecureChain Pay QR code or upload a QR screenshot.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => setIsQRModalOpen(true)}
+                    className="w-full py-4 bg-[#FEEF8B] text-black hover:bg-[#FDE047] rounded-xl font-bold text-xs shadow-[0_0_20px_rgba(254,239,139,0.25)] min-h-[44px]"
+                  >
+                    <QrCode size={16} className="mr-2" /> Launch Camera Scanner
+                  </Button>
                 </div>
               )}
 
@@ -515,7 +508,7 @@ async function safeParseJson(res: Response): Promise<any> {
                       value={manualAddress}
                       onChange={(e) => setManualAddress(e.target.value)}
                       placeholder="0x82F3...91A7"
-                      className="w-full bg-neutral-900 border border-white/10 text-white py-4 px-4 font-mono text-sm rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-neutral-600"
+                      className="w-full bg-[#121212] border border-white/10 text-white py-3.5 px-4 font-mono text-xs sm:text-sm rounded-2xl focus:outline-none focus:border-[#FEEF8B]/60 focus:ring-1 focus:ring-[#FEEF8B]/30 transition-all placeholder:text-neutral-600"
                     />
                   </div>
 
@@ -529,9 +522,9 @@ async function safeParseJson(res: Response): Promise<any> {
                   <Button
                     type="submit"
                     disabled={!manualAddress || isResolvingAddress}
-                    className="w-full py-6 bg-white text-black hover:bg-neutral-200 rounded-2xl font-bold text-sm disabled:opacity-50"
+                    className="w-full py-4 bg-[#FEEF8B] text-black hover:bg-[#FDE047] rounded-xl font-bold text-xs disabled:opacity-50 min-h-[44px]"
                   >
-                    {isResolvingAddress ? 'Resolving Address...' : 'Resolve Recipient'}
+                    {isResolvingAddress ? 'Resolving Address...' : 'Resolve Recipient →'}
                   </Button>
                 </form>
               )}
@@ -553,20 +546,20 @@ async function safeParseJson(res: Response): Promise<any> {
                               walletAddress: rec.address,
                             });
                           }}
-                          className="p-3.5 bg-neutral-900/80 hover:bg-neutral-900 border border-white/10 hover:border-indigo-500/40 rounded-2xl cursor-pointer transition-all flex items-center gap-3"
+                          className="p-3.5 bg-[#121212] hover:bg-[#1a1a1a] border border-white/5 hover:border-[#FEEF8B]/40 rounded-2xl cursor-pointer transition-all flex items-center gap-3 min-h-[54px]"
                         >
-                          <div className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center text-indigo-400 font-bold text-sm flex-shrink-0 border border-white/5">
+                          <div className="w-10 h-10 rounded-xl bg-[#FEEF8B]/10 flex items-center justify-center text-[#FEEF8B] font-bold text-sm flex-shrink-0 border border-[#FEEF8B]/20">
                             {rec.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-white text-xs truncate">{rec.name}</p>
-                            <p className="text-[11px] font-mono text-neutral-500 truncate mt-0.5">{abbreviateAddress(rec.address)}</p>
+                            <p className="text-[10px] font-mono text-neutral-400 truncate mt-0.5">{abbreviateAddress(rec.address)}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="p-6 text-center text-xs text-neutral-500 bg-neutral-900/50 rounded-2xl border border-white/5">
+                    <div className="p-6 text-center text-xs text-neutral-400 bg-[#121212] rounded-2xl border border-white/5">
                       No recent transaction recipients found.
                     </div>
                   )}
@@ -574,9 +567,9 @@ async function safeParseJson(res: Response): Promise<any> {
               )}
 
               {/* Available Balance Box */}
-              <div className="p-4 rounded-2xl bg-neutral-900/40 border border-white/5 flex items-center justify-between text-xs text-neutral-400">
-                <span className="flex items-center gap-1.5"><Wallet size={14} className="text-indigo-400" /> Available Balance:</span>
-                <span className="font-bold text-white text-sm">{availableBalanceHsct.toLocaleString()} HSCT</span>
+              <div className="p-3.5 rounded-2xl bg-[#121212] border border-white/5 flex items-center justify-between text-xs text-neutral-400">
+                <span className="flex items-center gap-1.5"><Wallet size={14} className="text-[#FEEF8B]" /> Available Balance:</span>
+                <span className="font-bold text-white text-xs sm:text-sm font-mono">{availableBalanceHsct.toLocaleString()} HSCT</span>
               </div>
             </div>
           )}
@@ -585,25 +578,25 @@ async function safeParseJson(res: Response): Promise<any> {
           {step === 'enter_amount' && selectedRecipient && (
             <form onSubmit={handleProceedToConfirm} className="relative z-10 space-y-6 animate-in fade-in duration-300">
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold border border-indigo-500/20 mb-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FEEF8B]/10 text-[#FEEF8B] rounded-full text-xs font-semibold border border-[#FEEF8B]/20 mb-3">
                   <Sparkles size={13} /> Step 2 of 3: Transfer Amount
                 </div>
-                <h1 className="text-3xl font-extrabold text-white tracking-tight">Enter Amount</h1>
-                <p className="text-neutral-400 text-sm mt-1">Specify how much HSCT you want to transfer.</p>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Enter Amount</h1>
+                <p className="text-neutral-400 text-xs sm:text-sm mt-1">Specify how much HSCT you want to transfer.</p>
               </div>
 
               {/* Verified Recipient Profile Card */}
-              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-indigo-950/40 to-neutral-900 border border-indigo-500/30 rounded-2xl">
+              <div className="flex items-center justify-between p-4 bg-[#121212] border border-[#FEEF8B]/25 rounded-2xl">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#FEEF8B] text-black flex items-center justify-center font-black text-sm flex-shrink-0 shadow-[0_0_12px_rgba(254,239,139,0.3)]">
                     {selectedRecipient.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wider">Sending To</p>
-                    <p className="font-bold text-white text-sm truncate">
+                    <p className="text-[10px] text-[#FEEF8B] font-bold uppercase tracking-wider">Sending To</p>
+                    <p className="font-bold text-white text-xs sm:text-sm truncate">
                       {selectedRecipient.displayName} {selectedRecipient.username && selectedRecipient.username !== 'external' ? `(@${selectedRecipient.username})` : ''}
                     </p>
-                    <p className="text-xs font-mono text-neutral-400 truncate">{abbreviateAddress(selectedRecipient.walletAddress)}</p>
+                    <p className="text-[11px] font-mono text-neutral-400 truncate">{abbreviateAddress(selectedRecipient.walletAddress)}</p>
                   </div>
                 </div>
                 <button
@@ -612,7 +605,7 @@ async function safeParseJson(res: Response): Promise<any> {
                     setStep('select_recipient');
                     setSelectedRecipient(null);
                   }}
-                  className="text-xs text-neutral-400 hover:text-white underline underline-offset-4"
+                  className="text-xs text-[#FEEF8B] hover:text-white font-semibold underline underline-offset-4 min-h-[36px] flex items-center"
                 >
                   Change
                 </button>
@@ -627,7 +620,7 @@ async function safeParseJson(res: Response): Promise<any> {
                   <button
                     type="button"
                     onClick={() => setAmount(availableBalanceHsct.toString())}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
+                    className="text-xs text-[#FEEF8B] hover:text-yellow-200 font-bold"
                   >
                     Use Max ({availableBalanceHsct.toLocaleString()} HSCT)
                   </button>
@@ -639,11 +632,11 @@ async function safeParseJson(res: Response): Promise<any> {
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     placeholder="0.00"
-                    className="w-full bg-neutral-900 border border-white/10 text-white text-4xl font-black py-6 px-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-center placeholder:text-neutral-700"
+                    className="w-full bg-[#121212] border border-white/10 text-white text-3xl sm:text-4xl font-black py-5 px-6 rounded-2xl focus:outline-none focus:border-[#FEEF8B]/60 focus:ring-1 focus:ring-[#FEEF8B]/30 transition-all text-center placeholder:text-neutral-700"
                     autoFocus
                     required
                   />
-                  <span className="absolute right-6 top-1/2 -translate-y-1/2 text-lg text-neutral-500 font-bold font-mono">HSCT</span>
+                  <span className="absolute right-6 top-1/2 -translate-y-1/2 text-sm sm:text-base text-neutral-400 font-bold font-mono">HSCT</span>
                 </div>
               </div>
 
@@ -654,13 +647,13 @@ async function safeParseJson(res: Response): Promise<any> {
                     type="button"
                     key={preset}
                     onClick={() => setAmount(preset.toString())}
-                    className={`py-2.5 rounded-xl font-semibold text-xs border transition-all ${
+                    className={`py-2.5 rounded-xl font-bold text-xs border transition-all min-h-[44px] ${
                       amount === preset.toString()
-                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
-                        : 'bg-neutral-900 border-white/5 text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                        ? 'bg-[#FEEF8B] text-black border-[#FEEF8B] shadow-[0_0_15px_rgba(254,239,139,0.3)]'
+                        : 'bg-[#121212] border-white/5 text-neutral-300 hover:bg-[#1a1a1a] hover:text-white'
                     }`}
                   >
-                    {preset}
+                    ₹{preset}
                   </button>
                 ))}
               </div>
@@ -668,14 +661,14 @@ async function safeParseJson(res: Response): Promise<any> {
               {/* Note Input */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-neutral-400">
-                  Note / Reason (Optional)
+                  Note / Memo (Optional)
                 </label>
                 <input
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="e.g. Dinner split, In-game buy-in..."
-                  className="w-full bg-neutral-900 border border-white/10 text-white py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm placeholder:text-neutral-600"
+                  placeholder="e.g. Payment for lunch, Invoice #102..."
+                  className="w-full bg-[#121212] border border-white/10 text-white py-3 px-4 rounded-xl focus:outline-none focus:border-[#FEEF8B]/50 text-xs sm:text-sm placeholder:text-neutral-600"
                 />
               </div>
 
@@ -693,80 +686,80 @@ async function safeParseJson(res: Response): Promise<any> {
                   type="button"
                   variant="outline"
                   onClick={() => setStep('select_recipient')}
-                  className="w-1/3 py-6 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold"
+                  className="w-1/3 py-4 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold text-xs min-h-[48px]"
                 >
                   Back
                 </Button>
                 <Button
                   type="submit"
                   disabled={!numericAmount || numericAmount <= 0 || numericAmount > availableBalanceHsct}
-                  className="w-2/3 py-6 bg-white text-black hover:bg-neutral-200 rounded-2xl font-bold text-base shadow-[0_0_20px_rgba(255,255,255,0.15)] disabled:opacity-50"
+                  className="w-2/3 py-4 bg-[#FEEF8B] text-black hover:bg-[#FDE047] rounded-2xl font-bold text-xs sm:text-sm shadow-[0_0_20px_rgba(254,239,139,0.25)] disabled:opacity-50 min-h-[48px]"
                 >
-                  Review Transfer <ArrowRight size={18} className="ml-2" />
+                  Review Transfer <ArrowRight size={16} className="ml-1.5" />
                 </Button>
               </div>
             </form>
           )}
 
-          {/* STEP 3: CONFIRMATION SCREEN */}
+          {/* STEP 3: REVIEW & PRE-FLIGHT */}
           {step === 'confirm_payment' && selectedRecipient && (
             <div className="relative z-10 space-y-6 animate-in fade-in duration-300">
               <div className="text-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 text-amber-400 rounded-full text-xs font-semibold border border-amber-500/20 mb-3">
-                  <Lock size={13} /> Final Step: Review & Authorize
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FEEF8B]/10 text-[#FEEF8B] rounded-full text-xs font-semibold border border-[#FEEF8B]/20 mb-3">
+                  <Lock size={13} /> Step 3 of 3: Final Review
                 </div>
-                <h1 className="text-3xl font-black text-white tracking-tight">CONFIRM PAYMENT</h1>
-                <p className="text-neutral-400 text-sm mt-1">
-                  Please review recipient and transaction parameters before signing.
+                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Review Transfer</h1>
+                <p className="text-neutral-400 text-xs sm:text-sm mt-1">
+                  Review transaction parameters before launching the secure verification signer.
                 </p>
               </div>
 
               {/* Recipient Details Highlight Box */}
-              <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4 shadow-inner">
-                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="bg-[#121212] border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-inner">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Recipient</span>
                   <div className="text-right">
-                    <p className="font-extrabold text-white text-sm sm:text-base">{selectedRecipient.displayName}</p>
+                    <p className="font-extrabold text-white text-xs sm:text-sm">{selectedRecipient.displayName}</p>
                     {selectedRecipient.username && selectedRecipient.username !== 'external' && (
-                      <p className="text-xs text-indigo-400 font-mono">@{selectedRecipient.username}</p>
+                      <p className="text-[11px] text-[#FEEF8B] font-mono">@{selectedRecipient.username}</p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-3 gap-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-2.5 gap-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Wallet Address</span>
                   <p className="font-mono text-xs text-neutral-300 break-all text-left sm:text-right max-w-full sm:max-w-[280px]">
                     {selectedRecipient.walletAddress}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Amount to Send</span>
-                  <p className="font-black text-xl sm:text-2xl text-emerald-400">{numericAmount.toLocaleString()} HSCT</p>
+                <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">Transfer Amount</span>
+                  <p className="font-black text-xl text-[#FEEF8B] font-mono">{numericAmount.toLocaleString()} HSCT</p>
                 </div>
 
-                <div className="flex items-center justify-between border-b border-white/5 pb-3 text-xs">
-                  <span className="font-medium text-neutral-400">Estimated Network Fee</span>
-                  <span className="text-emerald-400 font-bold">0.00 (Free / PoA)</span>
+                <div className="flex items-center justify-between border-b border-white/5 pb-2.5 text-xs">
+                  <span className="font-medium text-neutral-400">Network Gas Fee</span>
+                  <span className="text-emerald-400 font-bold">0.00 (Zero Gas / PoA)</span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-neutral-400">Total Debit from Wallet</span>
-                  <span className="text-white font-extrabold text-sm">{numericAmount.toLocaleString()} HSCT</span>
+                <div className="flex items-center justify-between text-xs pt-0.5">
+                  <span className="font-bold text-neutral-200">Total Debit</span>
+                  <span className="text-white font-extrabold text-sm sm:text-base font-mono">{numericAmount.toLocaleString()} HSCT</span>
                 </div>
               </div>
 
               {note && (
-                <div className="p-3 bg-neutral-900/50 rounded-xl border border-white/5 text-xs text-neutral-400">
+                <div className="p-3 bg-[#121212] rounded-xl border border-white/5 text-xs text-neutral-400">
                   <span className="font-semibold text-neutral-300">Note:</span> {note}
                 </div>
               )}
 
               {/* Security Notice */}
-              <div className="p-3.5 bg-indigo-950/30 border border-indigo-500/20 rounded-xl flex items-start gap-3 text-xs text-indigo-200">
-                <ShieldCheck className="text-indigo-400 flex-shrink-0 mt-0.5" size={18} />
+              <div className="p-3.5 bg-[#FEEF8B]/5 border border-[#FEEF8B]/20 rounded-xl flex items-start gap-3 text-xs text-neutral-300">
+                <ShieldCheck className="text-[#FEEF8B] flex-shrink-0 mt-0.5" size={18} />
                 <p>
-                  This transfer will be cryptographically signed and anchored into the SecureChain Pay global shared blockchain.
+                  Cryptographic verification is required. You will confirm the authorized signing in the next step.
                 </p>
               </div>
 
@@ -784,26 +777,17 @@ async function safeParseJson(res: Response): Promise<any> {
                   variant="outline"
                   disabled={isSubmitting}
                   onClick={() => setStep('enter_amount')}
-                  className="w-full sm:w-1/3 py-5 sm:py-6 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold min-h-[48px]"
+                  className="w-full sm:w-1/3 py-4 bg-transparent border-white/10 text-neutral-400 hover:text-white hover:bg-white/5 rounded-2xl font-bold min-h-[48px]"
                 >
                   Back
                 </Button>
                 <Button
                   type="button"
                   disabled={isSubmitting}
-                  onClick={handleConfirmAndSend}
-                  className="w-full sm:w-2/3 py-5 sm:py-6 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-sm sm:text-base rounded-2xl shadow-[0_0_25px_rgba(16,185,129,0.3)] disabled:opacity-50 min-h-[48px]"
+                  onClick={() => setIsVerificationModalOpen(true)}
+                  className="w-full sm:w-2/3 py-4 bg-[#FEEF8B] hover:bg-[#FDE047] text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-[0_0_24px_rgba(254,239,139,0.3)] min-h-[48px]"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Authorizing & Sending...
-                    </>
-                  ) : (
-                    <>
-                      CONFIRM & SEND {numericAmount.toLocaleString()} HSCT
-                    </>
-                  )}
+                  Proceed to Final Verification →
                 </Button>
               </div>
             </div>
@@ -811,27 +795,27 @@ async function safeParseJson(res: Response): Promise<any> {
 
           {/* STEP 4: SUCCESS STATE */}
           {step === 'success' && selectedRecipient && (
-            <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-6 py-6 animate-in zoom-in-95 duration-400">
-              <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.3)] border border-emerald-500/40">
-                <CheckCircle2 size={44} />
+            <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-6 py-4 animate-in zoom-in-95 duration-400">
+              <div className="w-18 h-18 sm:w-20 sm:h-20 bg-[#FEEF8B]/15 text-[#FEEF8B] rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(254,239,139,0.3)] border border-[#FEEF8B]/30">
+                <CheckCircle2 size={42} />
               </div>
 
               <div>
-                <h2 className="text-3xl font-black text-white tracking-tight mb-1">PAYMENT SUCCESSFUL ✓</h2>
-                <p className="text-neutral-400 text-sm">
-                  Successfully transferred <span className="text-emerald-400 font-bold">{numericAmount.toLocaleString()} HSCT</span> to {selectedRecipient.displayName}
+                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-1">Payment Sent!</h2>
+                <p className="text-neutral-400 text-xs sm:text-sm">
+                  Transferred <span className="text-[#FEEF8B] font-bold">{numericAmount.toLocaleString()} HSCT</span> to {selectedRecipient.displayName}
                 </p>
               </div>
 
               {/* Transaction Receipt Card */}
-              <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 w-full text-left space-y-3 font-mono text-xs">
+              <div className="bg-[#121212] border border-white/10 rounded-2xl p-5 w-full text-left space-y-3 font-mono text-xs">
                 <div className="flex justify-between py-1.5 border-b border-white/5">
                   <span className="text-neutral-400 font-sans">Recipient</span>
                   <span className="text-white font-bold">{selectedRecipient.displayName}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-white/5">
                   <span className="text-neutral-400 font-sans">Recipient Wallet</span>
-                  <span className="text-indigo-300">{abbreviateAddress(selectedRecipient.walletAddress)}</span>
+                  <span className="text-[#FEEF8B]">{abbreviateAddress(selectedRecipient.walletAddress)}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-white/5">
                   <span className="text-neutral-400 font-sans">Transaction ID</span>
@@ -839,22 +823,22 @@ async function safeParseJson(res: Response): Promise<any> {
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-white/5">
                   <span className="text-neutral-400 font-sans">Global Block</span>
-                  <span className="text-emerald-400 font-bold">#{completedTx?.blockNumber ?? 1}</span>
+                  <span className="text-[#FEEF8B] font-bold">#{completedTx?.blockNumber ?? 1}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-neutral-400 font-sans">Blockchain Status</span>
-                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[11px] font-bold">
-                    CONFIRMED ✓
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[10px] font-bold">
+                    CONFIRMED ON-CHAIN ✓
                   </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 w-full pt-2">
+              <div className="grid grid-cols-2 gap-3 w-full pt-1">
                 <Button
                   onClick={() => router.push('/explorer')}
-                  className="py-6 bg-white text-black hover:bg-neutral-200 font-bold rounded-2xl text-sm shadow-md"
+                  className="py-4 bg-white text-black hover:bg-neutral-200 font-bold rounded-2xl text-xs shadow-md min-h-[44px]"
                 >
-                  View in Explorer <ExternalLink size={16} className="ml-1.5" />
+                  View in Explorer <ExternalLink size={14} className="ml-1.5" />
                 </Button>
                 <Button
                   onClick={() => {
@@ -866,7 +850,7 @@ async function safeParseJson(res: Response): Promise<any> {
                     setStep('select_recipient');
                   }}
                   variant="outline"
-                  className="py-6 bg-transparent border-white/10 text-white hover:bg-white/5 font-bold rounded-2xl text-sm"
+                  className="py-4 bg-transparent border-white/10 text-white hover:bg-white/5 font-bold rounded-2xl text-xs min-h-[44px]"
                 >
                   Send Another
                 </Button>
@@ -883,6 +867,27 @@ async function safeParseJson(res: Response): Promise<any> {
         onClose={() => setIsQRModalOpen(false)}
         onScanSuccess={handleQRSuccess}
       />
+
+      {/* Verification Popup Modal */}
+      {selectedRecipient && (
+        <VerificationPopup
+          isOpen={isVerificationModalOpen}
+          onClose={() => setIsVerificationModalOpen(false)}
+          details={{
+            recipientName: selectedRecipient.displayName,
+            recipientAddress: selectedRecipient.walletAddress,
+            recipientType: selectedRecipient.uid ? 'INTERNAL_USER' : 'EXTERNAL_WALLET',
+            amount: numericAmount,
+            asset: 'HSCT',
+            network: 'SecureChain PoA Hybrid Ledger',
+            memo: note || undefined,
+          }}
+          onConfirmSign={async () => {
+            setIsVerificationModalOpen(false);
+            await handleConfirmAndSend();
+          }}
+        />
+      )}
     </div>
   );
 }

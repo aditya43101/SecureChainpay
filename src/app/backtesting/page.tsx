@@ -135,7 +135,7 @@ export default function BacktestingPage() {
               </div>
 
               <div>
-                <label className="text-xs text-neutral-400 font-medium block mb-1">Initial Capital ($)</label>
+                <label className="text-xs text-neutral-400 font-medium block mb-1">Initial Capital (HSCT)</label>
                 <input
                   type="number"
                   value={initialCapital}

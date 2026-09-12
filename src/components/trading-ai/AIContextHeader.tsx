@@ -34,13 +34,13 @@ export function AIContextHeader({ asset }: AIContextHeaderProps) {
         <span className="text-[10px] text-emerald-400/80 font-mono">LIVE DATA</span>
       </div>
 
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-[11px]">
-        <div className="flex items-center gap-1.5 text-slate-300 font-medium">
-          <ShieldCheck size={13} className={isEnabled ? 'text-cyan-400' : 'text-slate-500'} />
-          <span>Auto Trading: <strong className={isEnabled ? 'text-cyan-400 font-bold' : 'text-slate-400'}>{isEnabled ? 'ON' : 'OFF'}</strong></span>
+      <div className="flex items-center justify-between px-3 py-1 bg-black border border-white/10 rounded-lg text-[11px]">
+        <div className="flex items-center gap-1.5 text-neutral-300 font-medium">
+          <ShieldCheck size={13} className={isEnabled ? 'text-brand-primary' : 'text-neutral-500'} />
+          <span>Auto Trading: <strong className={isEnabled ? 'text-brand-primary font-bold' : 'text-neutral-400'}>{isEnabled ? 'ON' : 'OFF'}</strong></span>
         </div>
-        <div className="flex items-center gap-1 text-slate-400">
-          <Zap size={11} className={autoStatus?.allTimeMode ? 'text-amber-400' : 'text-slate-600'} />
+        <div className="flex items-center gap-1 text-neutral-400">
+          <Zap size={11} className={autoStatus?.allTimeMode ? 'text-brand-gold' : 'text-neutral-600'} />
           <span>All-Time: <strong>{autoStatus?.allTimeMode ? 'ON' : 'OFF'}</strong></span>
         </div>
       </div>

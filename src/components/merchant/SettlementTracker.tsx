@@ -7,30 +7,30 @@ import { RefreshCcw, CheckCircle2, Clock, ArrowRight, Building } from 'lucide-re
 const settlements = [
   {
     id: 'SET-9823',
-    amount: 12500.00,
-    currency: 'USD',
-    method: 'Wire Transfer',
-    bank: 'JPMorgan Chase',
+    amount: 1043750.00,
+    currency: 'HSCT',
+    method: 'Instant RTGS Parity',
+    bank: 'State Bank of India',
     status: 'Completed',
     date: 'Today, 09:30 AM',
     txHash: '0x8f...3a9c'
   },
   {
     id: 'SET-9824',
-    amount: 8450.50,
-    currency: 'EUR',
-    method: 'SEPA',
-    bank: 'Deutsche Bank',
+    amount: 705600.00,
+    currency: 'HSCT',
+    method: 'UPI Auto-Settle',
+    bank: 'HDFC Bank',
     status: 'Processing',
     date: 'Today, 11:15 AM',
     txHash: '0x2b...1f4e'
   },
   {
     id: 'SET-9825',
-    amount: 3200.00,
-    currency: 'GBP',
-    method: 'BACS',
-    bank: 'Barclays',
+    amount: 267200.00,
+    currency: 'HSCT',
+    method: 'IMPS Settlement',
+    bank: 'ICICI Bank',
     status: 'Pending',
     date: 'Est. Tomorrow',
     txHash: '0x9a...7d2b'
@@ -88,8 +88,7 @@ export default function SettlementTracker() {
               </div>
               <div className="text-right">
                 <h3 className="text-lg font-bold text-white">
-                  {settlement.currency === 'USD' ? '$' : settlement.currency === 'EUR' ? '€' : '£'}
-                  {settlement.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {settlement.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {settlement.currency}
                 </h3>
               </div>
             </div>

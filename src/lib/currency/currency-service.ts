@@ -64,8 +64,13 @@ export function formatCurrency(
   switch (currency) {
     case 'HSCT':
       return `${formattedNum} HSCT`;
-    case 'USD':
-      return `$${formattedNum} USD`;
+    case 'USD': {
+      const converted = (num * DEFAULT_USD_HSCT_RATE).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      return `${converted} HSCT`;
+    }
     case 'INR':
       return `₹${formattedNum} INR`;
     default:
@@ -74,7 +79,32 @@ export function formatCurrency(
 }
 
 /**
- * Returns a structured amount object containing canonical HSCT and derived USD/INR values.
+ * Sanitizes transaction descriptions by converting any "$X", "X USD", "X USDT" into "Y HSCT".
+ * This eliminates legacy hardcoded dollar strings from transaction logs and descriptions.
+ */
+export function sanitizeTxDescription(desc?: string): string {
+  if (!desc) return '';
+  // Replace patterns like "$100", "$ 100", "$100.50"
+  let sanitized = desc.replace(/\$\s*([\d,]+(?:\.\d+)?)/gi, (match, p1) => {
+    const num = parseFloat(p1.replace(/,/g, ''));
+    if (isNaN(num)) return match;
+    const hsct = Math.round(num * DEFAULT_USD_HSCT_RATE);
+    return `${hsct.toLocaleString()} HSCT`;
+  });
+  // Replace patterns like "100 USD", "100.50 USD", "100 USDT"
+  sanitized = sanitized.replace(/([\d,]+(?:\.\d+)?)\s*(?:USD|USDT)\b/gi, (match, p1) => {
+    const num = parseFloat(p1.replace(/,/g, ''));
+    if (isNaN(num)) return match;
+    const hsct = Math.round(num * DEFAULT_USD_HSCT_RATE);
+    return `${hsct.toLocaleString()} HSCT`;
+  });
+  // Replace standalone "USD" or "USDT" mention if any remains
+  sanitized = sanitized.replace(/\bUSD\b/g, 'HSCT').replace(/\bUSDT\b/g, 'HSCT');
+  return sanitized;
+}
+
+/**
+ * Returns a structured amount object containing canonical HSCT and derived values.
  */
 export function getStructuredAmount(
   hsctAmount: number,
@@ -90,7 +120,7 @@ export function getStructuredAmount(
     inrEquivalent: inrEq,
     currency: 'HSCT',
     formattedHsct: formatCurrency(safeHsct, 'HSCT'),
-    formattedUsd: formatCurrency(usdEq, 'USD'),
+    formattedUsd: `${safeHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT`,
     formattedInr: formatCurrency(inrEq, 'INR'),
   };
 }

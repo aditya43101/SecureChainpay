@@ -61,7 +61,30 @@ export const TopBar: React.FC = () => {
         </motion.p>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        {/* Phase 1+2 Security Status — click to view Security Command Center */}
+        <div 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#10B981',
+            letterSpacing: '0.2px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          title="Phase 1+2 Active: Chain integrity validated. Click to view Security Command Center."
+          onClick={() => router.push('/security')}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B981' }} />
+          <span>CHAIN SECURED</span>
+        </div>
         {isConnected && address ? (
           <motion.div 
             variants={slideUp} 

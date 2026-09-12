@@ -6,12 +6,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { PaymentCopilot } from '@/lib/payments/payment-copilot';
+import { TransactionSecurityGate } from '@/lib/security/transaction-security-gate';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const gateCheck = await TransactionSecurityGate.canProcessTransaction();
+    if (!gateCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: gateCheck.reason || 'Blockchain transactions are temporarily paused while ledger integrity is being verified.',
+          code: gateCheck.code,
+        },
+        { status: 403 }
+      );
+    }
+
     const { id: draftId } = await params;
     const body = await request.json().catch(() => ({}));
     const { otpCode, userId: explicitUserId } = body;

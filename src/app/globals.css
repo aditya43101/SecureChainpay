@@ -2,74 +2,102 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  --background: #0D0D0D;
-  --foreground: #ffffff;
-  --card: #1A1A1A;
-  --card-foreground: #ffffff;
-  --popover: #1A1A1A;
-  --popover-foreground: #ffffff;
-  --primary: #F5C542;
-  --primary-foreground: #0D0D0D;
-  --secondary: #2A2A2A;
-  --secondary-foreground: #ffffff;
-  --muted: #2A2A2A;
-  --muted-foreground: #A0A0A0;
-  --accent: #FFD54F;
-  --accent-foreground: #0D0D0D;
-  --destructive: #ef4444;
+  --color-primary: #FEEF8B;
+  --color-primary-soft: rgba(254, 239, 139, 0.12);
+  --color-primary-muted: rgba(254, 239, 139, 0.22);
+  --color-primary-hover: #FDE047;
+  --color-secondary: #FEF9C3;
+  --color-accent: #F5C542;
+  --color-surface: #0a0a0a;
+  --color-surface-card: #121212;
+  --color-surface-hover: #1a1a1a;
+  --color-surface-elevated: #202020;
+  --color-background: #000000;
+  --color-text: #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(254, 239, 139, 0.18);
+  --color-success: #10B981;
+  --color-error: #EF4444;
+  --color-warning: #F59E0B;
+
+  --background: #000000;
+  --foreground: #F8FAFC;
+  --card: #121212;
+  --card-foreground: #F8FAFC;
+  --popover: #0a0a0a;
+  --popover-foreground: #F8FAFC;
+  --primary: #FEEF8B;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #F8FAFC;
+  --muted: #121212;
+  --muted-foreground: #94A3B8;
+  --accent: #F5C542;
+  --accent-foreground: #000000;
+  --destructive: #EF4444;
   --destructive-foreground: #ffffff;
-  --border: #333333;
-  --input: #333333;
-  --ring: #F5C542;
-  --radius: 0.5rem;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #FEEF8B;
+  --radius: 1rem;
 }
 
 body {
-  background-color: var(--background);
+  background-color: #000000;
   color: var(--foreground);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Glassmorphism utilities */
+/* Glassmorphism utilities with pure neutral black */
 .glass-panel {
-  background: rgba(26, 26, 26, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  background: rgba(10, 10, 10, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
 }
 
 .glass-card {
-  background: rgba(26, 26, 26, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(245, 197, 66, 0.1);
+  background: rgba(18, 18, 18, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(254, 239, 139, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar - Pure Black */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0D0D0D;
+  background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333333;
+  background: #202020;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #F5C542;
+  background: #FEEF8B;
 }
 
 /* Gradient Text */
 .text-gradient {
-  background: linear-gradient(135deg, #F5C542 0%, #FFD54F 100%);
+  background: linear-gradient(135deg, #FEF9C3 0%, #FEEF8B 50%, #F5C542 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #FEEF8B 0%, #F5C542 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

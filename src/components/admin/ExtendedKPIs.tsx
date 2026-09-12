@@ -36,36 +36,36 @@ export function ExtendedKPIs() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {/* TPS Widget */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 col-span-1 md:col-span-2">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Transactions Per Second (TPS)</h3>
+      <div className="bg-white dark:bg-[#0a0a0a] p-6 rounded-xl shadow-sm border border-slate-200 dark:border-white/10 col-span-1 md:col-span-2">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-neutral-100 mb-4">Transactions Per Second (TPS)</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={mockTpsData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
-              <XAxis dataKey="time" stroke="#64748b" fontSize={12} />
-              <YAxis stroke="#64748b" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#333333" opacity={0.3} />
+              <XAxis dataKey="time" stroke="#888888" fontSize={12} />
+              <YAxis stroke="#888888" fontSize={12} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
-                itemStyle={{ color: '#38bdf8' }}
+                contentStyle={{ backgroundColor: '#121212', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#f8fafc' }}
+                itemStyle={{ color: '#FEEF8B' }}
               />
-              <Line type="monotone" dataKey="tps" stroke="#38bdf8" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="tps" stroke="#FEEF8B" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       {/* Node Status Widget */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 col-span-1 md:col-span-2">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Node Health (%)</h3>
+      <div className="bg-white dark:bg-[#0a0a0a] p-6 rounded-xl shadow-sm border border-slate-200 dark:border-white/10 col-span-1 md:col-span-2">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-neutral-100 mb-4">Node Health (%)</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={mockNodeData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
-              <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-              <YAxis stroke="#64748b" fontSize={12} domain={[0, 100]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#333333" opacity={0.3} />
+              <XAxis dataKey="name" stroke="#888888" fontSize={12} />
+              <YAxis stroke="#888888" fontSize={12} domain={[0, 100]} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
-                cursor={{ fill: '#334155', opacity: 0.2 }}
+                contentStyle={{ backgroundColor: '#121212', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#f8fafc' }}
+                cursor={{ fill: '#ffffff', opacity: 0.05 }}
               />
               <Bar dataKey="status" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -74,9 +74,9 @@ export function ExtendedKPIs() {
       </div>
 
       {/* Average Tx Value */}
-      <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-xl shadow-sm text-white col-span-1 md:col-span-2 lg:col-span-2">
+      <div className="bg-gradient-to-br from-neutral-900 to-black border border-white/10 p-6 rounded-xl shadow-sm text-white col-span-1 md:col-span-2 lg:col-span-2">
         <h3 className="text-lg font-medium opacity-90 mb-2">Average Tx Value</h3>
-        <div className="text-4xl font-bold mb-2">$4,250.00</div>
+        <div className="text-4xl font-bold mb-2">4,250.00 HSCT</div>
         <div className="text-sm opacity-80 flex items-center">
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
           +12.5% from last week
@@ -84,10 +84,10 @@ export function ExtendedKPIs() {
       </div>
 
       {/* Network Uptime */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 col-span-1 md:col-span-2 lg:col-span-2">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Network Uptime</h3>
+      <div className="bg-white dark:bg-[#0a0a0a] p-6 rounded-xl shadow-sm border border-slate-200 dark:border-white/10 col-span-1 md:col-span-2 lg:col-span-2">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-neutral-100 mb-2">Network Uptime</h3>
         <div className="text-4xl font-bold text-emerald-500 mb-2">99.99%</div>
-        <div className="text-sm text-slate-500 dark:text-slate-400">Last downtime: 45 days ago</div>
+        <div className="text-sm text-slate-500 dark:text-neutral-400">Last downtime: 45 days ago</div>
       </div>
     </div>
   );

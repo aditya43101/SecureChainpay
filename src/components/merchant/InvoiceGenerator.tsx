@@ -36,12 +36,12 @@ export default function InvoiceGenerator() {
   const total = subtotal + gstAmount;
 
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 lg:p-8 shadow-2xl relative overflow-hidden group h-full flex flex-col">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+    <div className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 lg:p-8 shadow-2xl relative overflow-hidden group h-full flex flex-col">
+      <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/5 via-brand-pale/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
       
       <div className="flex justify-between items-center mb-8 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-500/20 text-blue-400 rounded-xl">
+          <div className="p-3 bg-brand-primary/10 text-brand-primary rounded-xl">
             <FileText className="w-6 h-6" />
           </div>
           <div>
@@ -141,15 +141,15 @@ export default function InvoiceGenerator() {
         <div className="border-t border-white/10 pt-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-400">
             <span>Subtotal</span>
-            <span>${subtotal.toFixed(2)}</span>
+            <span>{subtotal.toFixed(2)} HSCT</span>
           </div>
           <div className="flex justify-between text-sm text-gray-400">
             <span>GST (18%)</span>
-            <span>${gstAmount.toFixed(2)}</span>
+            <span>{gstAmount.toFixed(2)} HSCT</span>
           </div>
           <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-white/5">
             <span>Total</span>
-            <span className="text-indigo-400">${total.toFixed(2)}</span>
+            <span className="text-brand-primary font-bold">{total.toFixed(2)} HSCT</span>
           </div>
         </div>
       </div>
@@ -160,7 +160,7 @@ export default function InvoiceGenerator() {
           <Download className="w-4 h-4 text-gray-400 group-hover/btn:text-white transition-colors" />
           Download PDF
         </button>
-        <button className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2">
+        <button className="flex-1 py-3 bg-brand-primary hover:bg-brand-pale text-black rounded-xl font-extrabold transition-all shadow-lg shadow-brand-primary/20 flex items-center justify-center gap-2">
           <Send className="w-4 h-4" />
           Send Invoice
         </button>

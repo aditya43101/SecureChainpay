@@ -1,12 +1,12 @@
 import { ethers } from 'ethers';
 
-const PUBLIC_AMOY_RPC = 'https://rpc-amoy.polygon.technology';
+const PUBLIC_AMOY_RPC = 'https://polygon-amoy-bor-rpc.publicnode.com';
 
 const getRpcUrl = () => {
   if (process.env.BLOCKCHAIN_RPC_URL && !process.env.BLOCKCHAIN_RPC_URL.includes('127.0.0.1')) {
     return process.env.BLOCKCHAIN_RPC_URL;
   }
-  if (typeof window !== 'undefined' || process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  if (process.env.VERCEL) {
     return PUBLIC_AMOY_RPC;
   }
   return process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:8545';

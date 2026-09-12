@@ -108,6 +108,42 @@
       "artifacts": [
         "WalletFactory"
       ]
+    },
+    "/Users/adityasingh/Desktop/bloackchain/contracts/SecureChainAnchor.sol": {
+      "lastModificationDate": 1789214962672,
+      "contentHash": "24c3714b31da09c57281231ab24113b7",
+      "sourceName": "contracts/SecureChainAnchor.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "SecureChainAnchor"
+      ]
     }
   }
 }

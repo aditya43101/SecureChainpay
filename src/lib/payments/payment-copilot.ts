@@ -169,12 +169,12 @@ export class PaymentCopilot {
           'To prepare this payment, please specify both the amount (e.g. ₹500 or 100 HSCT) and recipient username or wallet address.',
         intent: 'SEND_PAYMENT',
         actionRequired: 'CLARIFY',
-        quickReplies: ['Send 100 HSCT to @piyush_patel', 'Send $25 to Rahul', 'Send 0.01 ETH to 0x71C8363837F881234567890abcdef1234567890a'],
+        quickReplies: ['Send 100 HSCT to @piyush_patel', 'Send 500 HSCT to Rahul', 'Send 0.01 ETH to 0x71C8363837F881234567890abcdef1234567890a'],
         confidence: 0.85,
       };
     }
 
-    const currency = parsed.currency || 'USD';
+    const currency = parsed.currency || 'HSCT';
     const amount = parsed.amount;
 
     // 1. Verify and resolve recipient against registered database users
@@ -318,16 +318,16 @@ export class PaymentCopilot {
   ): Promise<CopilotMessageResponse> {
     if (!parsed.amount || parsed.amount <= 0) {
       return {
-        message: 'How much money would you like to request? (e.g. "Request ₹500" or "Ask Rahul for $50")',
+        message: 'How much money would you like to request? (e.g. "Request 500 HSCT" or "Ask Rahul for 1000 HSCT")',
         intent: 'REQUEST_PAYMENT',
         actionRequired: 'CLARIFY',
-        quickReplies: ['Request ₹500', 'Request $100', 'Request 0.01 ETH'],
+        quickReplies: ['Request 500 HSCT', 'Request 1000 HSCT', 'Request 0.01 ETH'],
         confidence: 0.9,
       };
     }
 
     const amount = parsed.amount;
-    const currency = parsed.currency || 'USD';
+    const currency = parsed.currency || 'HSCT';
     const memo = parsed.memo || '';
     const requestFrom = parsed.recipient;
 
@@ -521,7 +521,7 @@ export class PaymentCopilot {
     conversationId?: string
   ): Promise<CopilotMessageResponse> {
     const amount = parsed.amount || 100;
-    const currency = parsed.currency || 'USD';
+    const currency = parsed.currency || 'HSCT';
     const recipient = parsed.recipient || 'external-counterparty';
 
     const preflight = await this.runPreflightCheck({
@@ -763,7 +763,7 @@ Guidelines:
       recipientName: params.recipientName,
       recipientUserId: params.recipientUserId,
       amount: params.amount,
-      currency: params.currency || 'USD',
+      currency: params.currency || 'HSCT',
       description: params.description,
       preferredRoute: params.preferredRoute || 'ADAPTIVE',
       status: 'DRAFT',
@@ -789,7 +789,7 @@ Guidelines:
           recipientName: params.recipientName,
           recipientUserId: params.recipientUserId,
           amount: params.amount,
-          currency: params.currency || 'USD',
+          currency: params.currency || 'HSCT',
           description: params.description,
           preferredRoute: params.preferredRoute || 'ADAPTIVE',
           status: 'DRAFT',
@@ -1388,25 +1388,37 @@ Guidelines:
 
     if (isRequestAction) {
       let amount: number | undefined;
-      let currency = 'USD';
+      let currency = 'HSCT';
       let recipient: string | undefined;
 
       if (lower.includes('hsct')) currency = 'HSCT';
       else if (lower.includes('eth')) currency = 'ETH';
       else if (lower.includes('btc')) currency = 'BTC';
-      else if (lower.includes('inr') || lower.includes('₹')) currency = 'INR';
+      else if (lower.includes('inr') || lower.includes('₹')) currency = 'HSCT';
 
       const currencySymbolMatch = prompt.match(/([$₹€£])\s*([0-9]+(?:\.[0-9]{1,4})?)/);
       if (currencySymbolMatch) {
         const symbol = currencySymbolMatch[1];
         amount = parseFloat(currencySymbolMatch[2]);
-        if (symbol === '₹') currency = 'INR';
-        else if (symbol === '$' && !lower.includes('hsct')) currency = 'USD';
+        if (symbol === '$') {
+          amount = Math.round(amount * 83.5);
+          currency = 'HSCT';
+        } else if (symbol === '₹') {
+          currency = 'HSCT';
+        }
       } else {
         const amountMatch = prompt.match(/([0-9]+(?:\.[0-9]{1,4})?)\s*(USD|HSCT|INR|EUR|USDT|ETH|BTC)?/i);
         if (amountMatch) {
           amount = parseFloat(amountMatch[1]);
-          if (amountMatch[2]) currency = amountMatch[2].toUpperCase();
+          const matchedCurr = (amountMatch[2] || '').toUpperCase();
+          if (matchedCurr === 'USD' || matchedCurr === 'USDT') {
+            amount = Math.round(amount * 83.5);
+            currency = 'HSCT';
+          } else if (matchedCurr === 'INR') {
+            currency = 'HSCT';
+          } else if (matchedCurr) {
+            currency = matchedCurr;
+          }
         }
       }
 
@@ -1440,7 +1452,7 @@ Guidelines:
 
     if (isSendAction) {
       let amount: number | undefined;
-      let currency = 'USD';
+      let currency = 'HSCT';
       let recipient: string | undefined;
 
       if (lower.includes('hsct')) {
@@ -1450,22 +1462,32 @@ Guidelines:
       } else if (lower.includes('btc')) {
         currency = 'BTC';
       } else if (lower.includes('inr') || lower.includes('₹')) {
-        currency = 'INR';
-      } else if (lower.includes('usdt')) {
-        currency = 'USDT';
+        currency = 'HSCT';
       }
 
       const currencySymbolMatch = prompt.match(/([$₹€£])\s*([0-9]+(?:\.[0-9]{1,4})?)/);
       if (currencySymbolMatch) {
         const symbol = currencySymbolMatch[1];
         amount = parseFloat(currencySymbolMatch[2]);
-        if (symbol === '₹') currency = 'INR';
-        else if (symbol === '$' && !lower.includes('hsct')) currency = 'USD';
+        if (symbol === '$') {
+          amount = Math.round(amount * 83.5);
+          currency = 'HSCT';
+        } else if (symbol === '₹') {
+          currency = 'HSCT';
+        }
       } else {
         const amountMatch = prompt.match(/([0-9]+(?:\.[0-9]{1,4})?)\s*(USD|HSCT|INR|EUR|USDT|ETH|BTC)?/i);
         if (amountMatch) {
           amount = parseFloat(amountMatch[1]);
-          if (amountMatch[2]) currency = amountMatch[2].toUpperCase();
+          const matchedCurr = (amountMatch[2] || '').toUpperCase();
+          if (matchedCurr === 'USD' || matchedCurr === 'USDT') {
+            amount = Math.round(amount * 83.5);
+            currency = 'HSCT';
+          } else if (matchedCurr === 'INR') {
+            currency = 'HSCT';
+          } else if (matchedCurr) {
+            currency = matchedCurr;
+          }
         }
       }
 

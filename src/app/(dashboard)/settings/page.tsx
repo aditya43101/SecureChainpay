@@ -1,7 +1,28 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Bell, Lock, HelpCircle, Info, ChevronRight, Mail, ExternalLink, Moon, Sun, CreditCard, Key, Copy, Bot } from 'lucide-react';
+import {
+  User,
+  Shield,
+  Wallet,
+  Cpu,
+  Sliders,
+  Download,
+  Bot,
+  HelpCircle,
+  ChevronRight,
+  Copy,
+  Check,
+  Lock,
+  Mail,
+  ExternalLink,
+  ShieldCheck,
+  Key,
+  RefreshCw,
+  Sparkles,
+  AlertCircle,
+  Coins,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth-store';
 import { useWalletStore } from '@/stores/wallet-store';
@@ -11,8 +32,9 @@ import { AISettings } from '@/components/trading-ai/AISettings';
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [theme, setTheme] = useState('dark');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const profileUser = useAuthStore((state) => state.user);
-  
+
   const address = useWalletStore((state) => state.address);
   const publicKey = useWalletStore((state) => state.publicKey);
   const encryptedPrivateKey = useWalletStore((state) => state.encryptedPrivateKey);
@@ -26,17 +48,13 @@ export default function SettingsPage() {
   const initializeWallet = useWalletStore((state) => state.initializeWallet);
   const [isRetryingWallet, setIsRetryingWallet] = useState(false);
 
-  useEffect(() => {
-    console.info(`[Profile] Address received: ${Boolean(address)}`);
-    console.info(`[Profile] Public key received: ${Boolean(publicKey)}`);
-  }, [address, publicKey]);
+  const profileUsername = profileUser?.username || profileUser?.name || 'SecureChain User';
+  const profileContact = profileUser?.email || profileUser?.phoneNumber || 'No contact specified';
 
-  const profileUsername = profileUser?.username || profileUser?.name || 'Loading...';
-  const profileContact = profileUser?.email || profileUser?.phoneNumber || 'Loading...';
-
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (key: string, text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard');
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
   const retryWalletInitialization = async () => {
@@ -52,365 +70,433 @@ export default function SettingsPage() {
     }
   };
 
+  const handleExportData = () => {
+    const exportData = {
+      username: profileUsername,
+      contact: profileContact,
+      address,
+      publicKey,
+      keyFingerprint,
+      algorithm,
+      walletVersion,
+      keyGeneratedAt,
+      exportedAt: new Date().toISOString(),
+      platform: 'SecureChain Pay Web3 Financial System',
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `securechain-account-${profileUsername}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const tabs = [
-    { id: 'profile', label: 'Profile Settings', icon: <User size={18} /> },
-    { id: 'preferences', label: 'Preferences', icon: <Sun size={18} /> },
-    { id: 'security', label: 'Security & Keys', icon: <Lock size={18} /> },
-    { id: 'help', label: 'Help & Support', icon: <HelpCircle size={18} /> },
+    { id: 'profile', label: 'Profile', icon: <User size={18} /> },
+    { id: 'security', label: 'Security', icon: <Shield size={18} /> },
+    { id: 'wallet', label: 'Wallet', icon: <Wallet size={18} /> },
+    { id: 'blockchain', label: 'Blockchain', icon: <Cpu size={18} /> },
+    { id: 'preferences', label: 'Preferences', icon: <Sliders size={18} /> },
+    { id: 'data-export', label: 'Data Export', icon: <Download size={18} /> },
     { id: 'trading-ai', label: 'Trading AI', icon: <Bot size={18} /> },
-    { id: 'about', label: 'About Us', icon: <Info size={18} /> },
+    { id: 'help', label: 'Help & Support', icon: <HelpCircle size={18} /> },
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 fill-mode-both pb-20 md:pb-0 px-2 sm:px-0">
+    <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-300 pb-32 md:pb-12 text-white">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white mb-1 sm:mb-2">Settings</h1>
-        <p className="text-neutral-400 text-sm sm:text-base">Manage your account preferences and configurations.</p>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-1">
+          Settings & Account
+        </h1>
+        <p className="text-neutral-400 text-xs sm:text-sm">
+          Manage your decentralized identity, non-custodial cryptographic keys, and system preferences.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 sm:gap-8">
-        {/* Settings Navigation: Horizontal scroll on mobile/tablet, vertical list on desktop */}
-        <div className="md:col-span-1 flex md:flex-col overflow-x-auto custom-scrollbar md:overflow-visible gap-1.5 pb-2 md:pb-0 -mx-2 px-2 sm:mx-0 sm:px-0">
+        {/* Navigation Sidebar: Horizontal scroll on mobile, vertical stack on desktop */}
+        <div className="md:col-span-1 flex md:flex-col overflow-x-auto no-scrollbar md:overflow-visible gap-1.5 pb-2 md:pb-0 -mx-2 px-2 sm:mx-0 sm:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center justify-between px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl transition-all flex-shrink-0 md:w-full min-h-[44px] ${
-                activeTab === tab.id 
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                : 'text-neutral-400 hover:text-white hover:bg-white/5 border border-transparent'
+              className={`flex items-center justify-between px-3.5 py-3 rounded-2xl transition-all flex-shrink-0 md:w-full min-h-[44px] ${
+                activeTab === tab.id
+                  ? 'bg-brand-primary text-neutral-950 font-extrabold shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-white/5 border border-transparent'
               }`}
             >
-              <div className="flex items-center gap-2 sm:gap-3 font-medium text-xs sm:text-sm whitespace-nowrap">
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm whitespace-nowrap">
                 {tab.icon}
-                {tab.label}
+                <span>{tab.label}</span>
               </div>
-              <ChevronRight size={16} className={`hidden md:block ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`} />
+              <ChevronRight
+                size={16}
+                className={`hidden md:block ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`}
+              />
             </button>
           ))}
         </div>
 
-        {/* Settings Content area */}
-        <div className="md:col-span-3 bg-neutral-900/40 border border-white/5 rounded-3xl p-4 sm:p-6 md:p-8 backdrop-blur-xl">
-          
-          {/* Profile Section */}
+        {/* Content Area */}
+        <div className="md:col-span-3 bg-[#0a0a0a] border border-white/10 rounded-3xl p-5 sm:p-7 md:p-8 backdrop-blur-xl relative overflow-hidden shadow-xl">
+          {/* Ambient Glow */}
+          <div className="absolute -top-32 -right-32 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+
+          {/* TAB 1: PROFILE */}
           {activeTab === 'profile' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0">
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-white">Profile Settings</h2>
-                  <p className="text-xs sm:text-sm text-neutral-400">View and manage your decentralized user identity.</p>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white">Profile Identity</h2>
+                  <p className="text-xs sm:text-sm text-neutral-400">
+                    Decentralized account credentials and profile details.
+                  </p>
                 </div>
-                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5 w-fit">
+                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-1.5 w-fit">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   Account Active
                 </span>
               </div>
-              
-              {/* User Identity Card */}
-              <div className="p-4 sm:p-6 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-emerald-400 via-cyan-500 to-blue-500 p-[3px] shadow-[0_0_20px_rgba(52,211,153,0.3)] flex-shrink-0">
-                  <div className="w-full h-full bg-neutral-900 rounded-[14px] flex items-center justify-center text-white text-2xl sm:text-3xl font-black">
-                    {profileUsername.charAt(0).toUpperCase()}
-                  </div>
+
+              {/* Identity Header Card */}
+              <div className="p-5 bg-[#121212] border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-brand-primary/10 border-2 border-brand-primary/40 flex items-center justify-center text-brand-primary text-2xl font-black shrink-0">
+                  {profileUsername.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 text-center sm:text-left space-y-1 min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-white truncate">{profileUsername}</h3>
-                  <p className="text-xs sm:text-sm text-neutral-400 font-mono truncate">{profileContact}</p>
+                  <h3 className="text-lg font-bold text-white truncate">{profileUsername}</h3>
+                  <p className="text-xs text-neutral-400 font-mono truncate">{profileContact}</p>
                   <div className="flex flex-wrap gap-2 pt-2 justify-center sm:justify-start">
-                    <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-neutral-300 font-mono">
-                      UID: {profileUser?.id ? `${profileUser.id.substring(0, 10)}...` : 'Loading...'}
+                    <span className="text-[11px] px-2.5 py-1 bg-black border border-white/10 rounded-lg text-neutral-300 font-mono">
+                      UID: {profileUser?.id ? `${profileUser.id.substring(0, 10)}...` : 'N/A'}
                     </span>
-                    <span className="text-xs px-2.5 py-1 bg-neutral-800 border border-white/10 rounded-lg text-emerald-400 font-medium">
-                      Tier: {profileUser?.accountTier || 'Not specified'}
+                    <span className="text-[11px] px-2.5 py-1 bg-black border border-brand-primary/30 rounded-lg text-brand-primary font-bold">
+                      Tier: {profileUser?.accountTier || 'Standard Non-Custodial'}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Profile Details Grid */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-neutral-400">Registered Username</label>
-                    <input type="text" disabled value={profileUsername} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-80 cursor-not-allowed font-medium" />
-                    <p className="text-xs text-neutral-500">Decentralized handle linked to your on-chain wallet.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-neutral-400">Linked Contact</label>
-                    <input type="text" disabled value={profileContact} className="w-full px-4 py-3 bg-[#121212] border border-neutral-800 rounded-xl text-white opacity-80 cursor-not-allowed font-mono" />
-                    <p className="text-xs text-neutral-500">Primary phone number or email address.</p>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Registered Username
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={profileUsername}
+                    className="w-full px-3.5 py-2.5 bg-black border border-white/10 rounded-xl text-xs sm:text-sm text-neutral-200 font-medium opacity-80 cursor-not-allowed"
+                  />
+                  <p className="text-[11px] text-neutral-500">Unique handle for P2P transfers.</p>
                 </div>
-
-                {/* Blockchain Metadata Overview */}
-                <div className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-3">
-                  <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Blockchain Identity Details</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
-                      <span className="text-neutral-500 block mb-1">Wallet Address</span>
-                      <span className="font-mono text-white truncate block">{address ? `${address.substring(0, 8)}...${address.substring(address.length - 6)}` : identityStatus === 'error' ? 'Wallet unavailable' : 'Loading wallet...'}</span>
-                    </div>
-                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
-                      <span className="text-neutral-500 block mb-1">Key Fingerprint</span>
-                      <span className="font-mono text-emerald-400 block">{keyFingerprint || 'Pending'}</span>
-                    </div>
-                    <div className="p-3 bg-neutral-900/60 rounded-lg border border-white/5">
-                      <span className="text-neutral-500 block mb-1">Key Algorithm</span>
-                      <span className="font-medium text-white block">{algorithm || 'Pending'}</span>
-                    </div>
-                  </div>
-                  {identityStatus === 'error' && (
-                    <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                      <div className="min-w-0">
-                        <span className="block text-xs text-amber-300">Wallet cloud verification failed. No wallet was changed.</span>
-                        {initializationErrorCode && (
-                          <span className="mt-1 block truncate text-[11px] text-amber-200/70">
-                            {initializationErrorCode}: {initializationErrorMessage || 'Cloud verification unavailable'}
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                          type="button"
-                          onClick={retryWalletInitialization}
-                          disabled={isRetryingWallet}
-                          variant="outline"
-                          className="shrink-0 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
-                        >
-                          {isRetryingWallet ? 'Retrying...' : 'Retry'}
-                        </Button>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="pt-4 border-t border-white/5 flex gap-3">
-                  <Button 
-                    onClick={() => {
-                      const exportData = {
-                        username: profileUsername,
-                        contact: profileContact,
-                        address,
-                        publicKey,
-                        keyFingerprint,
-                        keyGeneratedAt,
-                        exportedAt: new Date().toISOString()
-                      };
-                      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `securechain-profile-${profileUsername}.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="bg-white text-neutral-950 hover:bg-neutral-200 font-semibold"
-                  >
-                    Export Profile Data
-                  </Button>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Linked Contact
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={profileContact}
+                    className="w-full px-3.5 py-2.5 bg-black border border-white/10 rounded-xl text-xs sm:text-sm text-neutral-200 font-mono opacity-80 cursor-not-allowed"
+                  />
+                  <p className="text-[11px] text-neutral-500">Email or phone number for authentication.</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Preferences Section */}
-          {activeTab === 'preferences' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">Preferences</h2>
-              
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <div>
-                    <h3 className="font-medium text-white">App Theme</h3>
-                    <p className="text-sm text-neutral-400">Choose between dark and light mode.</p>
-                  </div>
-                  <div className="flex bg-neutral-900 rounded-lg p-1 border border-white/10">
-                    <button onClick={() => setTheme('dark')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400' : 'text-neutral-400 hover:text-white'}`}>Dark</button>
-                    <button onClick={() => setTheme('light')} className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${theme === 'light' ? 'bg-emerald-500/20 text-emerald-400' : 'text-neutral-400 hover:text-white'}`}>Light</button>
-                  </div>
-                </div>
-
-                {/* Native Currency Info */}
-                <div className="p-4 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
-                  <div className="flex items-center gap-3">
-                    <CreditCard size={20} className="text-emerald-400" />
-                    <div>
-                      <h3 className="font-medium text-white">Platform Currency</h3>
-                      <p className="text-sm text-neutral-400">All portfolio balances are denominated in <span className="text-emerald-400 font-bold">HSCT</span>. Trading prices are shown in <span className="text-white font-bold">USD</span> with HSCT equivalent.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Security & Keys Section */}
+          {/* TAB 2: SECURITY & PRIVATE KEYS (PROMPT SECTIONS 16 & 17) */}
           {activeTab === 'security' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">Security & Keys</h2>
-              
-              <div className="space-y-4">
-                {/* Cryptographic Keys */}
-                <div className="p-5 bg-white/5 rounded-2xl border border-white/10 space-y-5">
-                  <div 
-                    className="flex items-center gap-3 mb-2 cursor-pointer select-none"
-                  >
-                    <Key className="text-emerald-400" size={20} />
-                    <h3 className="font-medium text-white text-lg">Blockchain Keys</h3>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Security & Cryptographic Keys</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Protected non-custodial key storage, encryption details, and authentication safeguards.
+                </p>
+              </div>
+
+              {/* Private Key Security Notice */}
+              <div className="p-5 bg-[#121212] border border-brand-primary/25 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-brand-primary font-bold text-sm">
+                    <Key size={18} />
+                    <span>Private Key Protection</span>
                   </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Wallet Address</label>
-                      <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={address || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-l-lg text-xs sm:text-sm text-neutral-300 font-mono truncate" />
-                        <button onClick={() => copyToClipboard(address || '')} className="px-3.5 py-2.5 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors min-h-[44px] flex items-center justify-center" aria-label="Copy wallet address">
-                          <Copy size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Public Key</label>
-                      <div className="flex items-center mt-1">
-                        <input type="text" readOnly value={publicKey || (identityStatus === 'error' ? 'Wallet unavailable' : 'Loading...')} className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-l-lg text-xs sm:text-sm text-neutral-300 font-mono truncate" />
-                        <button onClick={() => copyToClipboard(publicKey || '')} className="px-3.5 py-2.5 bg-neutral-800 border border-l-0 border-neutral-800 rounded-r-lg text-neutral-400 hover:text-white transition-colors min-h-[44px] flex items-center justify-center" aria-label="Copy public key">
-                          <Copy size={16} />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <div className="flex justify-between items-end flex-wrap gap-1">
-                        <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Private Key</label>
-                        <span className="text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                          {encryptedPrivateKey ? 'AES-256-GCM Encrypted • On-demand access' : 'Not Found'}
-                        </span>
-                      </div>
-                      <div className="flex items-center mt-1">
-                        <input type="text" readOnly value="Protected — accessed only when required for signing" className="w-full px-3 py-2.5 bg-[#121212] border border-neutral-800 rounded-lg text-xs sm:text-sm text-emerald-400 font-mono" />
-                      </div>
-                    </div>
-                    
-                    <div className="pt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs text-neutral-500 gap-1 sm:gap-0">
-                      <span>Generated: {keyGeneratedAt ? new Date(keyGeneratedAt).toLocaleDateString() : 'N/A'}</span>
-                      <span>{algorithm || 'Pending'} • v{walletVersion || 'N/A'}</span>
-                    </div>
+                  <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    AES-256-GCM Encrypted
+                  </span>
+                </div>
+                <div className="p-3 bg-black border border-white/10 rounded-xl">
+                  <div className="text-xs font-mono text-neutral-400 flex items-center justify-between">
+                    <span>Private Key:</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Lock size={12} /> Protected — accessed in-memory only for signing
+                    </span>
                   </div>
                 </div>
+                <p className="text-xs text-neutral-400">
+                  Your private key is stored in your secure non-custodial credential vault. It is never exposed in plaintext
+                  or transmitted across the network.
+                </p>
+              </div>
 
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+              {/* Security Features */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-[#121212] border border-white/10 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-sm">Non-Custodial Architecture</h4>
+                      <p className="text-xs text-neutral-400">Only your browser holds signing authority</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-brand-primary font-semibold">Active</span>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-[#121212] border border-white/10 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
                       <Lock size={20} />
                     </div>
                     <div>
-                      <h3 className="font-medium text-white">Two-Factor Authentication</h3>
-                      <p className="text-sm text-neutral-400">Add an extra layer of security.</p>
+                      <h4 className="font-bold text-white text-sm">Mandatory Payment Verification</h4>
+                      <p className="text-xs text-neutral-400">Every transaction requires explicit visual review</p>
                     </div>
                   </div>
-                  <Button variant="outline" className="border-white/10 text-white hover:bg-white/5">Enable</Button>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                  <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
-                      <User size={20} />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-white">Active Sessions</h3>
-                      <p className="text-sm text-neutral-400">Manage your connected devices.</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" className="border-red-500/20 text-red-400 hover:bg-red-500/10 hover:text-red-300">Log out all</Button>
+                  <span className="text-xs text-emerald-400 font-semibold">Enforced</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Help & Support Section */}
-          {activeTab === 'help' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">Help & Support</h2>
-              
-              <div className="p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl space-y-4">
-                <h3 className="text-lg font-semibold text-white">Need Assistance?</h3>
-                <p className="text-neutral-400 leading-relaxed">
-                  Our dedicated support team is available to help you with any issues regarding your wallet, transactions, or account settings.
+          {/* TAB 3: WALLET */}
+          {activeTab === 'wallet' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Wallet Configuration</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Public address and cryptographic verification identifiers.
                 </p>
-                <div className="flex items-center gap-3 p-4 bg-black/40 rounded-xl border border-white/5">
-                  <Mail className="text-emerald-400" size={24} />
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Wallet Public Address
+                  </label>
+                  <div className="flex items-center bg-black border border-white/10 rounded-xl overflow-hidden p-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={address || '0x...'}
+                      className="px-3 py-2 bg-transparent text-xs sm:text-sm font-mono text-white flex-1 focus:outline-none truncate"
+                    />
+                    <button
+                      onClick={() => address && copyToClipboard('addr', address)}
+                      className="px-3 py-2 bg-brand-primary text-neutral-950 font-bold rounded-lg text-xs flex items-center gap-1.5 hover:bg-brand-pale min-h-[38px]"
+                    >
+                      {copiedKey === 'addr' ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedKey === 'addr' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                    Public Key
+                  </label>
+                  <div className="flex items-center bg-black border border-white/10 rounded-xl overflow-hidden p-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={publicKey || address || '0x...'}
+                      className="px-3 py-2 bg-transparent text-xs sm:text-sm font-mono text-white flex-1 focus:outline-none truncate"
+                    />
+                    <button
+                      onClick={() => (publicKey || address) && copyToClipboard('pubkey', publicKey || address || '')}
+                      className="px-3 py-2 bg-white/10 hover:bg-white/15 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 min-h-[38px]"
+                    >
+                      {copiedKey === 'pubkey' ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedKey === 'pubkey' ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                {identityStatus === 'error' && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs flex items-center justify-between gap-3">
+                    <span className="text-amber-200">
+                      Wallet cloud verification notice: {initializationErrorMessage || 'Local initialization only'}
+                    </span>
+                    <button
+                      onClick={retryWalletInitialization}
+                      disabled={isRetryingWallet}
+                      className="px-3 py-1.5 bg-amber-500 text-neutral-950 font-bold rounded-lg"
+                    >
+                      {isRetryingWallet ? 'Retrying...' : 'Retry'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: BLOCKCHAIN */}
+          {activeTab === 'blockchain' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Blockchain Specifications</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Consensus parameters, cryptographic primitives, and node telemetry.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-1">
+                  <span className="text-neutral-400 font-semibold block uppercase">Consensus Mechanism</span>
+                  <span className="text-sm font-bold text-white">Proof of Authority (PoA)</span>
+                  <p className="text-neutral-500 text-[11px]">Instant block time with validator finality.</p>
+                </div>
+
+                <div className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-1">
+                  <span className="text-neutral-400 font-semibold block uppercase">Network Gas Fee</span>
+                  <span className="text-sm font-bold text-brand-primary">0% (Gasless)</span>
+                  <p className="text-neutral-500 text-[11px]">Zero network surcharge for P2P transfers.</p>
+                </div>
+
+                <div className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-1">
+                  <span className="text-neutral-400 font-semibold block uppercase">Hashing Algorithm</span>
+                  <span className="text-sm font-bold text-white">SHA-256 + Merkle Tree</span>
+                  <p className="text-neutral-500 text-[11px]">Cryptographic tamper-proofing on every block.</p>
+                </div>
+
+                <div className="p-4 bg-[#121212] border border-white/10 rounded-2xl space-y-1">
+                  <span className="text-neutral-400 font-semibold block uppercase">Key Fingerprint</span>
+                  <span className="text-xs font-mono font-bold text-brand-primary truncate block">
+                    {keyFingerprint || 'SHA256:SECURECHAIN'}
+                  </span>
+                  <p className="text-neutral-500 text-[11px]">Unique cryptographic fingerprint of your key pair.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: PREFERENCES */}
+          {activeTab === 'preferences' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">App Preferences</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Customization options and platform currency defaults.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-[#121212] border border-white/10 rounded-2xl">
                   <div>
-                    <p className="text-sm text-neutral-500">Direct Support Email</p>
-                    <a href="mailto:support@securechain.pay" className="text-white font-medium hover:text-emerald-400 transition-colors">
-                      aditya@securechain.pay
-                    </a>
+                    <h4 className="font-bold text-white text-sm">Theme Mode</h4>
+                    <p className="text-xs text-neutral-400">Select visual display style</p>
+                  </div>
+                  <div className="flex bg-black p-1 rounded-xl border border-white/10">
+                    <button
+                      onClick={() => setTheme('dark')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        theme === 'dark'
+                          ? 'bg-brand-primary text-neutral-950 shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      Dark
+                    </button>
+                    <button
+                      onClick={() => setTheme('light')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        theme === 'light'
+                          ? 'bg-brand-primary text-neutral-950 shadow-sm'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      Light
+                    </button>
                   </div>
                 </div>
-                <Button className="w-full bg-emerald-500 text-black hover:bg-emerald-400 font-bold">
-                  Open Support Ticket
-                </Button>
-              </div>
 
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold text-white mt-8 mb-4">Frequently Asked Questions</h3>
-                {[
-                  "How long do withdrawals take?",
-                  "Are there any hidden gas fees?",
-                  "How does the Account Abstraction work?"
-                ].map((faq, i) => (
-                  <div key={i} className="p-4 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-colors">
-                    <span className="text-sm font-medium text-neutral-300">{faq}</span>
-                    <ChevronRight size={16} className="text-neutral-500" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Trading AI Section */}
-          {activeTab === 'trading-ai' && (
-            <AISettings />
-          )}
-
-          {/* About Us Section */}
-          {activeTab === 'about' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              <h2 className="text-2xl font-bold text-white mb-6">About SecureChain Pay</h2>
-              
-              <div className="space-y-6 text-neutral-300 leading-relaxed">
-                <p>
-                  SecureChain Pay is a next-generation enterprise blockchain payment solution designed to bridge the gap between traditional finance and decentralized web3 infrastructure. 
-                </p>
-                <p>
-                  Built by <span className="text-emerald-400 font-medium">Aditya Singh</span>, the platform focuses on solving the critical UX hurdles of crypto payments by leveraging Account Abstraction (ERC-4337) and zero-gas infrastructure on the Polygon network.
-                </p>
-                
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5 mt-6">
-                  <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">Version</p>
-                    <p className="font-mono text-white">v2.4.0-enterprise</p>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                    <p className="text-xs text-neutral-500 uppercase tracking-wider mb-1">Network</p>
-                    <p className="font-mono text-emerald-400 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Polygon Mainnet
+                <div className="p-4 bg-brand-primary/10 border border-brand-primary/20 rounded-2xl flex items-center gap-3">
+                  <Coins size={20} className="text-brand-primary shrink-0" />
+                  <div className="text-xs text-neutral-300">
+                    <p className="font-bold text-white">Default Settlement Currency: HSCT</p>
+                    <p className="text-neutral-400">
+                      Portfolio calculations are denominated in HSCT (₹1 INR parity) with instant multi-currency
+                      conversion.
                     </p>
                   </div>
                 </div>
-
-                <div className="flex gap-4 pt-4">
-                  <Button variant="outline" className="border-white/10 text-neutral-400 hover:text-white flex items-center gap-2">
-                    Terms of Service <ExternalLink size={14} />
-                  </Button>
-                  <Button variant="outline" className="border-white/10 text-neutral-400 hover:text-white flex items-center gap-2">
-                    Privacy Policy <ExternalLink size={14} />
-                  </Button>
-                </div>
               </div>
             </div>
           )}
 
+          {/* TAB 6: DATA EXPORT (PROMPT SECTION 17) */}
+          {activeTab === 'data-export' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Data Export</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Export your non-custodial cryptographic credentials and profile records.
+                </p>
+              </div>
+
+              <div className="p-5 bg-[#121212] border border-white/10 rounded-2xl space-y-4">
+                <div className="space-y-1">
+                  <h4 className="font-bold text-white text-sm">Download Profile & Public Key Bundle</h4>
+                  <p className="text-xs text-neutral-400">
+                    Saves a JSON file containing your decentralized username, linked contact, public wallet address, and
+                    key fingerprint.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleExportData}
+                  className="px-5 py-3 bg-brand-primary hover:bg-brand-pale text-neutral-950 font-extrabold rounded-xl text-xs sm:text-sm transition-all shadow-md flex items-center gap-2 min-h-[44px]"
+                >
+                  <Download size={16} /> Export Profile JSON
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: TRADING AI */}
+          {activeTab === 'trading-ai' && <AISettings />}
+
+          {/* TAB 8: HELP & SUPPORT */}
+          {activeTab === 'help' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="pb-4 border-b border-white/10">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-white">Help & Support</h2>
+                <p className="text-xs sm:text-sm text-neutral-400">
+                  Get assistance with payments, key management, or blockchain settlement.
+                </p>
+              </div>
+
+              <div className="p-5 bg-brand-primary/10 border border-brand-primary/20 rounded-2xl space-y-3">
+                <h4 className="font-bold text-white text-sm">Direct Support Channel</h4>
+                <p className="text-xs text-neutral-300">
+                  Contact our engineering and security team for assistance with non-custodial account restoration or
+                  transaction validation queries.
+                </p>
+                <div className="flex items-center gap-2 pt-1 text-xs">
+                  <Mail size={16} className="text-brand-primary" />
+                  <a href="mailto:support@securechain.pay" className="text-brand-primary font-bold hover:underline">
+                    support@securechain.pay
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

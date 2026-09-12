@@ -78,7 +78,7 @@ export default function PaperTradingPage() {
   };
 
   const handleResetAccount = async () => {
-    if (!confirm('Are you sure you want to reset your simulated paper account back to $100,000?')) return;
+    if (!confirm('Are you sure you want to reset your simulated paper account back to 100,000 HSCT?')) return;
     try {
       const res = await fetch('/api/paper/account', { method: 'POST' });
       if (res.ok) {
@@ -90,7 +90,7 @@ export default function PaperTradingPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#0a0a0c] text-white font-sans overflow-hidden">
+    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col pl-[280px] overflow-hidden">
         <TopBar />
@@ -118,7 +118,7 @@ export default function PaperTradingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-neutral-900/80 border border-white/5 p-5 rounded-2xl backdrop-blur-2xl">
                 <span className="text-xs text-neutral-400 font-medium block mb-1">Simulated Equity</span>
-                <span className="text-2xl font-bold font-mono text-white">${account.equity.toLocaleString()}</span>
+                <span className="text-2xl font-bold font-mono text-white">{account.equity.toLocaleString()} HSCT</span>
                 <span className={`text-xs font-mono font-bold block mt-1 ${account.totalReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                   {account.totalReturn >= 0 ? '+' : ''}{account.totalReturn}% total return
                 </span>
@@ -126,20 +126,20 @@ export default function PaperTradingPage() {
 
               <div className="bg-neutral-900/80 border border-white/5 p-5 rounded-2xl backdrop-blur-2xl">
                 <span className="text-xs text-neutral-400 font-medium block mb-1">Simulated Cash</span>
-                <span className="text-2xl font-bold font-mono text-cyan-400">${account.cashBalance.toLocaleString()}</span>
+                <span className="text-2xl font-bold font-mono text-cyan-400">{account.cashBalance.toLocaleString()} HSCT</span>
               </div>
 
               <div className="bg-neutral-900/80 border border-white/5 p-5 rounded-2xl backdrop-blur-2xl">
                 <span className="text-xs text-neutral-400 font-medium block mb-1">Unrealized P&L</span>
                 <span className={`text-2xl font-bold font-mono ${account.unrealizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {account.unrealizedPnL >= 0 ? '+' : ''}${account.unrealizedPnL}
+                  {account.unrealizedPnL >= 0 ? '+' : ''}{account.unrealizedPnL} HSCT
                 </span>
               </div>
 
               <div className="bg-neutral-900/80 border border-white/5 p-5 rounded-2xl backdrop-blur-2xl">
                 <span className="text-xs text-neutral-400 font-medium block mb-1">Realized P&L</span>
                 <span className={`text-2xl font-bold font-mono ${account.realizedPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {account.realizedPnL >= 0 ? '+' : ''}${account.realizedPnL}
+                  {account.realizedPnL >= 0 ? '+' : ''}{account.realizedPnL} HSCT
                 </span>
               </div>
             </div>

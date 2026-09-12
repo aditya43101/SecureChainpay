@@ -107,7 +107,7 @@ export default function PaymentContinuityDashboard() {
                        {intent.status}
                      </span>
                    </td>
-                   <td className="py-3">${intent.amount}</td>
+                   <td className="py-3">{intent.amount} {intent.currency === 'USD' ? 'HSCT' : (intent.currency || 'HSCT')}</td>
                    <td className="py-3 text-neutral-400">{new Date(intent.updatedAt).toLocaleTimeString()}</td>
                    <td className="py-3">
                      {intent.status !== 'CONFIRMED' && intent.status !== 'FAILED' && (

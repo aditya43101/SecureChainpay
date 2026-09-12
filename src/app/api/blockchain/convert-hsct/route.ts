@@ -1,16 +1,33 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase/admin';
-import crypto from 'crypto';
+import { requireAdminUser } from '@/lib/auth/require-admin-user';
+import { SecurityAuditLogger } from '@/lib/security/audit-logger';
+import { calculateCanonicalBlockHash } from '@/lib/crypto/canonical-hash';
 
 const USD_TO_HSCT = 83.5;
 
-function nodeGenerateHash(message: string): string {
-  const hash = crypto.createHash('sha256').update(message).digest('hex');
-  return '0x' + hash;
-}
-
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    // 1. Enforce Admin Authorization
+    let adminUser: any;
+    try {
+      adminUser = await requireAdminUser(request);
+    } catch (authErr: any) {
+      await SecurityAuditLogger.log({
+        type: 'PRIVILEGE_ESCALATION_ATTEMPT',
+        userId: 'UNKNOWN',
+        resource: '/api/blockchain/convert-hsct',
+        action: 'convertLedger',
+        result: 'DENIED',
+        severity: 'CRITICAL',
+        metadata: { error: authErr.message },
+      });
+      return NextResponse.json(
+        { success: false, error: authErr.message || 'Unauthorized: Admin access required' },
+        { status: authErr.status || 403 }
+      );
+    }
+
     console.log('[SecureChain: HSCT Convert] Starting administrative ledger conversion...');
     const db = getAdminDb();
 
@@ -34,7 +51,7 @@ export async function POST() {
     // Sort blocks by blockNumber ascending
     blocksList.sort((a, b) => a.blockNumber - b.blockNumber);
 
-    // 3. Recalculate block statistics, amounts, descriptions, and hashes
+    // 3. Recalculate block statistics, amounts, descriptions, and hashes canonically
     let previousHash = genesisHash;
     const blockBatch = db.batch();
 
@@ -71,9 +88,17 @@ export async function POST() {
           .replace(/USD/g, 'HSCT');
       }
 
-      // Recompute Hash
-      const hashString = `${previousHash}${block.blockNumber}${block.sender}${block.receiver}${amount}${block.date}${block.type}`;
-      const newHash = nodeGenerateHash(hashString);
+      // Recompute Canonical Hash
+      const newHash = await calculateCanonicalBlockHash({
+        blockNumber: block.blockNumber,
+        previousHash,
+        sender: block.sender,
+        receiver: block.receiver,
+        amount,
+        currency,
+        date: block.date,
+        type: block.type,
+      });
 
       blockBatch.update(db.collection('global_blocks').doc(block.id), {
         amount,
@@ -82,7 +107,7 @@ export async function POST() {
         description,
         payload,
         previousHash,
-        hash: newHash
+        hash: newHash,
       });
 
       previousHash = newHash;
@@ -96,7 +121,7 @@ export async function POST() {
     // 4. Update Chain Meta State
     if (blocksList.length > 0) {
       await db.collection('global_chain_meta').doc('chain_state').update({
-        lastBlockHash: previousHash
+        lastBlockHash: previousHash,
       });
     }
 
@@ -105,22 +130,16 @@ export async function POST() {
     for (const userDoc of usersSnap.docs) {
       const uid = userDoc.id;
 
-      // Update balances located in users/{uid}/wallet/data
       const walletRef = db.collection('users').doc(uid).collection('wallet').doc('data');
       const walletSnap = await walletRef.get();
       if (walletSnap.exists) {
         const walletData = walletSnap.data();
         if (walletData?.balances && typeof walletData.balances.USD === 'number') {
           const currentUsd = walletData.balances.USD;
-          
-          // We only scale if the value is reasonably small (e.g. less than 100,000 USD/HSCT)
-          // or we can detect if it hasn't been converted yet to avoid double conversion.
-          // Since the user balance starts at 300 USD (which becomes 25050 HSCT),
-          // let's do a safe threshold check: if currentUsd < 50000 (pre-conversion USD), convert it!
           if (currentUsd < 50000) {
             const hsctBalance = currentUsd * USD_TO_HSCT;
             await walletRef.update({
-              'balances.USD': hsctBalance
+              'balances.USD': hsctBalance,
             });
             console.log(`[SecureChain: HSCT Convert] Converted wallet balances for user ${uid}.`);
           }
@@ -131,7 +150,7 @@ export async function POST() {
       const txsSnap = await db.collection('users').doc(uid).collection('transactions').get();
       const txBatch = db.batch();
       let hasTxUpdates = false;
-      
+
       txsSnap.forEach((txDoc) => {
         const txData = txDoc.data();
         let amount = Number(txData.amount || 0);
@@ -166,14 +185,14 @@ export async function POST() {
             .replace(/USD/g, 'HSCT');
           needsUpdate = true;
         }
-            
+
         if (needsUpdate) {
           txBatch.update(db.collection('users').doc(uid).collection('transactions').doc(txDoc.id), {
             amount,
             currency,
             asset: currency,
             description,
-            payload
+            payload,
           });
           hasTxUpdates = true;
         }
@@ -184,7 +203,15 @@ export async function POST() {
       }
     }
 
-    console.log('[SecureChain: HSCT Convert] User transactions and balances converted.');
+    await SecurityAuditLogger.log({
+      type: 'ADMIN_LEDGER_CONVERSION',
+      userId: adminUser.uid,
+      resource: 'global_blocks',
+      action: 'convertHSCT',
+      result: 'COMMITTED',
+      severity: 'HIGH',
+      metadata: { initiatedBy: adminUser.uid },
+    });
 
     return NextResponse.json({ success: true, message: 'All transactions converted to HSCT successfully' });
   } catch (error: any) {
