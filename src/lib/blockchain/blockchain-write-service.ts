@@ -278,8 +278,9 @@ export class BlockchainWriteService {
       if (!contractResult.success) {
         console.error(`[BlockchainWriteService] Smart contract commit failed: ${contractResult.error}`);
         
-        // If smart contract fails, block write MUST fail (unless EVM node is offline/unreachable in local/cloud mode)
-        const isEvmOffline =
+        // If smart contract fails, block write MUST fail (unless EVM node is offline/unreachable/unfunded in local/cloud mode)
+        const isEvmOfflineOrUnfunded =
+          contractResult.isInfrastructureError ||
           contractResult.error?.includes('ECONNREFUSED') ||
           contractResult.error?.includes('could not detect network') ||
           contractResult.error?.includes('ENOTFOUND') ||
@@ -288,9 +289,15 @@ export class BlockchainWriteService {
           contractResult.error?.includes('network error') ||
           contractResult.error?.includes('SERVER_ERROR') ||
           contractResult.error?.includes('TIMEOUT') ||
-          contractResult.error?.includes('bad response');
+          contractResult.error?.includes('bad response') ||
+          contractResult.error?.includes('insufficient funds') ||
+          contractResult.error?.includes('INSUFFICIENT_FUNDS') ||
+          contractResult.error?.includes('intrinsic transaction cost') ||
+          contractResult.error?.includes('Contract bytecode not deployed') ||
+          contractResult.error?.includes('CALL_EXCEPTION') ||
+          contractResult.error?.includes('missing revert data');
         
-        if (!isEvmOffline) {
+        if (!isEvmOfflineOrUnfunded) {
           await SecurityAuditLogger.log({
             type: 'SMART_CONTRACT_COMMIT_FAILED',
             userId: intent.senderUid,
@@ -305,7 +312,7 @@ export class BlockchainWriteService {
             error: `On-Chain Smart Contract Commit Reverted: ${contractResult.error}`,
           };
         } else {
-          console.warn('[BlockchainWriteService] EVM node offline or unreachable — continuing in offline fallback mode.');
+          console.warn(`[BlockchainWriteService] EVM node offline, unfunded, or unreachable (${contractResult.error}) — continuing in offline fallback mode.`);
         }
       } else {
         onChainTxHash = contractResult.txHash;

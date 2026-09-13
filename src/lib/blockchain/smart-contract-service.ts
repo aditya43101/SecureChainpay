@@ -32,6 +32,7 @@ export interface CommitBlockParams {
 
 export interface CommitBlockResult {
   success: boolean;
+  isInfrastructureError?: boolean;
   txHash?: string;
   blockNumber?: number;
   blockHash?: string;
@@ -96,6 +97,56 @@ export class SmartContractService {
     try {
       const address = this.getAddress();
       const wallet = getSystemWallet();
+      const provider = wallet.provider;
+
+      if (!provider) {
+        return {
+          success: false,
+          isInfrastructureError: true,
+          error: 'EVM provider not available',
+        };
+      }
+
+      // Check if contract code exists at this address
+      try {
+        const code = await provider.getCode(address);
+        if (!code || code === '0x' || code === '0x0') {
+          console.warn(`[SmartContractService] Contract bytecode not deployed at ${address} on connected network. Postponing on-chain commit.`);
+          return {
+            success: false,
+            isInfrastructureError: true,
+            error: `Contract bytecode not deployed at ${address}`,
+          };
+        }
+      } catch (checkErr: any) {
+        console.warn(`[SmartContractService] Network/RPC warning checking bytecode: ${checkErr.message}`);
+        return {
+          success: false,
+          isInfrastructureError: true,
+          error: `Network/RPC error checking contract: ${checkErr.message}`,
+        };
+      }
+
+      // Check if wallet has gas balance
+      try {
+        const balance = await provider.getBalance(wallet.address);
+        if (balance === BigInt(0)) {
+          console.warn(`[SmartContractService] System wallet ${wallet.address} has 0 gas funds. Postponing on-chain commit.`);
+          return {
+            success: false,
+            isInfrastructureError: true,
+            error: `insufficient funds: system wallet ${wallet.address} has 0 gas balance on connected network`,
+          };
+        }
+      } catch (balErr: any) {
+        console.warn(`[SmartContractService] Network/RPC warning checking wallet balance: ${balErr.message}`);
+        return {
+          success: false,
+          isInfrastructureError: true,
+          error: `Network/RPC error checking balance: ${balErr.message}`,
+        };
+      }
+
       const contract = new ethers.Contract(address, ANCHOR_ABI, wallet);
 
       console.info(`[SmartContractService] Committing Block #${params.blockNumber} to on-chain contract at ${address}...`);
@@ -128,9 +179,27 @@ export class SmartContractService {
       };
     } catch (error: any) {
       console.error('[SmartContractService] Failed to commit block on-chain:', error);
+      const rawError = error?.reason || error?.message || 'Smart contract execution failed';
+      const isInfra =
+        error?.code === 'INSUFFICIENT_FUNDS' ||
+        rawError.includes('insufficient funds') ||
+        rawError.includes('intrinsic transaction cost') ||
+        rawError.includes('ECONNREFUSED') ||
+        rawError.includes('ENOTFOUND') ||
+        rawError.includes('ETIMEDOUT') ||
+        rawError.includes('fetch failed') ||
+        rawError.includes('network error') ||
+        rawError.includes('SERVER_ERROR') ||
+        rawError.includes('TIMEOUT') ||
+        rawError.includes('bad response') ||
+        rawError.includes('CALL_EXCEPTION') ||
+        rawError.includes('could not detect network') ||
+        rawError.includes('missing revert data');
+
       return {
         success: false,
-        error: error?.reason || error?.message || 'Smart contract execution failed',
+        isInfrastructureError: isInfra,
+        error: rawError,
       };
     }
   }
