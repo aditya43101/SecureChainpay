@@ -1,5 +1,5 @@
 import { getAdminDb } from '@/lib/firebase/admin';
-import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 import { OnChainStateReader } from '@/lib/blockchain/on-chain-state-reader';
 import { BlockchainWriteService } from '@/lib/blockchain/blockchain-write-service';
 import { SecurityStateService } from './security-state-service';
@@ -90,7 +90,7 @@ export class BlockchainIntegrityMonitor {
     const storedChainRoot = dbState.chainRoot || '';
 
     // 3. Verify Genesis Block Hash
-    const expectedGenesisHash = await sha256Hex(this.EXPECTED_GENESIS_SEED);
+    const expectedGenesisHash = keccak256GenesisHash();
     if (dbState.genesisHash && dbState.genesisHash.toLowerCase() !== expectedGenesisHash.toLowerCase()) {
       return await this.handleConfirmedTamper({
         threat: 'GENESIS_MISMATCH',
@@ -271,7 +271,7 @@ export class BlockchainIntegrityMonitor {
 
       // Genesis check
       if (b.blockNumber === 0) {
-        const expectedGen = await sha256Hex(this.EXPECTED_GENESIS_SEED);
+        const expectedGen = keccak256GenesisHash();
         if (b.hash.toLowerCase() !== expectedGen.toLowerCase()) {
           return {
             status: 'FAILED',

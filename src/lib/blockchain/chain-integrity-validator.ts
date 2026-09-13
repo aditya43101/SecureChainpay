@@ -6,7 +6,7 @@
  */
 
 import { getAdminDb } from '@/lib/firebase/admin';
-import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ const GLOBAL_BLOCKS = 'global_blocks';
 const GLOBAL_META = 'global_chain_meta';
 const CHAIN_STATE_DOC = 'chain_state';
 const GENESIS_BLOCK_ID = 'GENESIS';
-const GENESIS_SEED = 'genesis:securechainpay:global:v1';
+// Genesis seed constant moved to canonical-hash.ts — use keccak256GenesisHash()
 
 // ─── Core Validator ───────────────────────────────────────────────────────────
 
@@ -113,7 +113,7 @@ export class ChainIntegrityValidator {
     let genesisHashVerified = false;
     const genesisBlock = sortedBlocks.find((b: any) => b.type === 'genesis' || b.id === GENESIS_BLOCK_ID);
     if (genesisBlock) {
-      const expectedGenesisHash = await sha256Hex(GENESIS_SEED);
+      const expectedGenesisHash = keccak256GenesisHash();
       genesisHashVerified = (genesisBlock.hash || '').toLowerCase() === expectedGenesisHash.toLowerCase();
 
       results.push({

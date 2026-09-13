@@ -1,4 +1,34 @@
 import crypto from 'crypto';
+import { ethers } from 'ethers';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CANONICAL GENESIS HASH — KECCAK-256 (must match SecureChainAnchor.sol)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The smart contract computes genesisHash as:
+ *   keccak256(abi.encodePacked("genesis:securechainpay:global:v1"))
+ *
+ * All backend services MUST use this function for genesis hash derivation
+ * to prevent cross-layer mismatches between Firestore ↔ On-Chain state.
+ */
+export const GENESIS_SEED = 'genesis:securechainpay:global:v1';
+
+/**
+ * Computes the canonical keccak256 hash for a given string input.
+ * Returns a 0x-prefixed, lowercase hex string (bytes32-compatible).
+ */
+export function keccak256Hex(content: string): string {
+  return ethers.keccak256(ethers.toUtf8Bytes(content));
+}
+
+/**
+ * Returns the canonical genesis hash that matches the on-chain anchor contract.
+ * This is THE authoritative genesis hash derivation for the entire system.
+ */
+export function keccak256GenesisHash(): string {
+  return keccak256Hex(GENESIS_SEED);
+}
 
 /**
  * Deterministically sorts object keys recursively to produce canonical JSON.

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase/admin';
 import { requireAdminUser } from '@/lib/auth/require-admin-user';
 import { SecurityAuditLogger } from '@/lib/security/audit-logger';
-import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     // 3. Initialize fresh global Genesis Block #0 deterministically
     const genesisTimeISO = '1970-01-01T00:00:00.000Z';
-    const genesisHash = await sha256Hex('genesis:securechainpay:global:v1');
+    const genesisHash = keccak256GenesisHash();
 
     const genesisBlock = {
       id: 'GENESIS',

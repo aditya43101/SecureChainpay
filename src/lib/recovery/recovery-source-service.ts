@@ -1,5 +1,5 @@
 import { getAdminDb } from '@/lib/firebase/admin';
-import { sha256Hex } from '@/lib/crypto/canonical-hash';
+import { keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 import { BlockchainWriteService } from '@/lib/blockchain/blockchain-write-service';
 import { SmartContractService } from '@/lib/blockchain/smart-contract-service';
 import { TrustedCheckpointService } from '@/lib/security/trusted-checkpoint-service';
@@ -28,7 +28,7 @@ export class RecoverySourceService {
     expectedHash: string;
     error?: string;
   }> {
-    const expectedHash = await sha256Hex(this.EXPECTED_GENESIS_SEED);
+    const expectedHash = keccak256GenesisHash();
     const adminDb = getAdminDb();
 
     let genesisBlockData: any = null;

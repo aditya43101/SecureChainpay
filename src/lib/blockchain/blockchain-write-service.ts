@@ -1,5 +1,5 @@
 import { getAdminDb } from '@/lib/firebase/admin';
-import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 import { SecurityAuditLogger } from '@/lib/security/audit-logger';
 import { ethers } from 'ethers';
 import { SmartContractService } from './smart-contract-service';
@@ -80,7 +80,7 @@ export class BlockchainWriteService {
     }
 
     const genesisTimeISO = '1970-01-01T00:00:00.000Z';
-    const genesisHash = await sha256Hex('genesis:securechainpay:global:v1');
+    const genesisHash = keccak256GenesisHash();
 
     const genesisBlock = {
       id: this.GENESIS_BLOCK_ID,

@@ -1,4 +1,4 @@
-import { calculateCanonicalBlockHash, sha256Hex } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
 import { BlockchainWriteService } from '@/lib/blockchain/blockchain-write-service';
 import { ethers } from 'ethers';
 
@@ -51,7 +51,7 @@ export class ChainReconstructionService {
    * Every block is verified cryptographically.
    */
   public static async reconstructChain(candidateBlocks: any[]): Promise<ChainReconstructionResult> {
-    const expectedGenesisHash = await sha256Hex(this.EXPECTED_GENESIS_SEED);
+    const expectedGenesisHash = keccak256GenesisHash();
     const reconstructedBlocks: ReconstructedBlock[] = [];
     const rejectedBlocks: any[] = [];
 
