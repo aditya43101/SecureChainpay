@@ -130,12 +130,15 @@ export class SmartContractService {
       // Check if wallet has gas balance
       try {
         const balance = await provider.getBalance(wallet.address);
-        if (balance === BigInt(0)) {
-          console.warn(`[SmartContractService] System wallet ${wallet.address} has 0 gas funds. Postponing on-chain commit.`);
+        const feeData = await provider.getFeeData().catch(() => null);
+        const gasPrice = feeData?.gasPrice || ethers.parseUnits('30', 'gwei');
+        const minGasCost = gasPrice * BigInt(150000);
+        if (balance < minGasCost) {
+          console.warn(`[SmartContractService] System wallet ${wallet.address} has insufficient gas (${balance} < ${minGasCost} wei). Postponing on-chain commit.`);
           return {
             success: false,
             isInfrastructureError: true,
-            error: `insufficient funds: system wallet ${wallet.address} has 0 gas balance on connected network`,
+            error: `insufficient funds: system wallet has ${balance} wei, minimum required ${minGasCost} wei`,
           };
         }
       } catch (balErr: any) {
@@ -180,10 +183,16 @@ export class SmartContractService {
     } catch (error: any) {
       console.error('[SmartContractService] Failed to commit block on-chain:', error);
       const rawError = error?.reason || error?.message || 'Smart contract execution failed';
+      let errorJson = '';
+      try { errorJson = JSON.stringify(error || {}); } catch (_) {}
       const isInfra =
         error?.code === 'INSUFFICIENT_FUNDS' ||
+        error?.error?.code === -32000 ||
         rawError.includes('insufficient funds') ||
         rawError.includes('intrinsic transaction cost') ||
+        rawError.includes('overshot') ||
+        errorJson.includes('INSUFFICIENT_FUNDS') ||
+        errorJson.includes('insufficient funds') ||
         rawError.includes('ECONNREFUSED') ||
         rawError.includes('ENOTFOUND') ||
         rawError.includes('ETIMEDOUT') ||

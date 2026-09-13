@@ -293,6 +293,7 @@ export class BlockchainWriteService {
           contractResult.error?.includes('insufficient funds') ||
           contractResult.error?.includes('INSUFFICIENT_FUNDS') ||
           contractResult.error?.includes('intrinsic transaction cost') ||
+          contractResult.error?.includes('overshot') ||
           contractResult.error?.includes('Contract bytecode not deployed') ||
           contractResult.error?.includes('CALL_EXCEPTION') ||
           contractResult.error?.includes('missing revert data');
