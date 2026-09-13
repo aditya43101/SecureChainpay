@@ -52,8 +52,10 @@ export class SecurityStateService {
 
       if (snap.exists) {
         const data = snap.data() as SystemSecurityDoc;
-        inMemoryState = data;
-        return data;
+        if (data && data.state) {
+          inMemoryState = { ...inMemoryState, ...data };
+          return inMemoryState;
+        }
       }
     } catch (err) {
       console.warn('[SecurityStateService] Warning reading Firestore security state, using in-memory state:', err);
@@ -89,27 +91,31 @@ export class SecurityStateService {
 
     const updatedDoc: SystemSecurityDoc = {
       state: nextState,
-      previousState: currentState.state,
+      previousState: currentState?.state || 'HEALTHY',
       lastStateChange: now,
       isTransactionFrozen: isFrozen,
-      isContractPaused: currentState.isContractPaused,
-      isEmergencyLockActive: isEmergency || currentState.isEmergencyLockActive,
-      activeIncidentId: metadata?.incidentId || currentState.activeIncidentId || null,
+      isContractPaused: currentState?.isContractPaused || false,
+      isEmergencyLockActive: isEmergency || currentState?.isEmergencyLockActive || false,
+      activeIncidentId: metadata?.incidentId || currentState?.activeIncidentId || null,
       lastCheckedAt: now,
       reason,
-      lastTrustedBlockNumber: metadata?.lastTrustedBlockNumber ?? currentState.lastTrustedBlockNumber,
-      lastTrustedBlockHash: metadata?.lastTrustedBlockHash ?? currentState.lastTrustedBlockHash,
-      lastTrustedChainRoot: metadata?.lastTrustedChainRoot ?? currentState.lastTrustedChainRoot,
+      lastTrustedBlockNumber: metadata?.lastTrustedBlockNumber ?? currentState?.lastTrustedBlockNumber ?? null,
+      lastTrustedBlockHash: metadata?.lastTrustedBlockHash ?? currentState?.lastTrustedBlockHash ?? null,
+      lastTrustedChainRoot: metadata?.lastTrustedChainRoot ?? currentState?.lastTrustedChainRoot ?? null,
     };
 
     inMemoryState = updatedDoc;
 
     try {
       const adminDb = getAdminDb();
+      // Filter out any undefined fields before sending to Firestore
+      const firestoreData = Object.fromEntries(
+        Object.entries(updatedDoc).filter(([_, v]) => v !== undefined)
+      );
       await adminDb
         .collection(this.SYSTEM_SECURITY_COLLECTION)
         .doc(this.STATE_DOC_ID)
-        .set(updatedDoc, { merge: true });
+        .set(firestoreData, { merge: true });
     } catch (err) {
       console.error('[SecurityStateService] Failed to persist state transition to Firestore:', err);
     }

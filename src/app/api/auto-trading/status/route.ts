@@ -45,12 +45,18 @@ export async function GET(request: Request) {
       take: 10
     });
 
+    const lastDecisions = {
+      BTCUSDT: tradingFallbackStore.getLastDecisionContext('BTCUSDT'),
+      ETHUSDT: tradingFallbackStore.getLastDecisionContext('ETHUSDT'),
+    };
+
     return NextResponse.json({
       success: true,
       settings: settings || tradingFallbackStore.getSettings(activeUserId),
       dailyState: dailyState || tradingFallbackStore.getDailyState(activeUserId),
       account: paperAccount || tradingFallbackStore.getPaperAccount(activeUserId),
-      recentEvents: recentEvents || tradingFallbackStore.getSafetyEvents(activeUserId)
+      recentEvents: recentEvents || tradingFallbackStore.getSafetyEvents(activeUserId),
+      lastDecisions
     });
   } catch (error: any) {
     console.warn('[API /api/auto-trading/status] Database unavailable, returning fallback state:', error?.message);
@@ -59,7 +65,11 @@ export async function GET(request: Request) {
       settings: tradingFallbackStore.getSettings(userId),
       dailyState: tradingFallbackStore.getDailyState(userId),
       account: tradingFallbackStore.getPaperAccount(userId),
-      recentEvents: tradingFallbackStore.getSafetyEvents(userId)
+      recentEvents: tradingFallbackStore.getSafetyEvents(userId),
+      lastDecisions: {
+        BTCUSDT: tradingFallbackStore.getLastDecisionContext('BTCUSDT'),
+        ETHUSDT: tradingFallbackStore.getLastDecisionContext('ETHUSDT'),
+      }
     });
   }
 }

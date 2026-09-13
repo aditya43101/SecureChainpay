@@ -1,4 +1,4 @@
-import { SMA, EMA, RSI, MACD, BollingerBands, ATR } from 'technicalindicators';
+import { SMA, EMA, RSI, MACD, BollingerBands, ATR, ADX } from 'technicalindicators';
 import { Candle } from './market-data-service';
 
 export interface Indicators {
@@ -17,6 +17,19 @@ export interface Indicators {
     lower?: number;
   };
   atr?: number;
+  adx?: number;
+  superTrend?: {
+    direction: 'BULLISH' | 'BEARISH';
+    upper: number;
+    lower: number;
+    value: number;
+  };
+  volume?: {
+    current: number;
+    average20: number;
+    ratio: number;
+    isSurge: boolean;
+  };
   volatility?: number;
 }
 
@@ -70,6 +83,52 @@ export const technicalAnalysisService = {
     const atrResult = ATR.calculate({ high: highs, low: lows, close: closes, period: 14 });
     const atr = getLatest(atrResult);
 
+    // ADX (14 period)
+    let adx: number | undefined;
+    try {
+      const adxResult = ADX.calculate({ high: highs, low: lows, close: closes, period: 14 });
+      const latestAdx = getLatest(adxResult);
+      if (latestAdx && typeof latestAdx.adx === 'number') {
+        adx = Number(latestAdx.adx.toFixed(2));
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+
+    // SuperTrend (period 10, multiplier 3.0)
+    let superTrend: { direction: 'BULLISH' | 'BEARISH'; upper: number; lower: number; value: number } | undefined;
+    if (atr && closes.length >= 10) {
+      const latestClose = closes[closes.length - 1];
+      const latestHigh = highs[highs.length - 1];
+      const latestLow = lows[lows.length - 1];
+      const hl2 = (latestHigh + latestLow) / 2;
+      const upper = hl2 + 3.0 * atr;
+      const lower = hl2 - 3.0 * atr;
+      const direction: 'BULLISH' | 'BEARISH' = latestClose >= lower ? 'BULLISH' : 'BEARISH';
+      superTrend = {
+        direction,
+        upper: Number(upper.toFixed(2)),
+        lower: Number(lower.toFixed(2)),
+        value: Number((direction === 'BULLISH' ? lower : upper).toFixed(2))
+      };
+    }
+
+    // Volume Analysis (vs 20-period moving average)
+    let volumeMetric: { current: number; average20: number; ratio: number; isSurge: boolean } | undefined;
+    const volumes = candles.map(c => c.volume);
+    if (volumes.length >= 5) {
+      const currentVol = volumes[volumes.length - 1];
+      const lookback = Math.min(20, volumes.length);
+      const avg20 = volumes.slice(-lookback).reduce((a, b) => a + b, 0) / lookback;
+      const ratio = avg20 > 0 ? Number((currentVol / avg20).toFixed(2)) : 1;
+      volumeMetric = {
+        current: Number(currentVol.toFixed(2)),
+        average20: Number(avg20.toFixed(2)),
+        ratio,
+        isSurge: ratio >= 1.5
+      };
+    }
+
     // Basic historical volatility estimation based on standard deviation of daily returns
     let volatility;
     if (closes.length >= 20) {
@@ -101,6 +160,9 @@ export const technicalAnalysisService = {
         lower: bollingerBands.lower
       } : undefined,
       atr,
+      adx,
+      superTrend,
+      volume: volumeMetric,
       volatility: volatility ? Number(volatility.toFixed(2)) : undefined
     };
   }

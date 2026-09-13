@@ -59,8 +59,8 @@ export function AutoTradingConfirmationModal({ isOpen, onClose, onConfirm }: Mod
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               Enable Auto-Trading & All-Time Mode
-              <span className="px-2 py-0.5 text-xs font-semibold bg-brand-primary/20 text-brand-primary border border-brand-primary/40 rounded-md">
-                REAL EXECUTION GATE
+              <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-md">
+                AUTONOMOUS PAPER EXECUTION GATE
               </span>
             </h2>
             <p className="text-xs text-neutral-400">

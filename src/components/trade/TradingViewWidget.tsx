@@ -147,15 +147,25 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
             <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${
               recommendation.decisionTrace?.rejectionReason === 'MARKET_DATA_STALE'
                 ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                : recommendation.brainContext?.decision === 'ENTER_LONG' || recommendation.brainContext?.decision === 'ENTER_SHORT'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-pulse'
+                : recommendation.brainContext?.decision === 'WAIT' || recommendation.brainContext?.timing?.status === 'WAITING_FOR_ENTRY'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                 : isApproved
                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                 : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
             }`}>
               {recommendation.decisionTrace?.rejectionReason === 'MARKET_DATA_STALE'
-                ? 'MARKET DATA STALE — EXECUTION BLOCKED'
+                ? 'MARKET DATA STALE — BLOCKED'
+                : recommendation.brainContext?.decision === 'ENTER_LONG' || recommendation.brainContext?.decision === 'ENTER_SHORT'
+                ? 'ENTRY CONFIRMED — PAPER EXECUTION'
+                : recommendation.brainContext?.decision === 'WAIT' || recommendation.brainContext?.timing?.status === 'WAITING_FOR_ENTRY'
+                ? 'WAITING FOR ENTRY TIMING'
+                : recommendation.brainContext?.decision === 'EXIT'
+                ? 'STRATEGY REVERSAL — CLOSING'
                 : isApproved
-                ? 'APPROVED — AWAITING EXECUTION'
-                : 'SIGNAL REJECTED'}
+                ? 'ENTRY CONFIRMED — PAPER EXECUTION'
+                : 'SIGNAL REJECTED / HOLD'}
             </span>
           </div>
         )}

@@ -5,6 +5,7 @@ import { strategyEngine, MLPredictionData, DecisionMode } from './strategy-engin
 import { riskEngine, UserRiskProfile } from './risk-engine';
 import { DEFAULT_STRATEGY_CONFIG } from './strategy-config';
 import { tradingFallbackStore } from './trading-fallback-store';
+import { TradingBrain, TradingDecisionContext } from './trading-brain';
 
 export interface DecisionTrace {
   marketData: 'PASS' | 'FAIL';
@@ -64,6 +65,7 @@ export interface RecommendationObject {
   warnings: string[];
   decisionTrace?: DecisionTrace;
   canonicalSnapshot?: MarketSnapshot;
+  brainContext?: TradingDecisionContext;
   timestamp: string;
   dataTimestamp: string;
 }
@@ -222,6 +224,19 @@ export const recommendationEngine = {
 
     const dataTimestamp = canonicalSnapshot.candleTimestamp;
 
+    let brainContext: TradingDecisionContext | undefined;
+    try {
+      brainContext = await TradingBrain.evaluate({
+        userId: userId || 'default-user',
+        symbol: formattedSymbol,
+        timeframe,
+        snapshot: canonicalSnapshot,
+        userRisk: userRiskProfile,
+      });
+    } catch (err: any) {
+      console.warn('[recommendationEngine] TradingBrain evaluation non-critical notice:', err?.message);
+    }
+
     const recommendation: RecommendationObject = {
       asset: formattedSymbol,
       timeframe,
@@ -260,6 +275,7 @@ export const recommendationEngine = {
       warnings,
       decisionTrace,
       canonicalSnapshot,
+      brainContext,
       timestamp: new Date().toISOString(),
       dataTimestamp
     };

@@ -170,6 +170,7 @@ class TradingFallbackStore {
   private candidateLessons: any[] = [];
   private confidenceCalibrationEvents: any[] = [];
   private validationResults = new Map<string, any>();
+  private decisionContexts = new Map<string, any>();
   private strategyVersionRecords: any[] = [
     {
       id: 'strat_ver_v1_baseline',
@@ -619,6 +620,14 @@ class TradingFallbackStore {
 
   getShadowEvaluations(limit = 20): any[] {
     return this.shadowEvaluations.slice(0, limit);
+  }
+
+  setLastDecisionContext(symbol: string, ctx: any): void {
+    this.decisionContexts.set(symbol, ctx);
+  }
+
+  getLastDecisionContext(symbol: string): any {
+    return this.decisionContexts.get(symbol) || null;
   }
 }
 

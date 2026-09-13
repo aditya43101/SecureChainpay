@@ -24,6 +24,7 @@ export interface Ticker {
 }
 
 export interface MarketSnapshot {
+  snapshotId: string;
   symbol: string;
   timestamp: string;
   lastPrice: number;
@@ -34,10 +35,13 @@ export interface MarketSnapshot {
   timeframe: string;
   dataSource: 'BINANCE_LIVE' | 'BINANCE_VISION' | 'BYBIT' | 'SYNTHETIC_FALLBACK';
   dataVersion: string;
+  isFresh: boolean;
   isStale: boolean;
   stalenessAgeSeconds: number;
   candles: Candle[];
 }
+
+export type CanonicalMarketSnapshot = MarketSnapshot;
 
 // Convert common timeframes to Binance intervals
 const toBinanceInterval = (timeframe: string) => {
@@ -369,8 +373,11 @@ export const marketDataService = {
 
     const dataSource = ticker.dataSource || (ticker.price ? 'BINANCE_LIVE' : 'SYNTHETIC_FALLBACK');
     const dataVersion = `SNAP_${symbol}_${timeframe}_${harmonizedLatestCandle.timestamp}_${lastPrice}`;
+    const snapshotId = dataVersion;
+    const isFresh = !isStale;
 
     return {
+      snapshotId,
       symbol,
       timestamp: new Date().toISOString(),
       lastPrice,
@@ -381,6 +388,7 @@ export const marketDataService = {
       timeframe,
       dataSource,
       dataVersion,
+      isFresh,
       isStale,
       stalenessAgeSeconds,
       candles

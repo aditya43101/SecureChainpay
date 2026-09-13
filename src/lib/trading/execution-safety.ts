@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { RecommendationObject } from './recommendation-engine';
 import { marketDataService } from '../market/market-data-service';
 import { tradingFallbackStore } from './trading-fallback-store';
+import { SecurityStateService } from '@/lib/security/security-state-service';
 
 export interface PreTradeValidationResult {
   allowed: boolean;
@@ -60,7 +61,23 @@ export class ExecutionSafetyEngine {
       settings.strategyVersion || 'HYBRID_v1'
     );
 
-    // GATE 0: Check System Status & Permission
+    // GATE 0: Check Global Security Freeze
+    try {
+      const secState = await SecurityStateService.getSecurityState();
+      if (secState && (secState.isTransactionFrozen || secState.state === 'TRANSACTION_FROZEN' || secState.state === 'EMERGENCY_LOCK')) {
+        return {
+          allowed: false,
+          stage: 'SECURITY_FREEZE_GATE',
+          reasons: [`TRANSACTION_FROZEN: Global transaction freeze active (${secState.state}). Auto-trading paper execution blocked.`],
+          warnings: [],
+          idempotencyKey: ik
+        };
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+
+    // GATE 0A: Check System Status & Permission
     if (!settings.enabled || settings.status !== 'ENABLED') {
       return {
         allowed: false,
@@ -213,6 +230,9 @@ export class ExecutionSafetyEngine {
       existingApproval = await prisma.tradeApproval.findUnique({
         where: { idempotencyKey: ik }
       });
+      if (!existingApproval) {
+        existingApproval = tradingFallbackStore.findApprovalByKey(ik);
+      }
     } catch {
       existingApproval = tradingFallbackStore.findApprovalByKey(ik);
     }
@@ -226,6 +246,9 @@ export class ExecutionSafetyEngine {
       existingOrder = await prisma.executionOrder.findUnique({
         where: { idempotencyKey: ik }
       });
+      if (!existingOrder) {
+        existingOrder = tradingFallbackStore.findOrderByKey(ik);
+      }
     } catch {
       existingOrder = tradingFallbackStore.findOrderByKey(ik);
     }
@@ -241,6 +264,10 @@ export class ExecutionSafetyEngine {
         where: { userId, symbol },
         orderBy: { createdAt: 'desc' }
       });
+      if (!lastOrder) {
+        const userOrders = tradingFallbackStore.getOrders(userId);
+        lastOrder = userOrders.find(o => o.symbol === symbol);
+      }
     } catch {
       const userOrders = tradingFallbackStore.getOrders(userId);
       lastOrder = userOrders.find(o => o.symbol === symbol);

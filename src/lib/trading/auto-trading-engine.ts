@@ -1,8 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { recommendationEngine } from './recommendation-engine';
+import { recommendationEngine, RecommendationObject } from './recommendation-engine';
 import { ExecutionEngine } from './execution-engine';
 import { marketDataService } from '../market/market-data-service';
 import { tradingFallbackStore } from './trading-fallback-store';
+import { TradingBrain, TradingDecisionContext } from './trading-brain';
+import { EntryTimingEngine } from './entry-timing-engine';
 
 export interface AllTimeCycleResult {
   userId: string;
@@ -118,26 +120,69 @@ export class AutoTradingEngine {
     for (const symbol of assetsEvaluated) {
       for (const timeframe of timeframes) {
         try {
-          // Fetch candles to ensure indicators are fresh
-          await marketDataService.getCandles(symbol, timeframe, 100);
+          // Steps 1-3: Fetch Canonical Market Snapshot
+          const snapshot = await marketDataService.getCanonicalSnapshot(symbol, timeframe, 100);
 
-          // Generate recommendation using Champion Model & Strategy Engine
-          const rec = await recommendationEngine.generateRecommendation(symbol, timeframe, userId);
+          // Steps 4-11: Trading Brain evaluation (Market Understanding, Regime, Timing, Risk, Learning)
+          const brainContext: TradingDecisionContext = await TradingBrain.evaluate({
+            userId,
+            symbol,
+            timeframe,
+            snapshot,
+            userRisk: {
+              accountCapital: 100000,
+              maxRiskPerTrade: settings.riskPerTrade || 0.01,
+              maxDailyLoss: settings.maxDailyLoss || 0.03,
+              maxAssetExposure: settings.maxAssetExposure || 0.10,
+              minRiskReward: settings.minRiskReward || 1.5,
+            }
+          });
           recommendationsGenerated++;
 
-          logs.push(`[${symbol} ${timeframe}] Signal: ${rec.action} (Score: ${rec.score.toFixed(1)}/7, Mode: ${rec.decisionMode || 'HOLD'}, Strength: ${rec.strength})`);
+          logs.push(`[${symbol} ${timeframe}] [${brainContext.marketRegime}] Brain Decision: ${brainContext.decision} (Signal: ${brainContext.signal}, Score: ${brainContext.confidence}/7, Quality: ${brainContext.entryQualityScore}/100, Mode: ${brainContext.mode})`);
+          logs.push(`[${symbol} ${timeframe}] Reason: ${brainContext.reason}`);
 
-          // Execute if signal is actionable (BUY or SELL in either EXPLORE or EXPLOIT mode)
-          if (rec.action === 'BUY' || rec.action === 'SELL') {
+          // Step 12 & 13: Act on Brain Decision (SIGNAL != DECISION)
+          if (brainContext.decision === 'ENTER_LONG' || brainContext.decision === 'ENTER_SHORT') {
+            const rec: RecommendationObject = {
+              id: brainContext.decisionId,
+              asset: symbol,
+              timeframe,
+              action: brainContext.decision === 'ENTER_LONG' ? 'BUY' : 'SELL',
+              strength: brainContext.confidence >= 6 ? 'HIGH' : (brainContext.confidence >= 4 ? 'MEDIUM' : 'LOW'),
+              decisionMode: brainContext.mode,
+              entry: brainContext.risk.entry,
+              stopLoss: brainContext.risk.stopLoss,
+              takeProfit: brainContext.risk.takeProfit,
+              riskReward: brainContext.risk.riskRewardRatio,
+              positionSize: brainContext.positionSizing.positionSize,
+              positionValueUSD: brainContext.positionSizing.positionValueUSD,
+              strategy: brainContext.mode === 'EXPLOIT' ? 'HYBRID' : 'HYBRID_EXPLORATION',
+              score: brainContext.confidence,
+              maxScore: 7,
+              riskAssessment: brainContext.risk,
+              reasons: [brainContext.reason, ...brainContext.entryConditions],
+              warnings: brainContext.risk.warnings,
+              canonicalSnapshot: snapshot,
+              brainContext,
+              timestamp: brainContext.timestamp,
+              dataTimestamp: snapshot.candleTimestamp,
+            };
+
             const result = await ExecutionEngine.processTradeRecommendation(userId, rec);
-            logs.push(`[${symbol} ${timeframe}] [${rec.decisionMode || 'EXPLOIT'} Mode] Decision: ${result.executed ? 'APPROVED' : 'REJECTED'}`);
-            logs.push(`[${symbol} ${timeframe}] Execution: ${result.message}`);
+            logs.push(`[${symbol} ${timeframe}] [${brainContext.mode} Mode] Paper Execution: ${result.executed ? 'APPROVED & FILLED' : 'REJECTED'} (${result.message})`);
 
             if (result.executed) {
               tradesExecuted++;
+              EntryTimingEngine.clearPendingSignal(userId, symbol);
             }
+          } else if (brainContext.decision === 'WAIT') {
+            logs.push(`[${symbol} ${timeframe}] Entry Timing: WAITING_FOR_ENTRY (${brainContext.timing.waitConditions.join('; ') || 'Waiting for favorable confirmation'})`);
+          } else if (brainContext.decision === 'EXIT') {
+            logs.push(`[${symbol} ${timeframe}] Strategy Reversal detected: closing open position.`);
+            await ExecutionEngine.monitorPositionsAndExits(userId);
           } else {
-            logs.push(`[${symbol} ${timeframe}] Decision: HOLD / REJECTED (Reason: ${rec.decisionTrace?.rejectionReason || rec.reasons[rec.reasons.length - 1] || 'Insufficient conviction or risk check'})`);
+            logs.push(`[${symbol} ${timeframe}] Decision: ${brainContext.decision} (Monitoring market)`);
           }
 
           // 4. Shadow Mode Evaluation for Challenger Models
@@ -156,13 +201,13 @@ export class AutoTradingEngine {
               userId,
               eventType: 'SHADOW_MODE_EVALUATION',
               title: `Shadow Evaluation: ${challenger.versionName}`,
-              description: `Evaluated ${symbol} ${timeframe} under Challenger ${challenger.versionName}. Signal: ${rec.action}`,
+              description: `Evaluated ${symbol} ${timeframe} under Challenger ${challenger.versionName}. Signal: ${brainContext.signal}`,
               metadata: {
                 symbol,
                 timeframe,
                 challengerVersion: challenger.versionName,
-                championSignal: rec.action,
-                championScore: rec.score
+                championSignal: brainContext.signal,
+                championScore: brainContext.confidence
               }
             };
 

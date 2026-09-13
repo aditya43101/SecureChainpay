@@ -127,6 +127,7 @@ export default function AutoTradingPage() {
   const dailyState = statusData?.dailyState || {};
   const account = statusData?.account || { positions: [], orders: [] };
   const events = statusData?.recentEvents || [];
+  const brainCtx = statusData?.lastDecisions?.[chartSymbol] || null;
 
   const isEnabled = settings.enabled && settings.status === 'ENABLED';
   const isEmergencyStop = settings.status === 'EMERGENCY_STOP';
@@ -153,12 +154,8 @@ export default function AutoTradingPage() {
               <h1 className="text-2xl font-black text-white tracking-tight">Auto-Trading & Execution Engine</h1>
               
               {/* Visual Distinction Badge */}
-              <span className={`px-3 py-1 text-xs font-black rounded-lg border tracking-wider uppercase ${
-                settings.mode === 'AUTO'
-                  ? 'bg-red-500/20 text-red-300 border-red-500/50 shadow-sm shadow-red-500/20'
-                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-              }`}>
-                {settings.mode === 'AUTO' ? '⚡ REAL EXECUTION' : '🧪 SIMULATED FUNDS'}
+              <span className="px-3 py-1 text-xs font-black rounded-lg border tracking-wider uppercase bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
+                {settings.mode === 'AUTO' ? '🧪 PAPER EXECUTION' : '🧪 SIMULATED FUNDS'}
               </span>
 
               {/* Status Badge */}
@@ -342,6 +339,156 @@ export default function AutoTradingPage() {
           </div>
         </div>
         <TradingViewWidget symbol={chartSymbol} height={440} showOverlay={true} />
+      </div>
+
+      {/* SECTION: TRADING BRAIN & AUTONOMOUS DECISION PIPELINE */}
+      <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-5 space-y-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
+              <Cpu className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white tracking-tight">TRADING BRAIN & DECISION ENGINE</h3>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              </div>
+              <p className="text-xs text-neutral-400 font-mono">
+                Asset: <strong className="text-white">{chartSymbol}</strong> • Timeframe: <strong className="text-white">1h</strong> • Mode: <strong className="text-cyan-400">{brainCtx?.mode || 'HOLD'}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Market Regime Badge */}
+            <span className={`px-3 py-1 text-xs font-black rounded-lg border uppercase ${
+              (brainCtx?.marketRegime || '').includes('BULL')
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : (brainCtx?.marketRegime || '').includes('BEAR')
+                ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                : (brainCtx?.marketRegime || '').includes('VOLATILITY')
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+            }`}>
+              REGIME: {brainCtx?.marketRegime || 'RANGING'}
+            </span>
+
+            {/* Brain Decision Badge */}
+            <span className={`px-3 py-1 text-xs font-black rounded-lg border uppercase tracking-wider ${
+              brainCtx?.decision === 'ENTER_LONG'
+                ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500 animate-pulse'
+                : brainCtx?.decision === 'ENTER_SHORT'
+                ? 'bg-red-500/30 text-red-300 border-red-500 animate-pulse'
+                : brainCtx?.decision === 'WAIT'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                : brainCtx?.decision === 'EXIT'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+            }`}>
+              DECISION: {brainCtx?.decision || 'WAIT'}
+            </span>
+          </div>
+        </div>
+
+        {/* Explanatory Banner: WHY WAIT? / WHY ENTER? / WHY STAND ASIDE? */}
+        <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+          brainCtx?.decision === 'ENTER_LONG' || brainCtx?.decision === 'ENTER_SHORT'
+            ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+            : brainCtx?.decision === 'WAIT'
+            ? 'bg-cyan-950/30 border-cyan-500/40 text-cyan-200'
+            : brainCtx?.decision === 'EXIT'
+            ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+            : 'bg-white/5 border-white/10 text-neutral-300'
+        }`}>
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-brand-primary" />
+          <div className="space-y-1">
+            <div className="text-xs font-bold uppercase tracking-wider">
+              {brainCtx?.decision === 'WAIT'
+                ? 'WHY WAIT? — PENDING ENTRY TIMING'
+                : brainCtx?.decision === 'ENTER_LONG' || brainCtx?.decision === 'ENTER_SHORT'
+                ? 'WHY ENTER? — ALL SAFETY & TIMING GATES VALIDATED'
+                : brainCtx?.decision === 'EXIT'
+                ? 'WHY EXIT? — STRATEGY REVERSAL TRIGGER'
+                : 'DECISION RATIONALE'}
+            </div>
+            <p className="text-xs leading-relaxed font-mono">
+              {brainCtx?.reason || 'Monitoring live orderbook and candle structure for optimal risk/reward entry confirmation...'}
+            </p>
+          </div>
+        </div>
+
+        {/* Quant Matrix Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Signal Bias</span>
+            <div className={`text-sm font-black mt-1 ${
+              brainCtx?.signal === 'BUY' ? 'text-emerald-400' : brainCtx?.signal === 'SELL' ? 'text-red-400' : 'text-neutral-400'
+            }`}>
+              {brainCtx?.signal || 'HOLD'}
+            </div>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Signal Conviction</span>
+            <div className="text-sm font-black text-white mt-1">
+              {brainCtx?.confidence !== undefined ? `${brainCtx.confidence}/7` : '3.0/7'}
+            </div>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Entry Quality</span>
+            <div className={`text-sm font-black mt-1 ${
+              (brainCtx?.entryQualityScore || 60) >= 60 ? 'text-emerald-400' : 'text-amber-400'
+            }`}>
+              {brainCtx?.entryQualityScore !== undefined ? `${brainCtx.entryQualityScore}/100` : '60/100'}
+            </div>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Trend / Momentum</span>
+            <div className="text-xs font-bold text-neutral-200 mt-1">
+              {brainCtx?.trend || 'BULLISH'} / {brainCtx?.momentum || 'BULLISH'}
+            </div>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Volatility / Vol</span>
+            <div className="text-xs font-bold text-neutral-200 mt-1">
+              {brainCtx?.volatility || 'LOW'} / {brainCtx?.volume || 'NORMAL'}
+            </div>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-neutral-400 font-semibold uppercase">Next Evaluation</span>
+            <div className="text-xs font-bold text-brand-primary mt-1 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" />
+              <span>~30s (Live)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Learning Influence & Conditions Footer */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs border-t border-white/5">
+          <div className="bg-black border border-white/10 rounded-xl p-3 space-y-1">
+            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              Validated Learning Influence
+            </span>
+            <p className="text-[11px] text-neutral-400 font-mono leading-relaxed">
+              {brainCtx?.learningInfluence?.note || 'Baseline rules active. Isolated user learning engine connected.'}
+            </p>
+          </div>
+
+          <div className="bg-black border border-white/10 rounded-xl p-3 space-y-1">
+            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5" />
+              Timing & Invalidation Rules
+            </span>
+            <p className="text-[11px] text-neutral-400 font-mono leading-relaxed">
+              {brainCtx?.invalidationConditions?.[0] || 'SL breach or counter-trend momentum expansion halts setup.'}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Main Grid: Active Positions & Safety Audit Log */}
