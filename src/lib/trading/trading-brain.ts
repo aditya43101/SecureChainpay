@@ -147,7 +147,7 @@ export class TradingBrain {
     });
 
     // 8. Entry Quality Calculation (0 to 100)
-    let entryQuality = this.calculateEntryQuality({
+    const entryQuality = this.calculateEntryQuality({
       strategyScore: calibratedScore,
       understanding,
       timingScore: timing.timingScore,
@@ -288,7 +288,7 @@ export class TradingBrain {
     else if (riskReward >= 1.5) rrPoints = 12;
     else rrPoints = 5;
 
-    let total = strategyWeight + timingWeight + regimePoints + rrPoints + learningAdjustment;
+    const total = strategyWeight + timingWeight + regimePoints + rrPoints + learningAdjustment;
     return Math.max(0, Math.min(100, Math.round(total)));
   }
 
@@ -303,7 +303,7 @@ export class TradingBrain {
     const appliedRuleIds: string[] = [];
     let qualityAdjustment = 0;
     let confidenceCalibration = 0;
-    let forceWait = false;
+    const forceWait = false;
     const notes: string[] = [];
 
     // Query feedback patterns from DB or fallback store
