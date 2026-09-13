@@ -45,14 +45,21 @@ export interface FallbackDailyRiskState {
 export interface FallbackPaperPosition {
   id: string;
   accountId: string;
+  tradeId?: string;
+  orderId?: string;
   symbol: string;
   side: 'LONG' | 'SHORT';
   quantity: number;
   averageEntry: number;
   currentPrice: number;
+  lowestPrice?: number;
+  highestPrice?: number;
   stopLoss: number;
   takeProfit: number;
   unrealizedPnL: number;
+  decisionMode?: string;
+  confidence?: number;
+  entrySnapshot?: any;
   openedAt: string;
   updatedAt: string;
 }
@@ -158,6 +165,30 @@ class TradingFallbackStore {
   private recommendations: any[] = [];
   private approvals: any[] = [];
   private journalEntries: any[] = [];
+  private tradeOutcomes = new Map<string, any>();
+  private candidatePatterns = new Map<string, any>();
+  private candidateLessons: any[] = [];
+  private confidenceCalibrationEvents: any[] = [];
+  private validationResults = new Map<string, any>();
+  private strategyVersionRecords: any[] = [
+    {
+      id: 'strat_ver_v1_baseline',
+      versionName: 'HYBRID_v1',
+      strategyType: 'HYBRID',
+      parentVersion: 'GENESIS',
+      changeReason: 'Baseline production champion strategy',
+      sourcePatternIds: [],
+      parameters: { minScore: 5, rsiFilter: true, mlWeight: 2 },
+      status: 'PAPER_ACTIVE',
+      totalReturn: 14.8,
+      maxDrawdown: 3.8,
+      winRate: 59.2,
+      profitFactor: 1.88,
+      createdAt: new Date().toISOString(),
+      promotedAt: new Date().toISOString()
+    }
+  ];
+  private shadowEvaluations: any[] = [];
 
   constructor() {
     // Initialize default system settings for demo/default users
@@ -278,6 +309,8 @@ class TradingFallbackStore {
     const acc = this.getPaperAccount(userId);
     const newPos: FallbackPaperPosition = {
       ...pos,
+      lowestPrice: pos.lowestPrice ?? pos.averageEntry,
+      highestPrice: pos.highestPrice ?? pos.averageEntry,
       id: `pos_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       accountId: acc.id,
       openedAt: new Date().toISOString(),
@@ -286,6 +319,32 @@ class TradingFallbackStore {
     acc.positions.push(newPos);
     this.accounts.set(userId, acc);
     return newPos;
+  }
+
+  updatePosition(userId: string, positionId: string, partial: Partial<FallbackPaperPosition>): FallbackPaperPosition | null {
+    const acc = this.getPaperAccount(userId);
+    const idx = acc.positions.findIndex(p => p.id === positionId);
+    if (idx === -1) return null;
+
+    const existing = acc.positions[idx];
+    const updated: FallbackPaperPosition = {
+      ...existing,
+      ...partial,
+      lowestPrice: partial.currentPrice ? Math.min(existing.lowestPrice ?? existing.averageEntry, partial.currentPrice) : existing.lowestPrice,
+      highestPrice: partial.currentPrice ? Math.max(existing.highestPrice ?? existing.averageEntry, partial.currentPrice) : existing.highestPrice,
+      updatedAt: new Date().toISOString()
+    };
+    acc.positions[idx] = updated;
+    this.accounts.set(userId, acc);
+    return updated;
+  }
+
+  getPositionById(positionId: string): { position: FallbackPaperPosition; userId: string } | null {
+    for (const [userId, acc] of this.accounts.entries()) {
+      const pos = acc.positions.find(p => p.id === positionId);
+      if (pos) return { position: pos, userId };
+    }
+    return null;
   }
 
   removePosition(userId: string, positionId: string): void {
@@ -360,6 +419,10 @@ class TradingFallbackStore {
 
   getStrategyVersions(): FallbackStrategyVersion[] {
     return [...this.strategyVersions];
+  }
+
+  getChampionStrategy(): FallbackStrategyVersion | null {
+    return this.strategyVersions.find(v => v.isChampion) || this.strategyVersions[0] || null;
   }
 
   addStrategyVersion(ver: Omit<FallbackStrategyVersion, 'id' | 'createdAt'>): FallbackStrategyVersion {
@@ -449,11 +512,119 @@ class TradingFallbackStore {
     }
     return list.slice(0, limit);
   }
+
+  saveTradeOutcome(outcome: any): void {
+    if (outcome && outcome.tradeId) {
+      this.tradeOutcomes.set(outcome.tradeId, outcome);
+    }
+  }
+
+  getTradeOutcome(tradeId: string): any {
+    return this.tradeOutcomes.get(tradeId) || null;
+  }
+
+  getAllTradeOutcomes(userId?: string): any[] {
+    const all = Array.from(this.tradeOutcomes.values());
+    if (userId) {
+      return all.filter(o => o.userId === userId);
+    }
+    return all;
+  }
+
+  saveCandidatePattern(pattern: any): void {
+    if (pattern && (pattern.patternId || pattern.fingerprint)) {
+      const key = pattern.fingerprint || pattern.patternId;
+      this.candidatePatterns.set(key, pattern);
+    }
+  }
+
+  getCandidatePatterns(symbol?: string): any[] {
+    let list = Array.from(this.candidatePatterns.values());
+    if (symbol) {
+      const s = symbol.toUpperCase().replace(/USDT$/, '');
+      list = list.filter(p => p.symbol === 'GLOBAL' || p.symbol.toUpperCase().includes(s));
+    }
+    return list;
+  }
+
+  saveCandidateLesson(lesson: any): void {
+    if (!lesson) return;
+    const existingIndex = this.candidateLessons.findIndex(l => l.id === lesson.id || l.patternFingerprint === lesson.patternFingerprint);
+    if (existingIndex >= 0) {
+      this.candidateLessons[existingIndex] = lesson;
+    } else {
+      this.candidateLessons.unshift(lesson);
+    }
+  }
+
+  getCandidateLessons(symbol?: string): any[] {
+    let list = this.candidateLessons;
+    if (symbol) {
+      const s = symbol.toUpperCase().replace(/USDT$/, '');
+      list = list.filter(l => l.symbol === 'GLOBAL' || l.symbol.toUpperCase().includes(s));
+    }
+    return list;
+  }
+
+  saveCalibrationEvents(events: any[]): void {
+    if (Array.isArray(events)) {
+      for (const ev of events) {
+        this.confidenceCalibrationEvents.unshift({
+          id: `calib_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          ...ev,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  getCalibrationEvents(): any[] {
+    return this.confidenceCalibrationEvents;
+  }
+
+  saveValidationResult(res: any): void {
+    if (res && res.validationId) {
+      this.validationResults.set(res.validationId, res);
+    }
+  }
+
+  getValidationResult(validationId: string): any {
+    return this.validationResults.get(validationId) || null;
+  }
+
+  getAllValidationResults(): any[] {
+    return Array.from(this.validationResults.values());
+  }
+
+  addStrategyVersionRecord(ver: any): any {
+    this.strategyVersionRecords.unshift(ver);
+    return ver;
+  }
+
+  getStrategyVersionRecords(): any[] {
+    return [...this.strategyVersionRecords];
+  }
+
+  updateStrategyVersionRecord(ver: any): void {
+    const idx = this.strategyVersionRecords.findIndex(v => v.versionName === ver.versionName || v.id === ver.id);
+    if (idx >= 0) {
+      this.strategyVersionRecords[idx] = ver;
+    }
+  }
+
+  saveShadowEvaluation(ev: any): void {
+    this.shadowEvaluations.unshift(ev);
+    if (this.shadowEvaluations.length > 100) this.shadowEvaluations.pop();
+  }
+
+  getShadowEvaluations(limit = 20): any[] {
+    return this.shadowEvaluations.slice(0, limit);
+  }
 }
 
 // Global singleton instance
 declare global {
-  // eslint-disable-next-line no-var
+   
   var _tradingFallbackStore: TradingFallbackStore | undefined;
 }
 

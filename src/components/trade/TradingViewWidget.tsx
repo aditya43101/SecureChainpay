@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAIStore } from '@/stores/ai-store';
 import { useWalletStore } from '@/stores/wallet-store';
-import { Target, ShieldAlert, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Target, ShieldAlert, TrendingUp, AlertTriangle, Sliders, Shield } from 'lucide-react';
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -50,7 +50,6 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
         console.warn('[TradingViewWidget] Non-critical overlay recommendation fetch warning:', err);
       }
     };
-
     fetchRec();
     const interval = setInterval(fetchRec, 15000);
     return () => {
@@ -73,10 +72,26 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
       case 'STRONG_SELL':
       case 'SELL':
         return 'text-red-400 bg-red-500/10 border-red-500/30';
+      case 'HOLD':
+        return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
       default:
         return 'text-neutral-400 bg-neutral-800 border-neutral-700';
     }
   };
+
+  const getModeBadge = (mode?: string) => {
+    switch (mode) {
+      case 'EXPLOIT':
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+      case 'EXPLORE':
+        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+      default:
+        return 'bg-neutral-800 text-neutral-400 border-neutral-700';
+    }
+  };
+
+  const isApproved = recommendation && (recommendation.decisionTrace?.execution === 'APPROVED' || (recommendation.action === 'BUY' || recommendation.action === 'SELL') && recommendation.riskAssessment?.status === 'PASS');
+  const decisionMode = recommendation?.decisionMode || (recommendation?.score >= 5 ? 'EXPLOIT' : (recommendation?.score >= 3 ? 'EXPLORE' : 'HOLD'));
 
   return (
     <div className="w-full bg-neutral-950/80 border border-white/10 rounded-3xl p-4 sm:p-5 relative overflow-hidden backdrop-blur-xl shadow-2xl">
@@ -85,7 +100,7 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
       <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header Controls */}
-      <div className="relative z-10 flex flex-wrap justify-between items-center gap-3 mb-4">
+      <div className="relative z-10 flex flex-wrap justify-between items-center gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
@@ -103,60 +118,106 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
           </div>
         </div>
 
-        {/* AI Signal Badge */}
+        {/* AI Signal Badge & Pipeline Status */}
         {showOverlay && recommendation && (
-          <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
-            <span className="text-xs text-neutral-400 font-semibold">AI Signal:</span>
+          <div className="flex flex-wrap items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+            <span className="text-xs text-neutral-400 font-semibold">Signal:</span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-md border ${getActionColor(recommendation.action)}`}>
-              {recommendation.action} ({recommendation.strength || 'MODERATE'})
+              {recommendation.action}
             </span>
-            <span className="text-xs text-neutral-400 font-mono hidden sm:inline">
-              Score: {recommendation.score?.toFixed(1) || '7.5'}/{recommendation.maxScore || '10'}
+
+            <span className="text-xs text-neutral-400 font-semibold ml-1">Confidence:</span>
+            <span className="text-xs font-mono font-bold text-white bg-white/10 px-1.5 py-0.5 rounded">
+              {recommendation.score !== undefined ? `${recommendation.score}/7` : '3/7'}
+            </span>
+
+            <span className="text-xs text-neutral-400 font-semibold ml-1">Mode:</span>
+            <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${getModeBadge(decisionMode)}`}>
+              {decisionMode}
+            </span>
+
+            <span className="text-xs text-neutral-400 font-semibold ml-1">Decision:</span>
+            <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${
+              isApproved
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+            }`}>
+              {isApproved ? 'PAPER TRADE APPROVED' : 'PAPER TRADE REJECTED'}
             </span>
           </div>
         )}
       </div>
 
-      {/* Validated Levels Overlay */}
-      {showOverlay && recommendation && recommendation.action !== 'NO_TRADE' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-3 relative z-10">
-          <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+      {/* Explicit Rejection Reason Banner when not approved */}
+      {showOverlay && recommendation && !isApproved && (
+        <div className="bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl text-xs text-amber-300 flex items-center gap-2 mb-3 relative z-10">
+          <ShieldAlert size={14} className="text-amber-400 flex-shrink-0" />
+          <span>
+            <strong>Reason:</strong> {recommendation.decisionTrace?.rejectionReason || recommendation.riskAssessment?.reasons?.[0] || recommendation.reasons?.[recommendation.reasons.length - 1] || 'Insufficient conviction or risk thresholds not satisfied'}
+          </span>
+        </div>
+      )}
+
+      {/* Validated Levels & Risk Overlay when approved */}
+      {showOverlay && recommendation && isApproved && (
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 sm:gap-3 mb-3 relative z-10">
+          <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
               <TrendingUp size={13} className="text-cyan-400" />
-              <span className="text-xs text-neutral-400 font-medium">Entry</span>
+              <span className="text-[11px] text-neutral-400 font-medium">Entry</span>
             </div>
             <span className="text-xs font-mono font-bold text-white">
               ${(recommendation.entry?.suggestedEntry || currentPrice)?.toLocaleString()}
             </span>
           </div>
 
-          <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
               <Target size={13} className="text-emerald-400" />
-              <span className="text-xs text-emerald-300 font-medium">Take Profit</span>
+              <span className="text-[11px] text-emerald-300 font-medium">Take Profit</span>
             </div>
             <span className="text-xs font-mono font-bold text-emerald-400">
               ${(recommendation.takeProfit || currentPrice * 1.035)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
           </div>
 
-          <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+          <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
               <ShieldAlert size={13} className="text-red-400" />
-              <span className="text-xs text-red-300 font-medium">Stop Loss</span>
+              <span className="text-[11px] text-red-300 font-medium">Stop Loss</span>
             </div>
             <span className="text-xs font-mono font-bold text-red-400">
               ${(recommendation.stopLoss || currentPrice * 0.982)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </span>
           </div>
 
-          <div className="bg-indigo-500/10 border border-indigo-500/20 p-2.5 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+          <div className="bg-indigo-500/10 border border-indigo-500/20 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
               <AlertTriangle size={13} className="text-indigo-400" />
-              <span className="text-xs text-indigo-300 font-medium">R:R Ratio</span>
+              <span className="text-[11px] text-indigo-300 font-medium">R:R Ratio</span>
             </div>
             <span className="text-xs font-mono font-bold text-indigo-300">
-              1:{recommendation.riskReward || '2.2'}
+              1:{recommendation.riskReward || '1.5'}
+            </span>
+          </div>
+
+          <div className="bg-cyan-500/10 border border-cyan-500/20 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Sliders size={13} className="text-cyan-400" />
+              <span className="text-[11px] text-cyan-300 font-medium">Position Size</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-cyan-300">
+              {recommendation.positionSize || 0} {cleanSymbol}
+            </span>
+          </div>
+
+          <div className="bg-purple-500/10 border border-purple-500/20 p-2.5 rounded-xl flex flex-col justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Shield size={13} className="text-purple-400" />
+              <span className="text-[11px] text-purple-300 font-medium">Risk Allocation</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-purple-300">
+              ${recommendation.riskAssessment?.allowedRiskUSD || 250} ({decisionMode === 'EXPLORE' ? '0.25%' : '1.0%'})
             </span>
           </div>
         </div>

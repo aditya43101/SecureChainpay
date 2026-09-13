@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       let amount = Number(block.amount || 0);
       let currency = block.currency || 'USD';
       let description = block.description || '';
-      let payload = block.payload || null;
+      const payload = block.payload || null;
 
       // Convert USD currency to HSCT
       if (currency === 'USD') {
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
         let amount = Number(txData.amount || 0);
         let currency = txData.currency || 'USD';
         let description = txData.description || '';
-        let payload = txData.payload || null;
+        const payload = txData.payload || null;
         let needsUpdate = false;
 
         if (currency === 'USD') {

@@ -1,0 +1,12 @@
+{
+  "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "chainId": "securechainpay-global-v1",
+  "chainVersion": 1,
+  "genesisHash": "0xe3d4d7a547cdd82e09b061cadf8c81e5c3248120814a4e2f6adfe604ce0ca3f9",
+  "genesisBlockNumber": 0,
+  "genesisChainRoot": "0xe12f1c7e72098138bce7c56244d82f9e44e81bbd967a3a206107b13e8991cb67",
+  "blockWriter": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "securityAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "contractAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "deployedAt": "2026-09-13T09:26:03.034Z"
+}

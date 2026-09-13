@@ -65,10 +65,11 @@ export const useExplorerStore = create<ExplorerState>()((set, get) => ({
       set({ isLoading: true, error: null });
 
       try {
-        let [chainState, blocks] = await Promise.all([
+        const [initialChainState, blocks] = await Promise.all([
           getGlobalChainState(),
           getGlobalBlocks(),
         ]);
+        let chainState = initialChainState;
 
         // Merge with client wallet transactions if global blocks is missing user transactions
         const walletTxs = useWalletStore.getState().transactions || [];

@@ -178,7 +178,7 @@ async function runPhase5TestMatrix() {
       console.log('✓ TEST 6 PASSED: Invalid blockchain anchor hash rejected -> BLOCKCHAIN_ANCHOR_MISMATCH');
       passedCount++;
     } else {
-      console.error('✗ TEST 6 FAILED:', res);
+      console.error('✗ TEST 6 FAILED: overallState =', res.overallState, 'fullyVerified =', res.fullyVerified, 'layers =', res.layers);
     }
   } catch (e: any) {
     console.error('✗ TEST 6 ERROR:', e.message);
@@ -270,7 +270,7 @@ async function runPhase5TestMatrix() {
       console.log('✓ TEST 13 PASSED: Authorized owner successfully verified transaction');
       passedCount++;
     } else {
-      console.error('✗ TEST 13 FAILED');
+      console.error('✗ TEST 13 FAILED:', res.overallState, res.mismatches, res.layers);
     }
   } catch (e: any) {
     console.error('✗ TEST 13 ERROR:', e.message);

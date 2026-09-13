@@ -654,8 +654,8 @@ Guidelines:
     let change24h = asset === 'BTC' ? '+2.85%' : '+1.64%';
     let rsi = asset === 'BTC' ? 58.4 : 52.1;
     let signal = 'MODERATE BUY / ACCUMULATE';
-    let support = asset === 'BTC' ? '$86,200' : '$3,020';
-    let resistance = asset === 'BTC' ? '$91,500' : '$3,350';
+    const support = asset === 'BTC' ? '$86,200' : '$3,020';
+    const resistance = asset === 'BTC' ? '$91,500' : '$3,350';
 
     try {
       const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${asset}USDT`, {
@@ -772,7 +772,7 @@ Guidelines:
     let routeReliability = 95;
     let routeLatency = 200;
     let failureProbability = 0.02;
-    let recommendedRoute = preferredRoute === 'ADAPTIVE' ? 'INTERNAL' : preferredRoute;
+    const recommendedRoute = preferredRoute === 'ADAPTIVE' ? 'INTERNAL' : preferredRoute;
 
     try {
       const forecast = await PredictiveEngine.getReliabilityForecast(recommendedRoute);
@@ -1107,7 +1107,7 @@ Guidelines:
       });
 
       if (recipientUser) {
-        let recipientWallet = recipientUser.wallets.find((w) => w.currency === currency);
+        const recipientWallet = recipientUser.wallets.find((w) => w.currency === currency);
         if (recipientWallet) {
           await db.wallet.update({
             where: { id: recipientWallet.id },

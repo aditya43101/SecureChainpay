@@ -48,9 +48,13 @@ async function runTests() {
 
   // 4. Hardhat Local Blockchain
   try {
-    // Cannot easily test without local node running, will just mock response or check env
-    console.log('❌ Hardhat blockchain: FAIL (Cannot reach local node at http://127.0.0.1:8545)');
-  } catch(e) {}
+    const { ethers } = await import('ethers');
+    const provider = new ethers.JsonRpcProvider('http://127.0.0.1:8545');
+    const block = await provider.getBlockNumber();
+    console.log(`✅ Hardhat blockchain: PASS (Connected to node at http://127.0.0.1:8545, Block #${block})`);
+  } catch(e: any) {
+    console.log('❌ Hardhat blockchain: FAIL', e.message);
+  }
 }
 
 runTests();

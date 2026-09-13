@@ -10,6 +10,7 @@ export interface PreTradeValidationResult {
   warnings: string[];
   idempotencyKey: string;
   riskSnapshot?: any;
+  decisionTrace?: any;
 }
 
 export class ExecutionSafetyEngine {
@@ -79,10 +80,20 @@ export class ExecutionSafetyEngine {
       // Non-blocking candle fetch
     }
 
+    const timeframeSeconds: Record<string, number> = {
+      '1m': 60,
+      '5m': 300,
+      '15m': 900,
+      '1h': 3600,
+      '4h': 14400,
+      '1d': 86400
+    };
+    const maxCandleAge = (timeframeSeconds[recommendation.timeframe] || 3600) * 2;
+
     if (candle) {
       const dataAgeSeconds = (Date.now() - new Date(candle.timestamp).getTime()) / 1000;
-      if (dataAgeSeconds > 300) { // 5 mins max age for candles
-        reasons.push(`Stale market data (${Math.round(dataAgeSeconds)}s old). Max allowed is 300s.`);
+      if (dataAgeSeconds > maxCandleAge) {
+        reasons.push(`Stale market data (${Math.round(dataAgeSeconds)}s old). Max allowed is ${maxCandleAge}s for ${recommendation.timeframe} timeframe.`);
       }
       if (candle.close <= 0) {
         reasons.push(`Invalid price detected: $${candle.close}`);
@@ -99,8 +110,9 @@ export class ExecutionSafetyEngine {
       reasons.push(`Signal action is ${recommendation.action}. Only BUY or SELL can execute.`);
     }
 
-    const signalAgeSeconds = (Date.now() - new Date(recommendation.dataTimestamp).getTime()) / 1000;
-    if (signalAgeSeconds > 600) { // 10 minutes signal age threshold
+    const recTimestamp = recommendation.timestamp || recommendation.dataTimestamp;
+    const signalAgeSeconds = (Date.now() - new Date(recTimestamp).getTime()) / 1000;
+    if (signalAgeSeconds > 600) { // 10 minutes signal age threshold from recommendation generation
       reasons.push(`Signal expired (${Math.round(signalAgeSeconds)}s old). Max allowed is 600s.`);
     }
 
@@ -318,13 +330,28 @@ export class ExecutionSafetyEngine {
       }
     }
 
+    const decisionTrace = {
+      marketData: candle && (Date.now() - new Date(candle.timestamp).getTime()) / 1000 <= 300 && candle.close > 0 ? "PASS" : "FAIL",
+      indicators: "PASS",
+      signal: recommendation.action === 'BUY' || recommendation.action === 'SELL' ? recommendation.action : "HOLD",
+      confidence: recommendation.score,
+      risk: reasons.some(r => r.includes('Risk') || r.includes('Loss')) ? "REJECT" : "PASS",
+      positionSizing: recommendation.positionSize > 0 ? "PASS" : "REJECT",
+      cooldown: reasons.some(r => r.includes('Cooldown')) ? "FAIL" : "PASS",
+      exposure: reasons.some(r => r.includes('exposure') || r.includes('Max open')) ? "FAIL" : "PASS",
+      decisionMode: recommendation.decisionMode || (recommendation.score >= 5 ? 'EXPLOIT' : 'EXPLORE'),
+      execution: isAllowed ? "APPROVED" : "REJECTED",
+      rejectionReason: !isAllowed ? reasons[0] : undefined
+    };
+
     return {
       allowed: isAllowed,
       stage: isAllowed ? 'ALL_GATES_PASSED' : 'SAFETY_GATE_BLOCKED',
       reasons,
       warnings,
       idempotencyKey: ik,
-      riskSnapshot
+      riskSnapshot,
+      decisionTrace
     };
   }
 

@@ -99,16 +99,19 @@ export class AutoTradingEngine {
           const rec = await recommendationEngine.generateRecommendation(symbol, timeframe, userId);
           recommendationsGenerated++;
 
-          logs.push(`[${symbol} ${timeframe}] Signal: ${rec.action} (Score: ${rec.score.toFixed(1)}, Strength: ${rec.strength})`);
+          logs.push(`[${symbol} ${timeframe}] Signal: ${rec.action} (Score: ${rec.score.toFixed(1)}/7, Mode: ${rec.decisionMode || 'HOLD'}, Strength: ${rec.strength})`);
 
-          // Only attempt execution if signal is BUY or SELL
+          // Execute if signal is actionable (BUY or SELL in either EXPLORE or EXPLOIT mode)
           if (rec.action === 'BUY' || rec.action === 'SELL') {
             const result = await ExecutionEngine.processTradeRecommendation(userId, rec);
+            logs.push(`[${symbol} ${timeframe}] [${rec.decisionMode || 'EXPLOIT'} Mode] Decision: ${result.executed ? 'APPROVED' : 'REJECTED'}`);
             logs.push(`[${symbol} ${timeframe}] Execution: ${result.message}`);
 
             if (result.executed) {
               tradesExecuted++;
             }
+          } else {
+            logs.push(`[${symbol} ${timeframe}] Decision: HOLD / REJECTED (Reason: ${rec.decisionTrace?.rejectionReason || rec.reasons[rec.reasons.length - 1] || 'Insufficient conviction or risk check'})`);
           }
 
           // 4. Shadow Mode Evaluation for Challenger Models

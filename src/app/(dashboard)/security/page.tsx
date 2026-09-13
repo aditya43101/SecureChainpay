@@ -622,9 +622,9 @@ export default function SecurityPage() {
     setSimulationLoading(true);
     setTimeout(() => {
       let simAmount = 500;
-      let simReceiver = '0x82F31A78B091A78B091A78B091A78B091A78B091';
+      const simReceiver = '0x82F31A78B091A78B091A78B091A78B091A78B091';
       let graphContext = {};
-      let customProfile = { ...userProfile };
+      const customProfile = { ...userProfile };
       if (type === 'UNUSUAL_AMOUNT') simAmount = 125000;
       else if (type === 'HIGH_VELOCITY') { simAmount = 1500; customProfile.recentVelocity10m = 8; }
       else if (type === 'CIRCULAR_GRAPH') { simAmount = 5000; graphContext = { circularFlowDetected: true }; }

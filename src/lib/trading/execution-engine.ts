@@ -3,11 +3,14 @@ import { ExecutionSafetyEngine, PreTradeValidationResult } from './execution-saf
 import { SimulatedExchangeAdapter, ExecutionResult } from './exchange-adapter';
 import { RecommendationObject } from './recommendation-engine';
 import { tradingFallbackStore } from './trading-fallback-store';
+import { PaperTradeLifecycleEngine, EntryDecisionSnapshot } from './paper-trade-lifecycle';
 
 export interface AutoTradeExecutionSummary {
   executed: boolean;
   validation: PreTradeValidationResult;
   orderResult?: ExecutionResult;
+  decisionTrace?: any;
+  decisionMode?: string;
   message: string;
 }
 
@@ -30,6 +33,8 @@ export class ExecutionEngine {
       return {
         executed: false,
         validation,
+        decisionTrace: validation.decisionTrace || recommendation.decisionTrace,
+        decisionMode: recommendation.decisionMode,
         message: `Trade execution blocked by Safety Gate (${validation.stage}): ${validation.reasons.join('; ')}`
       };
     }
@@ -52,14 +57,40 @@ export class ExecutionEngine {
       return {
         executed: false,
         validation,
+        decisionTrace: validation.decisionTrace || recommendation.decisionTrace,
+        decisionMode: recommendation.decisionMode,
         message: 'Auto-trading is disabled or paused by user configuration.'
       };
     }
 
-    // 3. Prepare Order Parameters
+    // 3. Prepare Order Parameters & Freeze Entry Snapshot
     const entryPrice = recommendation.entry.low || recommendation.entry.high || recommendation.entry.suggestedEntry || 0;
     const quantity = recommendation.positionSize || 0.01;
     const recModelVersion = recommendation.mlPrediction?.modelVersion;
+
+    const tradeId = PaperTradeLifecycleEngine.generateTradeId(symbol);
+    const orderId = `ORD_${tradeId}`;
+    const positionId = `POS_${tradeId}`;
+
+    const entrySnapshot: EntryDecisionSnapshot = PaperTradeLifecycleEngine.createEntrySnapshot({
+      tradeId,
+      orderId,
+      positionId,
+      symbol,
+      side: recommendation.action === 'BUY' ? 'LONG' : 'SHORT',
+      entryPrice,
+      riskParams: {
+        positionSize: quantity,
+        riskPercent: settings.riskPerTrade || 0.01,
+        stopLoss: recommendation.stopLoss,
+        takeProfit: recommendation.takeProfit,
+        riskRewardRatio: recommendation.riskReward || 1.5,
+        portfolioExposure: (entryPrice * quantity) / 100000,
+        availablePaperBalance: 100000,
+      },
+      timeframe: recommendation.timeframe || '1h',
+      recommendation,
+    });
 
     const orderParams = {
       userId,
@@ -74,7 +105,11 @@ export class ExecutionEngine {
       modelVersion: recModelVersion || settings.modelVersion || 'LOG_v1',
       signalId: recommendation.id || `${symbol}_${Date.now()}`,
       idempotencyKey: validation.idempotencyKey,
-      maxSlippage: settings.maxSlippage || 0.005
+      maxSlippage: settings.maxSlippage || 0.005,
+      decisionMode: recommendation.decisionMode || 'EXPLOIT',
+      confidence: recommendation.score,
+      tradeId,
+      entrySnapshot,
     };
 
     // 4. Submit Order via Exchange Adapter
@@ -87,6 +122,8 @@ export class ExecutionEngine {
       return {
         executed: false,
         validation,
+        decisionTrace: validation.decisionTrace || recommendation.decisionTrace,
+        decisionMode: recommendation.decisionMode,
         message: `Exchange order submission failed: ${err.message}`
       };
     }
@@ -114,6 +151,8 @@ export class ExecutionEngine {
         executed: false,
         validation,
         orderResult,
+        decisionTrace: validation.decisionTrace || recommendation.decisionTrace,
+        decisionMode: recommendation.decisionMode,
         message: `Order submission failed: ${orderResult.reason}`
       };
     }
@@ -141,7 +180,9 @@ export class ExecutionEngine {
       executed: true,
       validation,
       orderResult,
-      message: `Trade successfully executed for ${symbol} at $${orderResult.executedPrice.toFixed(2)}`
+      decisionTrace: validation.decisionTrace || recommendation.decisionTrace,
+      decisionMode: recommendation.decisionMode,
+      message: `[${recommendation.decisionMode || 'EXPLOIT'} Mode] Trade successfully executed for ${symbol} (${quantity} units at $${orderResult.executedPrice.toFixed(2)})`
     };
   }
 
@@ -167,86 +208,65 @@ export class ExecutionEngine {
 
     for (const pos of paperAccount.positions) {
       const ticker = await this.adapter.getTicker(pos.symbol);
-      const price = ticker.last;
-      let shouldExit = false;
-      let exitReason = '';
-      let exitPrice = price;
-
-      if (pos.side === 'LONG') {
-        if (pos.stopLoss && price <= pos.stopLoss) {
-          shouldExit = true;
-          exitReason = 'STOP_LOSS';
-          exitPrice = pos.stopLoss;
-        } else if (pos.takeProfit && price >= pos.takeProfit) {
-          shouldExit = true;
-          exitReason = 'TAKE_PROFIT';
-          exitPrice = pos.takeProfit;
-        }
-      } else if (pos.side === 'SHORT') {
-        if (pos.stopLoss && price >= pos.stopLoss) {
-          shouldExit = true;
-          exitReason = 'STOP_LOSS';
-          exitPrice = pos.stopLoss;
-        } else if (pos.takeProfit && price <= pos.takeProfit) {
-          shouldExit = true;
-          exitReason = 'TAKE_PROFIT';
-          exitPrice = pos.takeProfit;
-        }
+      const isStale = (Date.now() - ticker.timestamp) > (5 * 60 * 1000); // 5 min
+      if (isStale) {
+        console.warn(`[ExecutionEngine] Stale market data for ${pos.symbol}. Skipping exit check.`);
+        continue;
       }
 
-      if (shouldExit) {
-        // Calculate PnL
-        const pnl = pos.side === 'LONG'
-          ? (exitPrice - pos.averageEntry) * pos.quantity
-          : (pos.averageEntry - exitPrice) * pos.quantity;
+      const price = ticker.last;
+      const lowestPrice = Math.min(pos.lowestPrice ?? pos.averageEntry, price);
+      const highestPrice = Math.max(pos.highestPrice ?? pos.averageEntry, price);
 
-        // Return capital to cash balance
-        const returnedCash = paperAccount.cashBalance + (pos.quantity * exitPrice) + pnl;
+      const exitEval = PaperTradeLifecycleEngine.evaluateExitConditions({
+        side: pos.side,
+        currentPrice: price,
+        stopLoss: pos.stopLoss,
+        takeProfit: pos.takeProfit,
+        openedAt: pos.openedAt,
+      });
 
-        try {
-          await prisma.paperAccount.update({
-            where: { userId },
-            data: {
-              cashBalance: returnedCash,
-              realizedPnL: (paperAccount.realizedPnL || 0) + pnl
-            }
-          });
+      if (exitEval.shouldExit && exitEval.exitReason) {
+        const tradeId = pos.tradeId || `PT-${pos.symbol.replace(/USDT$/, '')}-${Date.parse(pos.openedAt) || Date.now()}`;
+        const entrySnapshot: EntryDecisionSnapshot = pos.entrySnapshot || PaperTradeLifecycleEngine.createEntrySnapshot({
+          tradeId,
+          orderId: pos.orderId || `ORD_${pos.id}`,
+          positionId: pos.id,
+          symbol: pos.symbol,
+          side: pos.side,
+          entryPrice: pos.averageEntry,
+          timeframe: '1h',
+          riskParams: {
+            positionSize: pos.quantity,
+            riskPercent: 0.01,
+            stopLoss: pos.stopLoss,
+            takeProfit: pos.takeProfit,
+            riskRewardRatio: 1.5,
+            portfolioExposure: 0.10,
+            availablePaperBalance: paperAccount.cashBalance || 100000,
+          }
+        });
 
-          await prisma.paperPosition.delete({
-            where: { id: pos.id }
-          });
+        const outcomeRecord = await PaperTradeLifecycleEngine.closeTradeAtomically({
+          tradeId,
+          orderId: pos.orderId,
+          positionId: pos.id,
+          userId,
+          symbol: pos.symbol,
+          side: pos.side,
+          entryPrice: pos.averageEntry,
+          exitPrice: exitEval.exitPrice,
+          quantity: pos.quantity,
+          openedAt: pos.openedAt,
+          stopLoss: pos.stopLoss,
+          takeProfit: pos.takeProfit,
+          exitReason: exitEval.exitReason,
+          lowestIntrabarPrice: lowestPrice,
+          highestIntrabarPrice: highestPrice,
+          entrySnapshot,
+        });
 
-          await prisma.tradingJournalEntry.create({
-            data: {
-              userId,
-              symbol: pos.symbol,
-              strategy: 'HYBRID_v1',
-              side: pos.side,
-              entryPrice: pos.averageEntry,
-              exitPrice,
-              pnl,
-              pnlPercentage: (pnl / (pos.averageEntry * pos.quantity)) * 100,
-              exitReason
-            }
-          });
-        } catch {
-          tradingFallbackStore.updatePaperAccount(userId, {
-            cashBalance: returnedCash,
-            realizedPnL: (paperAccount.realizedPnL || 0) + pnl
-          });
-          tradingFallbackStore.removePosition(userId, pos.id);
-          tradingFallbackStore.addJournalEntry({
-            userId,
-            symbol: pos.symbol,
-            strategy: 'HYBRID_v1',
-            side: pos.side,
-            entryPrice: pos.averageEntry,
-            exitPrice,
-            pnl,
-            pnlPercentage: (pnl / (pos.averageEntry * pos.quantity)) * 100,
-            exitReason
-          });
-        }
+        const pnl = outcomeRecord.realizedPnL;
 
         // Update Daily Risk State
         const todayStr = new Date().toISOString().split('T')[0];
@@ -308,6 +328,13 @@ export class ExecutionEngine {
         }
 
         closedCount++;
+      } else {
+        // Update intrabar excursion tracking on active position
+        tradingFallbackStore.updatePosition(userId, pos.id, {
+          currentPrice: price,
+          lowestPrice,
+          highestPrice,
+        });
       }
     }
 

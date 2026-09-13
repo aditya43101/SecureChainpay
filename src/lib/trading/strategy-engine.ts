@@ -3,6 +3,7 @@ import { Indicators } from '../market/technical-analysis';
 import { DEFAULT_STRATEGY_CONFIG, StrategyConfig } from './strategy-config';
 
 export type SignalDirection = 'LONG' | 'SHORT' | 'NEUTRAL' | 'NO_TRADE';
+export type DecisionMode = 'HOLD' | 'EXPLORE' | 'EXPLOIT';
 
 export interface StrategyResult {
   strategyName: string;
@@ -25,6 +26,8 @@ export interface StrategyEngineOutput {
   symbol: string;
   timeframe: string;
   direction: SignalDirection;
+  rawDirection?: SignalDirection;
+  decisionMode?: DecisionMode;
   score: number;
   maxScore: number;
   primaryStrategy: string;
@@ -473,12 +476,14 @@ export const strategyEngine = {
     const dataTimestamp = candles.length > 0 ? candles[candles.length - 1].timestamp : new Date().toISOString();
 
     // Check for NO_TRADE criteria:
-    // 1. Conflict check: Both Long and Short have high scores (> 3)
+    // 1. Conflict check: Both Long and Short have high scores (>= 3)
     if (longScore >= 3 && shortScore >= 3) {
       return {
         symbol,
         timeframe,
         direction: 'NO_TRADE',
+        rawDirection: 'NEUTRAL',
+        decisionMode: 'HOLD',
         score: Math.max(longScore, shortScore),
         maxScore,
         primaryStrategy: 'HYBRID',
@@ -490,36 +495,48 @@ export const strategyEngine = {
       };
     }
 
-    // 2. Score threshold check
+    // 2. Score threshold check: Low conviction (< 3/7) -> HOLD
     const winningScore = Math.max(longScore, shortScore);
-    if (winningScore < config.hybrid.minScoreForTrade) {
+    if (winningScore < 3) {
       return {
         symbol,
         timeframe,
         direction: 'NO_TRADE',
+        rawDirection: 'NEUTRAL',
+        decisionMode: 'HOLD',
         score: winningScore,
         maxScore,
         primaryStrategy: 'HYBRID',
         subStrategies,
-        conditions: [...allConditions, `INSUFFICIENT CONVICTION: Score ${winningScore}/${maxScore} is below threshold ${config.hybrid.minScoreForTrade}`],
-        reasoning: [...allReasoning, `Score ${winningScore} is below minimum requirement (${config.hybrid.minScoreForTrade}/${maxScore}). Market setup is unclear.`],
+        conditions: [...allConditions, `INSUFFICIENT CONVICTION: Score ${winningScore}/${maxScore} is below exploration threshold (3/${maxScore})`],
+        reasoning: [...allReasoning, `Score ${winningScore} is below minimum exploration requirement (3/${maxScore}). Market setup is unclear.`],
         timestamp: new Date().toISOString(),
         dataTimestamp
       };
     }
 
+    // Directional bias confirmed
     const direction: SignalDirection = longScore > shortScore ? 'LONG' : 'SHORT';
+    const decisionMode: DecisionMode = winningScore >= config.hybrid.minScoreForTrade ? 'EXPLOIT' : 'EXPLORE';
+    const primaryStrategy = decisionMode === 'EXPLOIT' ? 'HYBRID' : 'HYBRID_EXPLORATION';
 
     return {
       symbol,
       timeframe,
       direction,
+      rawDirection: direction,
+      decisionMode,
       score: winningScore,
       maxScore,
-      primaryStrategy: 'HYBRID',
+      primaryStrategy,
       subStrategies,
       conditions: allConditions,
-      reasoning: allReasoning,
+      reasoning: [
+        ...allReasoning,
+        decisionMode === 'EXPLORE'
+          ? `Moderate conviction score (${winningScore}/${maxScore}) qualified for EXPLORE mode paper evaluation.`
+          : `High conviction score (${winningScore}/${maxScore}) qualified for EXPLOIT mode execution.`
+      ],
       timestamp: new Date().toISOString(),
       dataTimestamp
     };

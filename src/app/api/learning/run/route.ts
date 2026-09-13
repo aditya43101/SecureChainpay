@@ -1,50 +1,75 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { patternDiscoveryEngine } from '@/lib/trading/pattern-discovery';
-import { feedbackRegistryEngine } from '@/lib/trading/feedback-registry';
+import { PatternIntelligenceEngine } from '@/lib/trading/pattern-intelligence-engine';
 import { tradingFallbackStore } from '@/lib/trading/trading-fallback-store';
 
 export async function POST() {
   try {
-    // 1. Discover Patterns from stored attributions
-    let discoveredPatterns: any[] = [];
-    try {
-      discoveredPatterns = await patternDiscoveryEngine.discoverPatterns(3);
-    } catch {
-      discoveredPatterns = [];
+    // 1. Gather all completed paper trade outcomes
+    const allTrades = tradingFallbackStore.getAllTradeOutcomes();
+
+    // 2. Discover patterns using canonical fingerprints & quality scoring
+    const { patterns, lessons, insufficientEvidenceTrades } = PatternIntelligenceEngine.discoverPatterns(allTrades, 5);
+
+    // 3. Persist discovered candidate patterns and lessons
+    await PatternIntelligenceEngine.persistDiscoveredPatterns(patterns, lessons);
+
+    // 4. Run confidence calibration across 1/7 to 7/7
+    const calibration = PatternIntelligenceEngine.calibrateConfidence(allTrades);
+    if (calibration.calibrationEvents.length > 0) {
+      tradingFallbackStore.saveCalibrationEvents(calibration.calibrationEvents);
+      for (const ev of calibration.calibrationEvents) {
+        try {
+          await db.learningEvent.create({
+            data: {
+              eventType: ev.eventType,
+              title: ev.title,
+              description: ev.description,
+              metadata: ev as any,
+            }
+          });
+        } catch {
+          tradingFallbackStore.addLearningEvent(ev);
+        }
+      }
     }
 
-    let evaluationResult = null;
-    if (discoveredPatterns.length > 0) {
-      // Evaluate candidate Challenger version for top pattern
-      evaluationResult = await feedbackRegistryEngine.evaluateCandidateVersion(discoveredPatterns[0].patternKey);
-    } else {
-      // Record Learning Event
-      const evtData = {
-        eventType: 'PATTERN_DISCOVERED',
-        title: 'Batch Learning Executed',
-        description: 'Learning run completed. Insufficient recurring trade attribution clusters to form new candidate feedback pattern.',
-      };
-      try {
-        await db.learningEvent.create({ data: evtData });
-      } catch {
-        tradingFallbackStore.addLearningEvent(evtData);
+    // 5. Emit summary learning event
+    const summaryEvent = {
+      eventType: 'PATTERN_DISCOVERED',
+      title: `Pattern Intelligence Run Completed`,
+      description: `Analyzed ${allTrades.length} paper trades. Identified ${patterns.length} candidate patterns (${lessons.length} grounded lessons). ${insufficientEvidenceTrades} trades categorized as insufficient evidence (< 5 samples).`,
+      metadata: {
+        totalTrades: allTrades.length,
+        candidatePatternsCount: patterns.length,
+        candidateLessonsCount: lessons.length,
+        insufficientEvidenceTrades,
       }
+    };
+
+    try {
+      await db.learningEvent.create({ data: summaryEvent as any });
+    } catch {
+      tradingFallbackStore.addLearningEvent(summaryEvent);
     }
 
     return NextResponse.json({
       success: true,
-      patternsDiscovered: discoveredPatterns.length,
-      patterns: discoveredPatterns,
-      evaluationResult
+      tradesAnalyzed: allTrades.length,
+      patternsDiscovered: patterns.length,
+      lessonsGenerated: lessons.length,
+      insufficientEvidenceTrades,
+      patterns,
+      lessons,
+      calibrationEvents: calibration.calibrationEvents,
+      disclaimer: 'Phase 3 Candidate Knowledge only. Production strategy parameters remain unmodified awaiting Phase 4 backtesting.'
     });
   } catch (error: any) {
     console.error('API /api/learning/run error:', error);
     return NextResponse.json({
-      success: true,
+      success: false,
+      error: error.message || 'Pattern discovery run failed',
       patternsDiscovered: 0,
-      patterns: [],
-      evaluationResult: null
-    });
+    }, { status: 500 });
   }
 }

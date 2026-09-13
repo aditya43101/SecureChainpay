@@ -1,10 +1,24 @@
 import { db } from '../db';
 import { marketDataService } from '../market/market-data-service';
 import { technicalAnalysisService } from '../market/technical-analysis';
-import { strategyEngine, MLPredictionData } from './strategy-engine';
+import { strategyEngine, MLPredictionData, DecisionMode } from './strategy-engine';
 import { riskEngine, UserRiskProfile } from './risk-engine';
 import { DEFAULT_STRATEGY_CONFIG } from './strategy-config';
 import { tradingFallbackStore } from './trading-fallback-store';
+
+export interface DecisionTrace {
+  marketData: 'PASS' | 'FAIL';
+  indicators: 'PASS' | 'FAIL';
+  signal: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  risk: 'PASS' | 'REJECT';
+  positionSizing: 'PASS' | 'REJECT';
+  cooldown: 'PASS' | 'FAIL';
+  exposure: 'PASS' | 'FAIL';
+  decisionMode: DecisionMode;
+  execution: 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+}
 
 export interface RecommendationObject {
   id?: string;
@@ -12,6 +26,7 @@ export interface RecommendationObject {
   timeframe: string;
   action: 'BUY' | 'SELL' | 'HOLD' | 'NO_TRADE';
   strength: 'LOW' | 'MEDIUM' | 'HIGH';
+  decisionMode: DecisionMode;
   entry: {
     type: 'ZONE' | 'EXACT';
     low: number;
@@ -40,24 +55,28 @@ export interface RecommendationObject {
   };
   reasons: string[];
   warnings: string[];
+  decisionTrace?: DecisionTrace;
   timestamp: string;
   dataTimestamp: string;
 }
 
 async function fetchMLPrediction(symbol: string, timeframe: string): Promise<MLPredictionData> {
-  try {
-    const formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
-    const res = await fetch('http://127.0.0.1:8000/api/ml/predict', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: formattedSymbol, timeframe }),
-      signal: AbortSignal.timeout(500),
-    });
-    if (res.ok) {
-      return await res.json();
+  const mlUrl = process.env.ML_SERVICE_URL;
+  if (mlUrl) {
+    try {
+      const formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
+      const res = await fetch(mlUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: formattedSymbol, timeframe }),
+        signal: AbortSignal.timeout(500),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (_) {
+      // Non-blocking fallback
     }
-  } catch (err) {
-    // Non-blocking fallback
   }
 
   // Embedded Quantitative Machine Learning Predictor (LOG_v1 Champion Model)
@@ -122,9 +141,17 @@ export const recommendationEngine = {
     } else if (strategyOutput.direction === 'SHORT' && riskOutput.status === 'PASS') {
       action = 'SELL';
     } else if (strategyOutput.direction === 'LONG' || strategyOutput.direction === 'SHORT') {
-      action = 'HOLD'; // Setup exists but failed risk checks -> HOLD / NO_TRADE
+      action = 'HOLD'; // Setup exists but failed risk checks -> HOLD
     } else {
       action = 'NO_TRADE';
+    }
+
+    // Determine decisionMode:
+    let decisionMode: DecisionMode = 'HOLD';
+    if (action === 'BUY' || action === 'SELL') {
+      decisionMode = strategyOutput.score >= 5 ? 'EXPLOIT' : 'EXPLORE';
+    } else {
+      decisionMode = 'HOLD';
     }
 
     // Determine Strength based on score & ML alignment
@@ -136,7 +163,7 @@ export const recommendationEngine = {
 
       if (strategyOutput.score >= 6 && mlSupport && riskOutput.riskLevel === 'LOW') {
         strength = 'HIGH';
-      } else if (strategyOutput.score >= 5) {
+      } else if (strategyOutput.score >= 4) {
         strength = 'MEDIUM';
       } else {
         strength = 'LOW';
@@ -156,6 +183,25 @@ export const recommendationEngine = {
       warnings.push(`Trade recommendation invalidated by Risk Engine.`);
     }
 
+    // Build structured DecisionTrace
+    const decisionTrace: DecisionTrace = {
+      marketData: candles.length > 0 && currentPrice > 0 ? 'PASS' : 'FAIL',
+      indicators: indicators.ema20 !== undefined ? 'PASS' : 'FAIL',
+      signal: action === 'BUY' ? 'BUY' : (action === 'SELL' ? 'SELL' : 'HOLD'),
+      confidence: strategyOutput.score,
+      risk: riskOutput.status,
+      positionSizing: riskOutput.positionSize > 0 ? 'PASS' : 'REJECT',
+      cooldown: 'PASS',
+      exposure: 'PASS',
+      decisionMode,
+      execution: (action === 'BUY' || action === 'SELL') && riskOutput.status === 'PASS' ? 'APPROVED' : 'REJECTED',
+      rejectionReason: riskOutput.status === 'REJECT'
+        ? (riskOutput.reasons[0] || 'Risk check failed')
+        : (action === 'NO_TRADE' || action === 'HOLD'
+            ? (strategyOutput.reasoning[strategyOutput.reasoning.length - 1] || 'Setup conviction below threshold')
+            : undefined)
+    };
+
     const dataTimestamp = candles.length > 0 ? candles[candles.length - 1].timestamp : new Date().toISOString();
 
     const recommendation: RecommendationObject = {
@@ -163,6 +209,7 @@ export const recommendationEngine = {
       timeframe,
       action,
       strength,
+      decisionMode,
       entry: riskOutput.entry,
       stopLoss: riskOutput.stopLoss,
       takeProfit: riskOutput.takeProfit,
@@ -186,6 +233,7 @@ export const recommendationEngine = {
       },
       reasons,
       warnings,
+      decisionTrace,
       timestamp: new Date().toISOString(),
       dataTimestamp
     };

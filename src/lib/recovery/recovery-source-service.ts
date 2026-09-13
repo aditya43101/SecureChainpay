@@ -100,7 +100,7 @@ export class RecoverySourceService {
     }
 
     // 1. Identify Trusted Checkpoint
-    let checkpoint = await TrustedCheckpointService.getLatestCheckpoint();
+    const checkpoint = await TrustedCheckpointService.getLatestCheckpoint();
     let maxTrustedBlockNumber = 0;
 
     // If incident specifies a lastTrustedBlock, use that boundary

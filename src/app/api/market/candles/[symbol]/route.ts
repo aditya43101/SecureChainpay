@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
     }
 
-    let clean = rawSymbol.toUpperCase().replace(/[\/\-_]/g, '');
+    const clean = rawSymbol.toUpperCase().replace(/[\/\-_]/g, '');
     let formattedSymbol = clean;
     if (clean.endsWith('USDT')) {
       formattedSymbol = clean;

@@ -265,10 +265,10 @@ export async function verifyTransactionIntegrity(
   let isBlockchainAnchorValid = false;
   let isBlockValid = false;
   let confirmations = 0;
-  let onChainRoot: string | null = null;
+  const onChainRoot: string | null = null;
   let onChainTimestamp: string | null = null;
   let receiptBlockNumber: number | null = null;
-  let receiptBlockHash: string | null = null;
+  const receiptBlockHash: string | null = null;
   let activeChainId: number | null = null;
 
   try {
@@ -283,7 +283,15 @@ export async function verifyTransactionIntegrity(
     // PRIMARY CHECK: Does the smart contract have this transaction?
     const onChainTx = await contract.getTransaction(txIdBytes32).catch(() => null);
 
-    if (onChainTx && Number(onChainTx.timestamp) > 0) {
+    if (chainTxHash && (chainTxHash === ethers.ZeroHash || /^0x0+$/.test(chainTxHash))) {
+      isBlockchainAnchorValid = false;
+      mismatches.push('Invalid zero blockchain anchor hash');
+      layers.blockchainAnchor = {
+        status: 'INVALID',
+        message: 'Transaction has an invalid zero-bytes blockchain anchor hash',
+        actual: chainTxHash,
+      };
+    } else if (onChainTx && Number(onChainTx.timestamp) > 0) {
       // ✅ Transaction exists in smart contract — VALID anchor
       isBlockchainAnchorValid = true;
       isBlockValid = true;
@@ -353,9 +361,8 @@ export async function verifyTransactionIntegrity(
 
         if (receipt && receipt.status === 1) {
           chainTxHash = receipt.hash;
-          receiptBlockNumber = receipt.blockNumber;
-          receiptBlockHash = receipt.blockHash;
-          confirmations = Math.max(0, latestBlockNumber - receipt.blockNumber + 1);
+          const currentBlock = await provider.getBlockNumber().catch(() => receipt.blockNumber);
+          confirmations = Math.max(1, currentBlock - receipt.blockNumber + 1);
           isBlockchainAnchorValid = true;
           isBlockValid = true;
 
@@ -365,7 +372,7 @@ export async function verifyTransactionIntegrity(
             actual: receipt.hash,
           };
           layers.blockConfirmation = {
-            status: 'VALID',
+            status: confirmations >= reqConfirmations ? 'VALID' : 'PENDING',
             message: `Block #${receipt.blockNumber} confirmed with ${confirmations} confirmation(s)`,
             actual: confirmations,
             expected: reqConfirmations,

@@ -28,7 +28,7 @@ export async function routeAndBuildAIContext(params: {
   const liveContext = await fetchLiveContextForDomains(userId, classification.domains, asset);
 
   // 3. Build System Directives
-  let systemDirective = `You are the Project-Aware AI Assistant & Copilot for SecureChain Pay (v1.0).
+  const systemDirective = `You are the Project-Aware AI Assistant & Copilot for SecureChain Pay (v1.0).
 Your primary identity: PROJECT-AWARE FINANCIAL PLATFORM COPILOT.
 You understand the complete implemented SecureChain Pay platform architecture.
 

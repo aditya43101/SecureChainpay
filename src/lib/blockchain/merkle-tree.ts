@@ -105,7 +105,7 @@ export function generateMerkleProofFromLevels(
   let currentIndex = targetIndex;
 
   for (let i = 0; i < levels.length - 1; i++) {
-    let currentLevel = [...levels[i]];
+    const currentLevel = [...levels[i]];
     if (currentLevel.length % 2 === 1) {
       currentLevel.push(currentLevel[currentLevel.length - 1]);
     }

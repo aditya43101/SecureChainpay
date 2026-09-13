@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    let rawBlocks: any[] = [];
+    const rawBlocks: any[] = [];
     try {
       const adminDb = getAdminDb();
       const snap = await adminDb.collection('global_blocks').get();

@@ -137,7 +137,7 @@ const INITIAL_NODES: BlockchainNode[] = [
   },
 ];
 
-let nodeStore: BlockchainNode[] = JSON.parse(JSON.stringify(INITIAL_NODES));
+const nodeStore: BlockchainNode[] = JSON.parse(JSON.stringify(INITIAL_NODES));
 
 // ════════════════════════════════════════════════════════════
 // CORE CRYPTOGRAPHIC LOGIC
@@ -258,7 +258,7 @@ export async function verifyAuditChain() {
     let expectedNextSeq = -1;
     let gapDetected = false;
     let tamperDetected = false;
-    let faultyRecords: any[] = [];
+    const faultyRecords: any[] = [];
 
     for (const record of records) {
       if (expectedNextSeq !== -1 && record.sequenceNumber !== expectedNextSeq) {

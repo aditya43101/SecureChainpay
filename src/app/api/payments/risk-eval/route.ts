@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const adminDb = getAdminDb();
-    let userTransactions: any[] = [];
+    const userTransactions: any[] = [];
 
     // Fetch user transaction history for behavior baseline
     try {

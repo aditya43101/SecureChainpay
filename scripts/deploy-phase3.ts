@@ -9,17 +9,16 @@ async function main() {
   console.log('[Phase 3 Deploy] Deploying SecureChainAnchor with account:', deployer.address);
 
   const SecureChainAnchor = await ethers.getContractFactory('SecureChainAnchor');
-  const anchor = await SecureChainAnchor.deploy();
+  const anchor = await SecureChainAnchor.deploy(deployer.address);
   await anchor.waitForDeployment();
   const anchorAddress = await anchor.getAddress();
   console.log('[Phase 3 Deploy] SecureChainAnchor deployed to:', anchorAddress);
 
   // Initialize parameters
-  const chainId = 31337; // Local Hardhat chainId
+  const chainId = 'securechainpay-global-v1';
   const chainVersion = 1;
   const genesisHash = ethers.keccak256(ethers.toUtf8Bytes('genesis:securechainpay:global:v1'));
-  const genesisBlockNumber = 0;
-  const genesisChainRoot = ethers.keccak256(ethers.toUtf8Bytes('genesis:securechainpay:global:v1:root'));
+  const genesisChainRoot = ethers.keccak256(ethers.toUtf8Bytes('chainroot:genesis:securechainpay'));
   const blockWriter = deployer.address;
   const securityAdmin = deployer.address;
   const contractAdmin = deployer.address;
@@ -29,11 +28,9 @@ async function main() {
     chainId,
     chainVersion,
     genesisHash,
-    genesisBlockNumber,
     genesisChainRoot,
     blockWriter,
-    securityAdmin,
-    contractAdmin
+    securityAdmin
   );
   await tx.wait();
   console.log('[Phase 3 Deploy] Contract initialized successfully.');
@@ -44,6 +41,7 @@ async function main() {
     fs.mkdirSync(deploymentDir, { recursive: true });
   }
 
+  const genesisBlockNumber = 0;
   const deploymentData = {
     address: anchorAddress,
     chainId,

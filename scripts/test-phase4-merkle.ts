@@ -169,7 +169,7 @@ async function runPhase4TestMatrix() {
   // ────────────────────────────────────────────────────────────
   // TEST 5: Generate Merkle proof -> verifyMerkleProof() = true
   // ────────────────────────────────────────────────────────────
-  let test5Leaves: string[] = [];
+  const test5Leaves: string[] = [];
   let test5Root = '';
   let test5Levels: string[][] = [];
   try {

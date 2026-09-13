@@ -1,7 +1,8 @@
 import { Candle } from '../market/market-data-service';
 import { Indicators } from '../market/technical-analysis';
-import { StrategyEngineOutput } from './strategy-engine';
+import { StrategyEngineOutput, DecisionMode } from './strategy-engine';
 import { DEFAULT_STRATEGY_CONFIG, StrategyConfig } from './strategy-config';
+import { PositionSizer } from './position-sizer';
 
 export interface UserRiskProfile {
   accountCapital: number;
@@ -15,6 +16,7 @@ export interface UserRiskProfile {
 export interface RiskAssessmentResult {
   status: 'PASS' | 'REJECT';
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  decisionMode?: DecisionMode;
   entry: {
     type: 'ZONE' | 'EXACT';
     low: number;
@@ -27,6 +29,8 @@ export interface RiskAssessmentResult {
   positionSize: number;      // Quantity of asset (e.g. BTC)
   positionValueUSD: number;  // USD value of position
   allowedRiskUSD: number;
+  confidenceMultiplier?: number;
+  effectiveRiskPct?: number;
   reasons: string[];
   warnings: string[];
 }
@@ -96,7 +100,6 @@ export const riskEngine = {
       
       // Pick the safest SL (whichever is lower/gives buffer)
       stopLoss = Number(Math.min(suggestedEntry - atrSLDistance, recentLow * 0.998).toFixed(2));
-      takeProfit = Number((suggestedEntry + atrTPDistance).toFixed(2));
     } else {
       // SHORT
       const recentHigh = candles.length >= 10 
@@ -104,32 +107,40 @@ export const riskEngine = {
         : currentPrice + atrSLDistance;
 
       stopLoss = Number(Math.max(suggestedEntry + atrSLDistance, recentHigh * 1.002).toFixed(2));
-      takeProfit = Number((suggestedEntry - atrTPDistance).toFixed(2));
     }
 
-    // 3. Risk / Reward Calculation
+    // 3. Risk / Reward & Take Profit Calculation
     const riskDistance = Math.abs(suggestedEntry - stopLoss);
-    const rewardDistance = Math.abs(takeProfit - suggestedEntry);
+    const targetReward = Math.max(atrTPDistance, riskDistance * config.riskDefaults.minRiskReward);
 
+    if (direction === 'LONG') {
+      takeProfit = Number((suggestedEntry + targetReward).toFixed(2));
+    } else {
+      takeProfit = Number((suggestedEntry - targetReward).toFixed(2));
+    }
+
+    const rewardDistance = Math.abs(takeProfit - suggestedEntry);
     const riskRewardRatio = Number((rewardDistance / (riskDistance || 1)).toFixed(2));
 
-    // 4. Position Sizing Formula
-    // Position Size (Units) = Allowed Risk ($) / Distance to Stop Loss ($)
-    const allowedRiskUSD = riskProfile.accountCapital * riskProfile.maxRiskPerTrade;
-    let rawPositionSize = allowedRiskUSD / (riskDistance || 1);
-    let positionValueUSD = rawPositionSize * suggestedEntry;
+    // 4. Confidence-Based Position Sizing via PositionSizer
+    const sizingResult = PositionSizer.calculatePositionSize(
+      strategyOutput.score,
+      suggestedEntry,
+      stopLoss,
+      riskProfile.accountCapital,
+      riskProfile.maxRiskPerTrade
+    );
 
-    // 5. Portfolio & Exposure Cap Validation
-    const maxAssetLimitUSD = riskProfile.accountCapital * riskProfile.maxAssetExposure;
-    if (positionValueUSD > maxAssetLimitUSD) {
-      warnings.push(`Position size capped from $${positionValueUSD.toFixed(0)} to max asset exposure limit ($${maxAssetLimitUSD.toFixed(0)}).`);
-      positionValueUSD = maxAssetLimitUSD;
-      rawPositionSize = positionValueUSD / suggestedEntry;
+    const allowedRiskUSD = sizingResult.allowedRiskUSD;
+    const positionSize = sizingResult.positionSize;
+    const positionValueUSD = sizingResult.positionValueUSD;
+    const decisionMode = sizingResult.decisionMode;
+
+    if (sizingResult.isCappedByExposure && sizingResult.cappedReason) {
+      warnings.push(sizingResult.cappedReason);
     }
 
-    const positionSize = Number(rawPositionSize.toFixed(6));
-
-    // 6. Volatility & Risk Level Assessment
+    // 5. Volatility & Risk Level Assessment
     const volatility = indicators.volatility || 30; // default 30%
     let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
 
@@ -143,7 +154,7 @@ export const riskEngine = {
       riskLevel = 'MEDIUM';
     }
 
-    // 7. Rejection Criteria Checks
+    // 6. Rejection Criteria Checks
     let status: 'PASS' | 'REJECT' = 'PASS';
 
     // R:R Check
@@ -160,12 +171,13 @@ export const riskEngine = {
 
     if (status === 'PASS') {
       reasons.push(`Risk checks passed with 1:${riskRewardRatio} Risk/Reward ratio.`);
-      reasons.push(`Max allowed risk per trade capped at $${allowedRiskUSD.toFixed(2)} (${(riskProfile.maxRiskPerTrade * 100).toFixed(1)}% of capital).`);
+      reasons.push(`[${decisionMode} Mode] Risk per trade scaled to $${allowedRiskUSD.toFixed(2)} (${(sizingResult.effectiveRiskPct * 100).toFixed(2)}% of capital at ${(sizingResult.confidenceMultiplier * 100).toFixed(0)}% conviction weight).`);
     }
 
     return {
       status,
       riskLevel,
+      decisionMode,
       entry: {
         type: 'ZONE',
         low: entryLow,
@@ -178,6 +190,8 @@ export const riskEngine = {
       positionSize,
       positionValueUSD: Number(positionValueUSD.toFixed(2)),
       allowedRiskUSD,
+      confidenceMultiplier: sizingResult.confidenceMultiplier,
+      effectiveRiskPct: sizingResult.effectiveRiskPct,
       reasons,
       warnings
     };

@@ -747,7 +747,7 @@ export const useWalletStore = create<WalletState>()(
             const restoreWalletState = async (data: any, source: 'CLOUD' | 'CACHE' | 'LOCAL') => {
               const resolvedAddress = data.address || data.walletAddress || (stateAfterIsolation.ownerUid === uid ? stateAfterIsolation.address : null);
               const resolvedEncryptedKey = data.encryptedPrivateKey || data.encryptedKey || (stateAfterIsolation.ownerUid === uid ? stateAfterIsolation.encryptedPrivateKey : null);
-              let resolvedPublicKey = data.publicKey || data.senderPublicKey || (stateAfterIsolation.ownerUid === uid ? stateAfterIsolation.publicKey : null);
+              const resolvedPublicKey = data.publicKey || data.senderPublicKey || (stateAfterIsolation.ownerUid === uid ? stateAfterIsolation.publicKey : null);
 
               if (!isValidString(resolvedAddress) || !isValidString(resolvedEncryptedKey)) {
                 set({

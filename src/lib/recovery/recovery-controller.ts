@@ -108,7 +108,7 @@ export class RecoveryController {
 
       // ─── STEP 5: ON-CHAIN SMART CONTRACT ANCHOR VERIFICATION (§16, §17) ───
       await RecoveryLockService.updateCheckpoint({ stage: 'ON_CHAIN_ANCHOR_VALIDATION' });
-      let smartContractVerified = true;
+      const smartContractVerified = true;
       try {
         const onChain = await SmartContractService.readOnChainState();
         if (onChain.initialized) {

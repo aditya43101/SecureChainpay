@@ -31,6 +31,10 @@ export interface PlaceOrderParams {
   signalId?: string;
   idempotencyKey: string;
   maxSlippage?: number; // e.g. 0.005 (0.5%)
+  decisionMode?: string;
+  confidence?: number;
+  tradeId?: string;
+  entrySnapshot?: any;
 }
 
 export interface ExecutionResult {
@@ -233,43 +237,48 @@ export class SimulatedExchangeAdapter implements ExchangeAdapter {
         });
       }
 
-      if (params.side === 'BUY') {
-        const updatedCash = Math.max(0, paperAccount.cashBalance - notionalCost);
-        await prisma.paperAccount.update({
-          where: { userId: params.userId },
-          data: { cashBalance: updatedCash }
-        });
+      const positionSide = params.side === 'BUY' ? 'LONG' : 'SHORT';
+      const updatedCash = Math.max(0, paperAccount.cashBalance - notionalCost);
+      await prisma.paperAccount.update({
+        where: { userId: params.userId },
+        data: { cashBalance: updatedCash }
+      });
 
-        await prisma.paperPosition.create({
-          data: {
-            accountId: paperAccount.id,
-            symbol: params.symbol,
-            side: 'LONG',
-            quantity: filledQuantity,
-            averageEntry: executionPrice,
-            currentPrice: executionPrice,
-            stopLoss: params.stopLoss,
-            takeProfit: params.takeProfit,
-            unrealizedPnL: 0
-          }
-        });
-      }
-    } catch {
-      const acc = tradingFallbackStore.getPaperAccount(params.userId);
-      if (params.side === 'BUY') {
-        const updatedCash = Math.max(0, acc.cashBalance - notionalCost);
-        tradingFallbackStore.updatePaperAccount(params.userId, { cashBalance: updatedCash });
-        tradingFallbackStore.addPosition(params.userId, {
+      await prisma.paperPosition.create({
+        data: {
+          accountId: paperAccount.id,
           symbol: params.symbol,
-          side: 'LONG',
+          side: positionSide,
           quantity: filledQuantity,
           averageEntry: executionPrice,
           currentPrice: executionPrice,
-          stopLoss: params.stopLoss || 0,
-          takeProfit: params.takeProfit || 0,
+          stopLoss: params.stopLoss,
+          takeProfit: params.takeProfit,
           unrealizedPnL: 0
-        });
-      }
+        }
+      });
+    } catch {
+      const acc = tradingFallbackStore.getPaperAccount(params.userId);
+      const positionSide = params.side === 'BUY' ? 'LONG' : 'SHORT';
+      const updatedCash = Math.max(0, acc.cashBalance - notionalCost);
+      tradingFallbackStore.updatePaperAccount(params.userId, { cashBalance: updatedCash });
+      tradingFallbackStore.addPosition(params.userId, {
+        tradeId: params.tradeId,
+        orderId,
+        symbol: params.symbol,
+        side: positionSide,
+        quantity: filledQuantity,
+        averageEntry: executionPrice,
+        currentPrice: executionPrice,
+        lowestPrice: executionPrice,
+        highestPrice: executionPrice,
+        stopLoss: params.stopLoss || 0,
+        takeProfit: params.takeProfit || 0,
+        unrealizedPnL: 0,
+        decisionMode: params.decisionMode,
+        confidence: params.confidence,
+        entrySnapshot: params.entrySnapshot,
+      });
     }
 
     return {

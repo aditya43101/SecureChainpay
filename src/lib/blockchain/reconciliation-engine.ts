@@ -182,7 +182,23 @@ export async function reconcileTransaction(
   let chainTxHash = txRecord.blockchainTransactionHash;
 
   if (!chainTxHash) {
-    // Attempt auto-submission to smart contract if autoRecover is enabled or transaction is unanchored
+    if (!autoRecover) {
+      return {
+        reconciliationId,
+        applicationTransactionId: txRecord.applicationTransactionId || txRecord.id,
+        userId: txRecord.userId,
+        timestamp,
+        offChainStatus,
+        blockchainStatus: 'NOT_SUBMITTED',
+        reconciliationStatus: 'BLOCKCHAIN_PENDING',
+        verified: false,
+        severity: 'INFO',
+        actionPerformed: 'PENDING_SUBMISSION_DETECTED',
+        mismatches: [],
+        isRetryable: true,
+      };
+    }
+    // Attempt auto-submission to smart contract if autoRecover is enabled
     try {
       const appId = txRecord.applicationTransactionId || txRecord.id;
       const senderWallet = txRecord.sender || txRecord.walletAddress || '';
