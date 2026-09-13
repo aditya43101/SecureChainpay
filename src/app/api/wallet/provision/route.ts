@@ -5,6 +5,44 @@ import { SecurityAuditLogger } from '@/lib/security/audit-logger';
 
 export const dynamic = 'force-dynamic';
 
+export async function GET(request: Request) {
+  try {
+    let authUser: any;
+    try {
+      authUser = await requireFirebaseUser(request);
+    } catch (authErr: any) {
+      return NextResponse.json(
+        { success: false, error: authErr.message || 'Authentication required' },
+        { status: authErr.status || 401 }
+      );
+    }
+
+    const adminDb = getAdminDb();
+    const walletRef = adminDb.collection('users').doc(authUser.uid).collection('wallet').doc('data');
+    const snap = await walletRef.get();
+
+    if (snap.exists) {
+      return NextResponse.json({
+        success: true,
+        exists: true,
+        wallet: snap.data(),
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      exists: false,
+      wallet: null,
+    });
+  } catch (err: any) {
+    console.error('[API /api/wallet/provision GET] Error:', err);
+    return NextResponse.json(
+      { success: false, error: err.message || 'Failed to check wallet' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     // 1. Enforce Server-Side Authentication
@@ -71,6 +109,11 @@ export async function POST(request: Request) {
       };
 
       transaction.set(walletRef, initData);
+
+      // Also synchronize walletAddress with user document for search and recipient resolution
+      const userRef = adminDb.collection('users').doc(authUser.uid);
+      transaction.set(userRef, { walletAddress: address }, { merge: true });
+
       created = true;
       existingData = initData;
     });
@@ -100,3 +143,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

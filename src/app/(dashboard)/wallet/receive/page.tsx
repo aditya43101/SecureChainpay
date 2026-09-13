@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useWalletStore } from '@/stores/wallet-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { auth } from '@/lib/firebase/client';
 import {
   Copy,
   Check,
@@ -21,17 +22,70 @@ import {
   FileText,
   User,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { generateQRDataURL } from '@/lib/qr/qr-service';
 
 export default function ReceivePage() {
-  const { address } = useWalletStore();
+  const {
+    address,
+    _isWalletReady,
+    identityStatus,
+    initializationErrorMessage,
+    initializeWallet,
+  } = useWalletStore();
   const user = useAuthStore((s) => s.user);
 
   const [activeTab, setActiveTab] = useState<'receive' | 'request'>('receive');
   const [copied, setCopied] = useState(false);
   const selectedAsset = 'HSCT';
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [isInitializingWallet, setIsInitializingWallet] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+
+  // Auto-initialize wallet on mount or session change if address is missing
+  useEffect(() => {
+    const currentUid =
+      user?.id ||
+      auth.currentUser?.uid ||
+      (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null);
+
+    if (currentUid && !address && !_isWalletReady && identityStatus !== 'verified' && !isInitializingWallet) {
+      console.log('[ReceivePage] Auto-triggering wallet initialization for UID:', currentUid);
+      setIsInitializingWallet(true);
+      setWalletError(null);
+      initializeWallet(currentUid)
+        .catch((err: any) => {
+          console.warn('[ReceivePage] Wallet auto-init warning:', err);
+          setWalletError(err?.message || 'Wallet initialization failed.');
+        })
+        .finally(() => {
+          setIsInitializingWallet(false);
+        });
+    }
+  }, [user?.id, address, _isWalletReady, identityStatus, initializeWallet, isInitializingWallet]);
+
+  const handleRetryInit = useCallback(async () => {
+    const currentUid =
+      user?.id ||
+      auth.currentUser?.uid ||
+      (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null);
+
+    if (!currentUid) {
+      setWalletError('No active user session found. Please sign in.');
+      return;
+    }
+
+    setIsInitializingWallet(true);
+    setWalletError(null);
+    try {
+      await initializeWallet(currentUid);
+    } catch (err: any) {
+      setWalletError(err?.message || 'Failed to initialize wallet.');
+    } finally {
+      setIsInitializingWallet(false);
+    }
+  }, [user?.id, initializeWallet]);
 
   // Request Money Form States
   const [requestAmount, setRequestAmount] = useState('');
@@ -48,10 +102,13 @@ export default function ReceivePage() {
 
   // Generate wallet receiving QR code
   useEffect(() => {
-    if (!address) return;
+    if (!address) {
+      setQrDataUrl(null);
+      return;
+    }
     generateQRDataURL({
       address,
-      uid: user?.id,
+      uid: user?.id || auth.currentUser?.uid,
       username: user?.username,
       displayName: user?.name || user?.username || 'SecureChain User',
       currency: selectedAsset,
@@ -250,6 +307,46 @@ export default function ReceivePage() {
                     alt="SecureChain Pay QR Code"
                     className="w-44 h-44 sm:w-52 sm:h-52 rounded-lg object-contain"
                   />
+                ) : !address ? (
+                  walletError || identityStatus === 'error' ? (
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex flex-col items-center justify-center bg-rose-50 border border-rose-200 text-rose-900 text-xs font-sans rounded-lg p-3 text-center gap-2">
+                      <AlertCircle size={28} className="text-rose-600" />
+                      <span className="font-bold text-xs text-rose-950">Wallet Setup Needed</span>
+                      <p className="text-[10px] text-rose-700 leading-tight">
+                        {walletError || initializationErrorMessage || 'New account wallet initialization pending.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleRetryInit}
+                        disabled={isInitializingWallet}
+                        className="mt-1 px-3 py-1.5 bg-neutral-900 text-[#FEEF8B] rounded-lg text-xs font-bold hover:bg-neutral-800 transition-colors flex items-center gap-1.5 shadow"
+                      >
+                        <RefreshCw size={12} className={isInitializingWallet ? 'animate-spin' : ''} />
+                        {isInitializingWallet ? 'Initializing...' : 'Setup Wallet'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-44 h-44 sm:w-52 sm:h-52 flex flex-col items-center justify-center bg-gray-50 text-neutral-800 text-xs font-sans rounded-lg p-4 text-center gap-3">
+                      <div className="relative flex items-center justify-center">
+                        <div className="w-8 h-8 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
+                        <span className="absolute w-2 h-2 rounded-full bg-[#FEEF8B]" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-xs text-neutral-900">Provisioning Wallet</p>
+                        <p className="text-[10px] text-neutral-500 leading-tight">
+                          Generating secure keys & receiving QR code...
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetryInit}
+                        disabled={isInitializingWallet}
+                        className="text-[11px] text-neutral-700 underline font-semibold hover:text-black mt-1"
+                      >
+                        {isInitializingWallet ? 'Setting up...' : 'Click to speed up'}
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <div className="w-44 h-44 sm:w-52 sm:h-52 flex flex-col items-center justify-center bg-gray-100 text-neutral-600 text-xs font-mono rounded-lg gap-2">
                     <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
@@ -267,7 +364,7 @@ export default function ReceivePage() {
                 </p>
                 <div className="flex items-center justify-center gap-1.5 mt-1 text-[11px] text-emerald-400 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Direct Non-Custodial Address
+                  {address ? 'Direct Non-Custodial Address' : 'Initializing Non-Custodial Address'}
                 </div>
               </div>
 
@@ -292,31 +389,55 @@ export default function ReceivePage() {
 
             {/* Wallet Address Box */}
             <div className="space-y-2 relative z-10">
-              <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                Your Public Wallet Address
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                  Your Public Wallet Address
+                </label>
+                {!address && (
+                  <button
+                    type="button"
+                    onClick={handleRetryInit}
+                    disabled={isInitializingWallet}
+                    className="text-xs text-brand-primary hover:underline flex items-center gap-1"
+                  >
+                    <RefreshCw size={11} className={isInitializingWallet ? 'animate-spin' : ''} />
+                    {isInitializingWallet ? 'Initializing...' : 'Setup Wallet'}
+                  </button>
+                )}
+              </div>
               <div className="flex flex-col sm:flex-row sm:items-center bg-black border border-white/10 rounded-xl overflow-hidden p-1.5 focus-within:border-brand-primary/50 transition-colors gap-2 sm:gap-0">
                 <span className="px-3 py-2 text-xs font-mono text-neutral-300 break-all sm:truncate flex-1 select-all">
-                  {address || '0x...'}
+                  {address || (isInitializingWallet ? 'Generating secure cryptographic address...' : '0x... (Click Setup Wallet)')}
                 </span>
-                <button
-                  onClick={() => address && handleCopy(address)}
-                  className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold transition-all min-h-[44px] ${
-                    copied
-                      ? 'bg-brand-primary text-neutral-950 shadow-[0_0_15px_rgba(254,239,139,0.3)]'
-                      : 'bg-white/10 text-white hover:bg-white/20'
-                  }`}
-                >
-                  {copied ? (
-                    <>
-                      <Check size={14} /> Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={14} /> Copy Address
-                    </>
-                  )}
-                </button>
+                {address ? (
+                  <button
+                    onClick={() => handleCopy(address)}
+                    className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold transition-all min-h-[44px] ${
+                      copied
+                        ? 'bg-brand-primary text-neutral-950 shadow-[0_0_15px_rgba(254,239,139,0.3)]'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {copied ? (
+                      <>
+                        <Check size={14} /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} /> Copy Address
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleRetryInit}
+                    disabled={isInitializingWallet}
+                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold bg-[#FEEF8B] text-neutral-950 hover:bg-[#FEF9C3] transition-all min-h-[44px]"
+                  >
+                    <RefreshCw size={14} className={isInitializingWallet ? 'animate-spin' : ''} />
+                    {isInitializingWallet ? 'Initializing...' : 'Setup Wallet'}
+                  </button>
+                )}
               </div>
             </div>
 

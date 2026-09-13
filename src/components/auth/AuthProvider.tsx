@@ -79,6 +79,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 await initializeWallet(user.uid);
               } catch (error: any) {
                 console.error(`[AUTH ${getElapsed()}] Critical wallet init error:`, error);
+                // Reset ref on failure so navigation or subsequent retry can proceed
+                lastInitUidRef.current = null;
               }
             }
           })();

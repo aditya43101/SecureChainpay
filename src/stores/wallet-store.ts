@@ -851,12 +851,54 @@ export const useWalletStore = create<WalletState>()(
 
             console.info(`[WalletInit] Firestore lookup result: ${readResult.status}`);
 
+            let finalStatus: 'FOUND' | 'NOT_FOUND' | 'ERROR' = readResult.status;
+            let foundData: any = readResult.status === 'FOUND' ? readResult.snapshot?.data() : null;
+
+            // If direct Firestore lookup errors or times out (common on brand new signups before auth token propagation),
+            // verify with authoritative server API using Firebase Admin SDK
+            if (finalStatus === 'ERROR') {
+              console.warn(`[WalletInit] Firestore direct read error/timeout for ${uid}. Checking authoritative server API...`);
+              try {
+                const idToken = await auth.currentUser?.getIdToken().catch(() => null);
+                const serverCheck = await safeJsonFetch('/api/wallet/provision', {
+                  method: 'GET',
+                  headers: {
+                    'x-user-id': uid,
+                    ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+                  },
+                });
+
+                if (serverCheck.ok && serverCheck.data?.success) {
+                  if (serverCheck.data.exists && serverCheck.data.wallet) {
+                    console.info(`[WalletInit] Server confirmed existing wallet for UID ${uid}.`);
+                    finalStatus = 'FOUND';
+                    foundData = serverCheck.data.wallet;
+                  } else if (!serverCheck.data.exists) {
+                    console.info(`[WalletInit] Server confirmed NO existing wallet for UID ${uid}. Proceeding to provision.`);
+                    finalStatus = 'NOT_FOUND';
+                  }
+                }
+              } catch (srvErr) {
+                console.warn('[WalletInit] Authoritative server check failed, falling back to local error handling:', srvErr);
+              }
+            }
+
             // ═══════════════════════════════════════════════════════
-            // STATE C: FIRESTORE ERROR / TIMEOUT / UNAVAILABLE
+            // STATE A: WALLET FOUND IN CLOUD (VIA FIRESTORE OR SERVER CHECK)
             // ═══════════════════════════════════════════════════════
-            if (readResult.status === 'ERROR') {
-              const errCode = readResult.error?.code;
-              const errMessage = readResult.error?.message || 'Firestore wallet lookup failed';
+            if (finalStatus === 'FOUND') {
+              console.info('[WalletInit] Existing wallet confirmed in cloud. Restoring...');
+              await restoreWalletState(foundData ?? {}, 'CLOUD');
+              return;
+            }
+
+            // ═══════════════════════════════════════════════════════
+            // STATE C: FIRESTORE ERROR / TIMEOUT / UNAVAILABLE (AND SERVER CHECK UNCONFIRMED)
+            // ═══════════════════════════════════════════════════════
+            if (finalStatus === 'ERROR') {
+              const rawError = 'error' in readResult ? (readResult as any).error : null;
+              const errCode = rawError?.code;
+              const errMessage = rawError?.message || 'Firestore wallet lookup failed';
 
               let normalizedErrorCode: WalletErrorCode = 'WALLET_CLOUD_UNAVAILABLE';
               if (errCode === 'permission-denied') {
@@ -888,7 +930,7 @@ export const useWalletStore = create<WalletState>()(
                 }
               }
 
-              // NEVER CREATE A REPLACEMENT WALLET ON STATE C
+              // NEVER CREATE A REPLACEMENT WALLET ON UNVERIFIED ERROR STATE
               set({
                 _hasHydrated: true,
                 _isWalletReady: false,
@@ -898,16 +940,6 @@ export const useWalletStore = create<WalletState>()(
                 initializationErrorMessage: errMessage,
               });
               console.warn(`[WALLET ${getWElapsed()}] Wallet lookup unavailable (${errMessage}). No wallet was created or changed; retry is required.`);
-              return;
-            }
-
-            // ═══════════════════════════════════════════════════════
-            // STATE A: WALLET FOUND IN CLOUD
-            // ═══════════════════════════════════════════════════════
-            if (readResult.status === 'FOUND') {
-              console.info('[WalletInit] Existing wallet confirmed in cloud. Restoring...');
-              const data = readResult.snapshot.data() ?? {};
-              await restoreWalletState(data, 'CLOUD');
               return;
             }
 
@@ -962,12 +994,13 @@ export const useWalletStore = create<WalletState>()(
             let created = false;
             let provisionedWalletData: any = null;
 
-            // Authoritative server-side wallet provisioning with Bearer ID Token
-            const idToken = await auth.currentUser?.getIdToken();
+            // Authoritative server-side wallet provisioning with Bearer ID Token and x-user-id fallback
+            const idToken = await auth.currentUser?.getIdToken().catch(() => null);
             const { ok, data: provData } = await safeJsonFetch('/api/wallet/provision', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                'x-user-id': uid,
                 ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
               },
               body: JSON.stringify({
