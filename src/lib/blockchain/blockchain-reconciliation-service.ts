@@ -36,7 +36,9 @@ export class BlockchainReconciliationService {
     }
 
     // 1. Check Genesis Hash
-    if (dbState.genesisHash.toLowerCase() !== onChainState.genesisHash.toLowerCase()) {
+    const dbGen = (dbState.genesisHash || '').toLowerCase();
+    const onChainGen = (onChainState.genesisHash || '').toLowerCase();
+    if (dbGen !== onChainGen) {
       mismatches.push(
         `Genesis hash mismatch: DB (${dbState.genesisHash}) vs Contract (${onChainState.genesisHash})`
       );
@@ -51,15 +53,18 @@ export class BlockchainReconciliationService {
     }
 
     // 3. Check Latest Block Hash
-    const dbBlockHash = dbState.lastBlockHash ?? (dbState as any).latestBlockHash ?? '';
-    if (dbBlockHash.toLowerCase() !== onChainState.latestBlockHash.toLowerCase()) {
+    const dbBlockHash = ((dbState.lastBlockHash ?? (dbState as any).latestBlockHash) || '').toLowerCase();
+    const onChainBlockHash = (onChainState.latestBlockHash || '').toLowerCase();
+    if (dbBlockHash !== onChainBlockHash) {
       mismatches.push(
-        `Latest block hash mismatch: DB (${dbBlockHash}) vs Contract (${onChainState.latestBlockHash})`
+        `Latest block hash mismatch: DB (${dbState.lastBlockHash}) vs Contract (${onChainState.latestBlockHash})`
       );
     }
 
     // 4. Check Chain Root (if dbState contains chainRoot)
-    if (dbState.chainRoot && dbState.chainRoot.toLowerCase() !== onChainState.chainRoot.toLowerCase()) {
+    const dbRoot = (dbState.chainRoot || '').toLowerCase();
+    const onChainRoot = (onChainState.chainRoot || '').toLowerCase();
+    if (dbRoot && dbRoot !== onChainRoot) {
       mismatches.push(
         `Chain root mismatch: DB (${dbState.chainRoot}) vs Contract (${onChainState.chainRoot})`
       );
