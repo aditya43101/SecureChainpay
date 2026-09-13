@@ -6,6 +6,7 @@ import { ethers } from 'ethers';
 import { encryptPrivateKey, decryptPrivateKey } from '@/lib/crypto/client-aes';
 import { getWalletSigner } from '@/lib/wallet/key-access';
 import { initializeGlobalGenesis } from '@/lib/blockchain/global-chain';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL INITIALIZATION LOCK (Idempotent per UID)
@@ -619,7 +620,10 @@ export const useWalletStore = create<WalletState>()(
         try {
           const { data } = await safeJsonFetch('/api/reconciliation', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(uid ? { 'x-user-id': uid } : {}),
+            },
             body: JSON.stringify({
               transactionRecord: {
                 ...tx,
@@ -1070,7 +1074,12 @@ export const useWalletStore = create<WalletState>()(
       // EXECUTE TRANSACTION (with pre-flight checks + auto-recovery)
       // ═══════════════════════════════════════════════════════
       executeTransaction: async (type, amount, currency, description, payload) => {
-        const uid = auth.currentUser?.uid;
+        const uid =
+          auth.currentUser?.uid ||
+          useAuthStore.getState().user?.id ||
+          (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null) ||
+          get().ownerUid;
+
         if (!uid) throw new Error('User not authenticated');
         
         console.log(`[SecureChain: Tx] ▶ Initiating ${type} transaction: ${amount} ${currency}`);
@@ -1144,11 +1153,12 @@ export const useWalletStore = create<WalletState>()(
         let newBlockHash = '';
 
         // ─── STEP 1: EXECUTE VIA TRUSTED SERVER ENDPOINT ───
-        const idToken = await auth.currentUser?.getIdToken();
+        const idToken = await auth.currentUser?.getIdToken().catch(() => null);
         const { ok, data: execResult } = await safeJsonFetch('/api/transactions/execute', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-user-id': uid,
             ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
           },
           body: JSON.stringify({
@@ -1199,8 +1209,13 @@ export const useWalletStore = create<WalletState>()(
         currency = 'HSCT',
         note,
       }) => {
-        const uid = auth.currentUser?.uid;
-        if (!uid) throw new Error('User not authenticated');
+        const uid =
+          auth.currentUser?.uid ||
+          useAuthStore.getState().user?.id ||
+          (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null) ||
+          get().ownerUid;
+
+        if (!uid) throw new Error('User authentication required. Please sign in or refresh your session.');
 
         console.log(`[SecureChain: Transfer] ▶ Initiating transfer of ${amount} ${currency} to ${receiverAddress}`);
 
@@ -1258,12 +1273,13 @@ export const useWalletStore = create<WalletState>()(
           throw new Error("Failed to sign transfer with private key");
         }
 
-        // 5. Call Atomic Server Endpoint with Bearer token
-        const idToken = await auth.currentUser?.getIdToken();
+        // 5. Call Atomic Server Endpoint with Bearer token and x-user-id fallback
+        const idToken = await auth.currentUser?.getIdToken().catch(() => null);
         const { data } = await safeJsonFetch('/api/wallet/transfer', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'x-user-id': uid,
             ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
           },
           body: JSON.stringify({
