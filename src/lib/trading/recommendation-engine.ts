@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { marketDataService } from '../market/market-data-service';
+import { marketDataService, MarketSnapshot } from '../market/market-data-service';
 import { technicalAnalysisService } from '../market/technical-analysis';
 import { strategyEngine, MLPredictionData, DecisionMode } from './strategy-engine';
 import { riskEngine, UserRiskProfile } from './risk-engine';
@@ -50,12 +50,20 @@ export interface RecommendationObject {
   riskAssessment: {
     status: 'PASS' | 'REJECT';
     riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    allowedRiskUSD?: number;
+    configuredRiskPercent?: number;
+    configuredRiskUSD?: number;
+    appliedStopRiskUSD?: number;
+    appliedStopRiskPercent?: number;
+    isCappedByExposure?: boolean;
+    reconciliationSummary?: string;
     reasons: string[];
     warnings: string[];
   };
   reasons: string[];
   warnings: string[];
   decisionTrace?: DecisionTrace;
+  canonicalSnapshot?: MarketSnapshot;
   timestamp: string;
   dataTimestamp: string;
 }
@@ -101,10 +109,10 @@ export const recommendationEngine = {
   ): Promise<RecommendationObject> {
     const formattedSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
 
-    // 1. Fetch Market Candles & Ticker
-    const candles = await marketDataService.getCandles(formattedSymbol, timeframe, 100);
-    const ticker = await marketDataService.getTicker(formattedSymbol);
-    const currentPrice = parseFloat(ticker.price) || (candles.length > 0 ? candles[candles.length - 1].close : 0);
+    // 1. Fetch Single Canonical Market Snapshot
+    const canonicalSnapshot = await marketDataService.getCanonicalSnapshot(formattedSymbol, timeframe, 100);
+    const candles = canonicalSnapshot.candles;
+    const currentPrice = canonicalSnapshot.lastPrice;
 
     // 2. Compute Technical Indicators
     const indicators = technicalAnalysisService.calculateIndicators(candles);
@@ -136,7 +144,11 @@ export const recommendationEngine = {
     let action: 'BUY' | 'SELL' | 'HOLD' | 'NO_TRADE' = 'NO_TRADE';
     let strength: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
 
-    if (strategyOutput.direction === 'LONG' && riskOutput.status === 'PASS') {
+    if (canonicalSnapshot.isStale) {
+      action = 'NO_TRADE';
+      riskOutput.status = 'REJECT';
+      riskOutput.reasons.push(`MARKET_DATA_STALE: Market data is ${canonicalSnapshot.stalenessAgeSeconds}s old. Stale snapshot blocks trade execution.`);
+    } else if (strategyOutput.direction === 'LONG' && riskOutput.status === 'PASS') {
       action = 'BUY';
     } else if (strategyOutput.direction === 'SHORT' && riskOutput.status === 'PASS') {
       action = 'SELL';
@@ -179,13 +191,17 @@ export const recommendationEngine = {
       ...riskOutput.warnings
     ];
 
+    if (canonicalSnapshot.isStale) {
+      warnings.push(`MARKET_DATA_STALE: Market snapshot timestamp is stale (${canonicalSnapshot.stalenessAgeSeconds}s old).`);
+    }
+
     if (riskOutput.status === 'REJECT') {
       warnings.push(`Trade recommendation invalidated by Risk Engine.`);
     }
 
     // Build structured DecisionTrace
     const decisionTrace: DecisionTrace = {
-      marketData: candles.length > 0 && currentPrice > 0 ? 'PASS' : 'FAIL',
+      marketData: !canonicalSnapshot.isStale && candles.length > 0 && currentPrice > 0 ? 'PASS' : 'FAIL',
       indicators: indicators.ema20 !== undefined ? 'PASS' : 'FAIL',
       signal: action === 'BUY' ? 'BUY' : (action === 'SELL' ? 'SELL' : 'HOLD'),
       confidence: strategyOutput.score,
@@ -195,14 +211,16 @@ export const recommendationEngine = {
       exposure: 'PASS',
       decisionMode,
       execution: (action === 'BUY' || action === 'SELL') && riskOutput.status === 'PASS' ? 'APPROVED' : 'REJECTED',
-      rejectionReason: riskOutput.status === 'REJECT'
-        ? (riskOutput.reasons[0] || 'Risk check failed')
-        : (action === 'NO_TRADE' || action === 'HOLD'
-            ? (strategyOutput.reasoning[strategyOutput.reasoning.length - 1] || 'Setup conviction below threshold')
-            : undefined)
+      rejectionReason: canonicalSnapshot.isStale
+        ? 'MARKET_DATA_STALE'
+        : (riskOutput.status === 'REJECT'
+            ? (riskOutput.reasons[0] || 'Risk check failed')
+            : (action === 'NO_TRADE' || action === 'HOLD'
+                ? (strategyOutput.reasoning[strategyOutput.reasoning.length - 1] || 'Setup conviction below threshold')
+                : undefined))
     };
 
-    const dataTimestamp = candles.length > 0 ? candles[candles.length - 1].timestamp : new Date().toISOString();
+    const dataTimestamp = canonicalSnapshot.candleTimestamp;
 
     const recommendation: RecommendationObject = {
       asset: formattedSymbol,
@@ -228,12 +246,20 @@ export const recommendationEngine = {
       riskAssessment: {
         status: riskOutput.status,
         riskLevel: riskOutput.riskLevel,
+        allowedRiskUSD: riskOutput.allowedRiskUSD,
+        configuredRiskPercent: riskOutput.configuredRiskPercent,
+        configuredRiskUSD: riskOutput.configuredRiskUSD,
+        appliedStopRiskUSD: riskOutput.appliedStopRiskUSD,
+        appliedStopRiskPercent: riskOutput.appliedStopRiskPercent,
+        isCappedByExposure: riskOutput.isCappedByExposure,
+        reconciliationSummary: riskOutput.reconciliationSummary,
         reasons: riskOutput.reasons,
         warnings: riskOutput.warnings
       },
       reasons,
       warnings,
       decisionTrace,
+      canonicalSnapshot,
       timestamp: new Date().toISOString(),
       dataTimestamp
     };

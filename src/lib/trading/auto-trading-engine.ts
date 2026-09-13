@@ -18,10 +18,36 @@ export interface AllTimeCycleResult {
 }
 
 export class AutoTradingEngine {
+  private static activeCycles = new Set<string>();
+
   /**
    * Executes one cycle of the All-Time Monitoring & Controlled Auto-Trading loop for a given user.
    */
   static async runMonitoringCycle(userId: string): Promise<AllTimeCycleResult> {
+    if (this.activeCycles.has(userId)) {
+      return {
+        userId,
+        timestamp: new Date().toISOString(),
+        allTimeModeEnabled: true,
+        status: 'BUSY',
+        assetsEvaluated: [],
+        recommendationsGenerated: 0,
+        tradesExecuted: 0,
+        positionsClosed: 0,
+        shadowModeEvaluations: 0,
+        logs: ['Monitoring cycle already running for user. Duplicate cycle execution prevented by mutex lock.']
+      };
+    }
+
+    this.activeCycles.add(userId);
+    try {
+      return await this.executeCycleInternal(userId);
+    } finally {
+      this.activeCycles.delete(userId);
+    }
+  }
+
+  private static async executeCycleInternal(userId: string): Promise<AllTimeCycleResult> {
     const logs: string[] = [];
 
     // 1. Fetch user auto-trading settings

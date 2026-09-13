@@ -20,6 +20,23 @@ export interface Ticker {
   low24h: string;
   volume24h: string;
   timestamp: string;
+  dataSource?: 'BINANCE_LIVE' | 'BINANCE_VISION' | 'BYBIT' | 'SYNTHETIC_FALLBACK';
+}
+
+export interface MarketSnapshot {
+  symbol: string;
+  timestamp: string;
+  lastPrice: number;
+  bid: number;
+  ask: number;
+  latestCandle: Candle;
+  candleTimestamp: string;
+  timeframe: string;
+  dataSource: 'BINANCE_LIVE' | 'BINANCE_VISION' | 'BYBIT' | 'SYNTHETIC_FALLBACK';
+  dataVersion: string;
+  isStale: boolean;
+  stalenessAgeSeconds: number;
+  candles: Candle[];
 }
 
 // Convert common timeframes to Binance intervals
@@ -302,5 +319,71 @@ export const marketDataService = {
     } catch {
       // Non-blocking
     }
+  },
+
+  /**
+   * Get single canonical market snapshot synchronizing historical candles,
+   * live candle, ticker, bid/ask, and staleness validation.
+   */
+  async getCanonicalSnapshot(symbol: string, timeframe: string = '1h', limit: number = 100): Promise<MarketSnapshot> {
+    const candles = await this.getCandles(symbol, timeframe, limit);
+    const ticker = await this.getTicker(symbol);
+
+    if (candles.length === 0) {
+      throw new Error(`Unable to obtain candles for ${symbol}`);
+    }
+
+    const latestCandleIndex = candles.length - 1;
+    const rawLatestCandle = candles[latestCandleIndex];
+
+    const tickerPriceNum = parseFloat(ticker.price);
+    const lastPrice = !isNaN(tickerPriceNum) && tickerPriceNum > 0
+      ? Number(tickerPriceNum.toFixed(2))
+      : rawLatestCandle.close;
+
+    // Harmonize the active live candle with live ticker price to prevent split-second divergence
+    const harmonizedLatestCandle: Candle = {
+      ...rawLatestCandle,
+      close: lastPrice,
+      high: Math.max(rawLatestCandle.high, lastPrice),
+      low: Math.min(rawLatestCandle.low, lastPrice),
+    };
+    candles[latestCandleIndex] = harmonizedLatestCandle;
+
+    const spread = lastPrice * 0.0002;
+    const bid = Number((lastPrice - spread / 2).toFixed(2));
+    const ask = Number((lastPrice + spread / 2).toFixed(2));
+
+    const timeframeSeconds: Record<string, number> = {
+      '1m': 60,
+      '5m': 300,
+      '15m': 900,
+      '1h': 3600,
+      '4h': 14400,
+      '1d': 86400
+    };
+    const maxCandleAge = (timeframeSeconds[timeframe] || 3600) * 2;
+    const candleTime = new Date(harmonizedLatestCandle.timestamp).getTime();
+    const stalenessAgeSeconds = Math.max(0, Math.round((Date.now() - candleTime) / 1000));
+    const isStale = stalenessAgeSeconds > maxCandleAge;
+
+    const dataSource = ticker.dataSource || (ticker.price ? 'BINANCE_LIVE' : 'SYNTHETIC_FALLBACK');
+    const dataVersion = `SNAP_${symbol}_${timeframe}_${harmonizedLatestCandle.timestamp}_${lastPrice}`;
+
+    return {
+      symbol,
+      timestamp: new Date().toISOString(),
+      lastPrice,
+      bid,
+      ask,
+      latestCandle: harmonizedLatestCandle,
+      candleTimestamp: harmonizedLatestCandle.timestamp,
+      timeframe,
+      dataSource,
+      dataVersion,
+      isStale,
+      stalenessAgeSeconds,
+      candles
+    };
   }
 };

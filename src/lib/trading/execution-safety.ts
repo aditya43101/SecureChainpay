@@ -72,13 +72,10 @@ export class ExecutionSafetyEngine {
     }
 
     // GATE 1: Market Data Safety
-    let candle: any = null;
-    try {
-      const candles = await marketDataService.getCandles(symbol, recommendation.timeframe, 1);
-      candle = candles && candles.length > 0 ? candles[candles.length - 1] : null;
-    } catch {
-      // Non-blocking candle fetch
-    }
+    const snapshot = (recommendation as any).canonicalSnapshot;
+    const candle = snapshot ? snapshot.latestCandle : null;
+    const candleTimestamp = snapshot ? snapshot.candleTimestamp : (recommendation.dataTimestamp || recommendation.timestamp);
+    const candlePrice = snapshot ? snapshot.lastPrice : (recommendation.entry?.suggestedEntry || 0);
 
     const timeframeSeconds: Record<string, number> = {
       '1m': 60,
@@ -89,15 +86,13 @@ export class ExecutionSafetyEngine {
       '1d': 86400
     };
     const maxCandleAge = (timeframeSeconds[recommendation.timeframe] || 3600) * 2;
+    const dataAgeSeconds = Math.max(0, (Date.now() - new Date(candleTimestamp).getTime()) / 1000);
 
-    if (candle) {
-      const dataAgeSeconds = (Date.now() - new Date(candle.timestamp).getTime()) / 1000;
-      if (dataAgeSeconds > maxCandleAge) {
-        reasons.push(`Stale market data (${Math.round(dataAgeSeconds)}s old). Max allowed is ${maxCandleAge}s for ${recommendation.timeframe} timeframe.`);
-      }
-      if (candle.close <= 0) {
-        reasons.push(`Invalid price detected: $${candle.close}`);
-      }
+    if (snapshot?.isStale || dataAgeSeconds > maxCandleAge) {
+      reasons.push(`MARKET_DATA_STALE: Stale market data (${Math.round(dataAgeSeconds)}s old). Max allowed is ${maxCandleAge}s for ${recommendation.timeframe} timeframe.`);
+    }
+    if (candlePrice <= 0) {
+      reasons.push(`Invalid price detected: $${candlePrice}`);
     }
 
     const allowedAssets = settings.allowedAssets || ['BTCUSDT', 'ETHUSDT'];

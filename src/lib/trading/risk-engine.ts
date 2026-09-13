@@ -28,7 +28,13 @@ export interface RiskAssessmentResult {
   riskRewardRatio: number;
   positionSize: number;      // Quantity of asset (e.g. BTC)
   positionValueUSD: number;  // USD value of position
-  allowedRiskUSD: number;
+  allowedRiskUSD: number;    // Budgeted risk in USD
+  configuredRiskPercent?: number; // e.g. 0.01 (1%)
+  configuredRiskUSD?: number;
+  appliedStopRiskUSD?: number;   // Actual stop risk = positionSize * riskDistance
+  appliedStopRiskPercent?: number;
+  isCappedByExposure?: boolean;
+  reconciliationSummary?: string;
   confidenceMultiplier?: number;
   effectiveRiskPct?: number;
   reasons: string[];
@@ -98,15 +104,22 @@ export const riskEngine = {
         ? Math.min(...candles.slice(-10).map(c => c.low)) 
         : currentPrice - atrSLDistance;
       
-      // Pick the safest SL (whichever is lower/gives buffer)
+      // Stop Loss must be strictly below entry for BUY
       stopLoss = Number(Math.min(suggestedEntry - atrSLDistance, recentLow * 0.998).toFixed(2));
+      if (stopLoss >= suggestedEntry) {
+        stopLoss = Number((suggestedEntry - atrSLDistance).toFixed(2));
+      }
     } else {
       // SHORT
       const recentHigh = candles.length >= 10 
         ? Math.max(...candles.slice(-10).map(c => c.high)) 
         : currentPrice + atrSLDistance;
 
+      // Stop Loss must be strictly above entry for SELL
       stopLoss = Number(Math.max(suggestedEntry + atrSLDistance, recentHigh * 1.002).toFixed(2));
+      if (stopLoss <= suggestedEntry) {
+        stopLoss = Number((suggestedEntry + atrSLDistance).toFixed(2));
+      }
     }
 
     // 3. Risk / Reward & Take Profit Calculation
@@ -114,8 +127,10 @@ export const riskEngine = {
     const targetReward = Math.max(atrTPDistance, riskDistance * config.riskDefaults.minRiskReward);
 
     if (direction === 'LONG') {
+      // Take Profit must be strictly above entry for BUY
       takeProfit = Number((suggestedEntry + targetReward).toFixed(2));
     } else {
+      // Take Profit must be strictly below entry for SELL
       takeProfit = Number((suggestedEntry - targetReward).toFixed(2));
     }
 
@@ -171,7 +186,7 @@ export const riskEngine = {
 
     if (status === 'PASS') {
       reasons.push(`Risk checks passed with 1:${riskRewardRatio} Risk/Reward ratio.`);
-      reasons.push(`[${decisionMode} Mode] Risk per trade scaled to $${allowedRiskUSD.toFixed(2)} (${(sizingResult.effectiveRiskPct * 100).toFixed(2)}% of capital at ${(sizingResult.confidenceMultiplier * 100).toFixed(0)}% conviction weight).`);
+      reasons.push(`[${decisionMode} Mode] Risk budget: $${allowedRiskUSD.toFixed(2)} (${(sizingResult.effectiveRiskPct * 100).toFixed(2)}%). Actual Stop Risk: $${sizingResult.appliedStopRiskUSD.toFixed(2)} (${(sizingResult.appliedStopRiskPercent * 100).toFixed(3)}%).`);
     }
 
     return {
@@ -190,6 +205,12 @@ export const riskEngine = {
       positionSize,
       positionValueUSD: Number(positionValueUSD.toFixed(2)),
       allowedRiskUSD,
+      configuredRiskPercent: sizingResult.configuredRiskPercent,
+      configuredRiskUSD: sizingResult.configuredRiskUSD,
+      appliedStopRiskUSD: sizingResult.appliedStopRiskUSD,
+      appliedStopRiskPercent: sizingResult.appliedStopRiskPercent,
+      isCappedByExposure: sizingResult.isCappedByExposure,
+      reconciliationSummary: sizingResult.reconciliationSummary,
       confidenceMultiplier: sizingResult.confidenceMultiplier,
       effectiveRiskPct: sizingResult.effectiveRiskPct,
       reasons,

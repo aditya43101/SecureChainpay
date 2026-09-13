@@ -64,7 +64,7 @@ export class ExecutionEngine {
     }
 
     // 3. Prepare Order Parameters & Freeze Entry Snapshot
-    const entryPrice = recommendation.entry.low || recommendation.entry.high || recommendation.entry.suggestedEntry || 0;
+    const entryPrice = recommendation.entry.suggestedEntry || (recommendation as any).canonicalSnapshot?.lastPrice || recommendation.entry.low || 0;
     const quantity = recommendation.positionSize || 0.01;
     const recModelVersion = recommendation.mlPrediction?.modelVersion;
 

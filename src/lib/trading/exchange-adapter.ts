@@ -257,11 +257,38 @@ export class SimulatedExchangeAdapter implements ExchangeAdapter {
           unrealizedPnL: 0
         }
       });
+
+      // Increment Today's Trades in dailyRiskState
+      const todayStr = new Date().toISOString().split('T')[0];
+      const daily = await prisma.dailyRiskState.findUnique({
+        where: { userId_date: { userId: params.userId, date: todayStr } }
+      });
+      if (!daily) {
+        await prisma.dailyRiskState.create({
+          data: {
+            userId: params.userId,
+            date: todayStr,
+            startingBalance: paperAccount.equity || 100000,
+            totalTrades: 1
+          }
+        });
+      } else {
+        await prisma.dailyRiskState.update({
+          where: { id: daily.id },
+          data: { totalTrades: daily.totalTrades + 1 }
+        });
+      }
     } catch {
       const acc = tradingFallbackStore.getPaperAccount(params.userId);
       const positionSide = params.side === 'BUY' ? 'LONG' : 'SHORT';
       const updatedCash = Math.max(0, acc.cashBalance - notionalCost);
       tradingFallbackStore.updatePaperAccount(params.userId, { cashBalance: updatedCash });
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const daily = tradingFallbackStore.getDailyState(params.userId, todayStr);
+      tradingFallbackStore.updateDailyState(params.userId, todayStr, {
+        totalTrades: (daily.totalTrades || 0) + 1
+      });
       tradingFallbackStore.addPosition(params.userId, {
         tradeId: params.tradeId,
         orderId,

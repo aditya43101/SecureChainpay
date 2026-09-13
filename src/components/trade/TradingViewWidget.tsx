@@ -110,10 +110,17 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
             <p className="text-xs text-neutral-400 font-mono flex items-center gap-2 mt-0.5">
               <span>Live Price:</span>
               <span className="text-emerald-400 font-bold font-mono">
-                ${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${(recommendation?.canonicalSnapshot?.lastPrice || recommendation?.entry?.suggestedEntry || currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-neutral-600">•</span>
-              <span>TradingView Pro Live Feed</span>
+              <span className="text-neutral-400">
+                {recommendation?.canonicalSnapshot?.dataSource || 'Binance Spot Live'}
+              </span>
+              {recommendation?.canonicalSnapshot?.isStale && (
+                <span className="text-amber-400 font-bold bg-amber-500/20 px-1.5 py-0.2 rounded text-[10px]">
+                  STALE DATA ({recommendation?.canonicalSnapshot?.stalenessAgeSeconds}s)
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -136,13 +143,19 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
               {decisionMode}
             </span>
 
-            <span className="text-xs text-neutral-400 font-semibold ml-1">Decision:</span>
+            <span className="text-xs text-neutral-400 font-semibold ml-1">Lifecycle State:</span>
             <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border ${
-              isApproved
+              recommendation.decisionTrace?.rejectionReason === 'MARKET_DATA_STALE'
+                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                : isApproved
                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                 : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
             }`}>
-              {isApproved ? 'PAPER TRADE APPROVED' : 'PAPER TRADE REJECTED'}
+              {recommendation.decisionTrace?.rejectionReason === 'MARKET_DATA_STALE'
+                ? 'MARKET DATA STALE — EXECUTION BLOCKED'
+                : isApproved
+                ? 'APPROVED — AWAITING EXECUTION'
+                : 'SIGNAL REJECTED'}
             </span>
           </div>
         )}
@@ -164,10 +177,10 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
           <div className="bg-white/5 border border-white/10 p-2.5 rounded-xl flex flex-col justify-center">
             <div className="flex items-center gap-1.5 mb-1">
               <TrendingUp size={13} className="text-cyan-400" />
-              <span className="text-[11px] text-neutral-400 font-medium">Entry</span>
+              <span className="text-[11px] text-neutral-400 font-medium">Entry (Market)</span>
             </div>
             <span className="text-xs font-mono font-bold text-white">
-              ${(recommendation.entry?.suggestedEntry || currentPrice)?.toLocaleString()}
+              ${(recommendation.entry?.suggestedEntry || recommendation.canonicalSnapshot?.lastPrice || currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -177,7 +190,7 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
               <span className="text-[11px] text-emerald-300 font-medium">Take Profit</span>
             </div>
             <span className="text-xs font-mono font-bold text-emerald-400">
-              ${(recommendation.takeProfit || currentPrice * 1.035)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              ${recommendation.takeProfit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -187,7 +200,7 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
               <span className="text-[11px] text-red-300 font-medium">Stop Loss</span>
             </div>
             <span className="text-xs font-mono font-bold text-red-400">
-              ${(recommendation.stopLoss || currentPrice * 0.982)?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              ${recommendation.stopLoss?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
 
@@ -209,15 +222,27 @@ export function TradingViewWidget({ symbol, height = 540, showOverlay = true }: 
             <span className="text-xs font-mono font-bold text-cyan-300">
               {recommendation.positionSize || 0} {cleanSymbol}
             </span>
+            {recommendation.riskAssessment?.isCappedByExposure && (
+              <span className="text-[9px] text-amber-300 font-mono">
+                Capped (10% max)
+              </span>
+            )}
           </div>
 
           <div className="bg-purple-500/10 border border-purple-500/20 p-2.5 rounded-xl flex flex-col justify-center">
             <div className="flex items-center gap-1.5 mb-1">
               <Shield size={13} className="text-purple-400" />
-              <span className="text-[11px] text-purple-300 font-medium">Risk Allocation</span>
+              <span className="text-[11px] text-purple-300 font-medium">Stop Risk / Budget</span>
             </div>
             <span className="text-xs font-mono font-bold text-purple-300">
-              ${recommendation.riskAssessment?.allowedRiskUSD || 250} ({decisionMode === 'EXPLORE' ? '0.25%' : '1.0%'})
+              ${(recommendation.riskAssessment?.appliedStopRiskUSD || recommendation.riskAssessment?.allowedRiskUSD || 250).toFixed(2)}
+              {' '}
+              <span className="text-[10px] text-purple-200">
+                ({(((recommendation.riskAssessment?.appliedStopRiskPercent || (decisionMode === 'EXPLORE' ? 0.0025 : 0.01))) * 100).toFixed(3)}%)
+              </span>
+            </span>
+            <span className="text-[9px] text-neutral-400 font-mono">
+              Budget: ${recommendation.riskAssessment?.allowedRiskUSD || 250} ({decisionMode === 'EXPLORE' ? '0.25%' : '1.0%'})
             </span>
           </div>
         </div>

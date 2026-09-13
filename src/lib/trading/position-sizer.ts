@@ -51,13 +51,19 @@ export interface PositionSizingResult {
   decisionMode: DecisionMode;
   confidenceScore: number;
   confidenceMultiplier: number;
+  configuredRiskPercent: number;
+  configuredRiskUSD: number;
   effectiveRiskPct: number;
   allowedRiskUSD: number;
+  appliedStopRiskUSD: number;
+  appliedStopRiskPercent: number;
+  riskDistance: number;
   rawPositionSize: number;
   positionSize: number;
   positionValueUSD: number;
   isCappedByExposure: boolean;
   cappedReason?: string;
+  reconciliationSummary: string;
 }
 
 export class PositionSizer {
@@ -104,32 +110,45 @@ export class PositionSizer {
         decisionMode: 'HOLD',
         confidenceScore: score,
         confidenceMultiplier: 0,
+        configuredRiskPercent: baseRisk,
+        configuredRiskUSD: Number((capital * baseRisk).toFixed(2)),
         effectiveRiskPct: 0,
         allowedRiskUSD: 0,
+        appliedStopRiskUSD: 0,
+        appliedStopRiskPercent: 0,
+        riskDistance: 0,
         rawPositionSize: 0,
         positionSize: 0,
         positionValueUSD: 0,
         isCappedByExposure: false,
-        cappedReason: 'Score below exploration threshold (< 3/7)'
+        cappedReason: 'Score below exploration threshold (< 3/7)',
+        reconciliationSummary: 'No position allocated (HOLD mode)'
       };
     }
 
     const effectiveRiskPct = baseRisk * confidenceMultiplier;
     const allowedRiskUSD = Number((capital * effectiveRiskPct).toFixed(2));
-    const riskDistance = Math.abs(currentPrice - stopLossPrice);
+    const configuredRiskUSD = Number((capital * baseRisk).toFixed(2));
+    const riskDistance = Number(Math.abs(currentPrice - stopLossPrice).toFixed(2));
 
     if (riskDistance <= 0) {
       return {
         decisionMode,
         confidenceScore: score,
         confidenceMultiplier,
+        configuredRiskPercent: baseRisk,
+        configuredRiskUSD,
         effectiveRiskPct,
         allowedRiskUSD,
+        appliedStopRiskUSD: 0,
+        appliedStopRiskPercent: 0,
+        riskDistance: 0,
         rawPositionSize: 0,
         positionSize: 0,
         positionValueUSD: 0,
         isCappedByExposure: false,
-        cappedReason: 'Stop loss distance is zero'
+        cappedReason: 'Stop loss distance is zero',
+        reconciliationSummary: 'Invalid stop distance (0)'
       };
     }
 
@@ -150,17 +169,28 @@ export class PositionSizer {
     // Decimal precision: 6 decimals for crypto (BTC/ETH)
     const positionSize = Number(rawPositionSize.toFixed(6));
 
+    // Exact mathematical stop loss risk of the actual sized position
+    const appliedStopRiskUSD = Number((positionSize * riskDistance).toFixed(2));
+    const appliedStopRiskPercent = capital > 0 ? Number((appliedStopRiskUSD / capital).toFixed(5)) : 0;
+    const reconciliationSummary = `${positionSize} × $${riskDistance.toFixed(2)} = $${appliedStopRiskUSD.toFixed(2)} (${(appliedStopRiskPercent * 100).toFixed(3)}%)`;
+
     return {
       decisionMode,
       confidenceScore: score,
       confidenceMultiplier,
+      configuredRiskPercent: baseRisk,
+      configuredRiskUSD,
       effectiveRiskPct,
       allowedRiskUSD,
+      appliedStopRiskUSD,
+      appliedStopRiskPercent,
+      riskDistance,
       rawPositionSize,
       positionSize,
       positionValueUSD: Number(positionValueUSD.toFixed(2)),
       isCappedByExposure: isCapped,
-      cappedReason
+      cappedReason,
+      reconciliationSummary
     };
   }
 }
