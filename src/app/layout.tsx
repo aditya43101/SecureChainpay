@@ -1,17 +1,34 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  themeColor: "#05070D",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "SecureChain Pay | Enterprise Blockchain Payments",
   description: "Secure, instant, and scalable decentralized payment infrastructure.",
   keywords: ["Blockchain", "Payments", "Crypto", "Polygon", "Fintech"],
+  metadataBase: new URL('https://bloackchain-psi.vercel.app'),
+  manifest: "/manifest.webmanifest",
+  applicationName: "SecureChain Pay",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "SecureChain Pay",
+  },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: '32x32' },
       { url: '/logo.svg', type: 'image/svg+xml' },
       { url: '/logo.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico', sizes: '32x32' },
     ],
-    shortcut: '/favicon.ico',
+    shortcut: '/logo.png',
     apple: [
       { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
       { url: '/logo.png', sizes: '512x512', type: 'image/png' },

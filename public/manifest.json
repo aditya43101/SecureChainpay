@@ -1,11 +1,12 @@
 {
-  "name": "SecureChain Pay",
+  "name": "SecureChain Pay | Decentralized Non-Custodial Payments",
   "short_name": "SecureChain",
-  "description": "Enterprise Non-Custodial Blockchain Payments",
+  "description": "Enterprise Non-Custodial Blockchain Payments & Autonomous Trading",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "orientation": "portrait",
+  "background_color": "#05070D",
+  "theme_color": "#EAB308",
   "icons": [
     {
       "src": "/favicon.ico",
@@ -15,13 +16,19 @@
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "maskable any"
     },
     {
       "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
     },
     {
       "src": "/logo.svg",

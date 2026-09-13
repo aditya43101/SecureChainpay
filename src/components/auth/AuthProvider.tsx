@@ -7,6 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useWalletStore } from '@/stores/wallet-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useRouter, usePathname } from 'next/navigation';
+import SplashScreen from '@/components/common/SplashScreen';
 
 const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
 const getElapsed = () => `+${Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0)}ms`;
@@ -137,6 +138,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // Cached wallet fast-path: Only trust local wallet if ownership matches the current authenticated UID
   const isLocalWalletOwner = typeof window !== 'undefined' && auth.currentUser && localStorage.getItem('securechain_uid') === auth.currentUser.uid;
   const hasLocalWallet = Boolean(isLocalWalletOwner && ownerUid === auth.currentUser?.uid && address && encryptedPrivateKey);
+  if (isInitializing) {
+    return <SplashScreen message="INITIALIZING IDENTITY & ENCRYPTED KEYSTORE..." subMessage="Non-Custodial Cryptographic Security" />;
+  }
+
   if (!isInitializing && pathname?.startsWith('/admin-dashboard') && authUser && authUser.role !== 'admin') {
     router.replace('/dashboard');
     return null;
@@ -146,8 +151,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     router.replace('/dashboard');
     return null;
   }
-
-  console.log(`[AUTH ${getElapsed()}] Authenticated app render -> isInitializing: ${isInitializing}, hasLocalWallet: ${hasLocalWallet}, _isWalletReady: ${_isWalletReady}`);
 
   return <>{children}</>;
 }
