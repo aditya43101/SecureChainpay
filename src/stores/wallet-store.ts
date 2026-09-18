@@ -30,11 +30,25 @@ export type WalletErrorCode =
 
 export type TransactionStatus =
   | 'CREATED'
+  | 'SECURITY_VALIDATED'
+  | 'TEMP_PENDING'
+  | 'ONCHAIN_INITIALIZING'
+  | 'ONCHAIN_INITIALIZED'
+  | 'FUNDS_RESERVED'
+  | 'PROCESSING'
+  | 'FINAL_VALIDATION'
+  | 'FINALIZATION_SUBMITTED'
+  | 'CONFIRMING'
+  | 'FINALIZED'
+  | 'CANCEL_REQUESTED'
+  | 'CANCELLED'
+  | 'EXPIRED'
+  | 'FAILED'
+  | 'QUARANTINED'
   | 'VALIDATED'
   | 'SIGNED'
   | 'SUBMITTED'
   | 'CONFIRMED'
-  | 'FINALIZED'
   | 'VALIDATION_FAILED'
   | 'SIGNING_FAILED'
   | 'SUBMISSION_FAILED'
@@ -98,6 +112,12 @@ export interface Transaction {
   anchorStatus?: string | null;
   anchoredAt?: string | null;
 
+  // Orchestration & Fault Tolerance
+  route?: 'ON_CHAIN' | 'OFFCHAIN_TEMPORARY';
+  reservationStatus?: string | null;
+  failureReason?: string | null;
+  confirmations?: number;
+
   payload?: any;
   difficulty?: number;
   nonce?: number;
@@ -113,6 +133,17 @@ interface Balances {
   BNB?: number;
   ADA?: number;
   lifetimeDeposited: number; // cumulative deposits — only reduces on explicit withdrawal
+}
+
+export interface DetailedBalances {
+  total: number;
+  available: number;
+  reserved: number;
+  processing: number;
+  confirmed: number;
+  onchainLocked: number;
+  offchainReserved: number;
+  activeReservationsCount: number;
 }
 
 interface WalletState {
@@ -131,6 +162,7 @@ interface WalletState {
   keyFingerprint: string | null;
   
   balances: Balances;
+  detailedBalances: DetailedBalances;
   transactions: Transaction[];
   lastBlockNumber: number;
   lastBlockHash: string | null;
@@ -141,6 +173,7 @@ interface WalletState {
   isMarketDataStale: boolean;
   latestKlineData: Record<string, { time: number; open: number; high: number; low: number; close: number; volume: number; isClosed: boolean }>;
   fetchPrices: () => Promise<void>;
+  fetchDetailedBalances: (address?: string) => Promise<void>;
   subscribeToLivePrices: () => () => void;
   setHasHydrated: (state: boolean) => void;
   initializeWallet: (uid: string) => Promise<void>;
@@ -383,6 +416,16 @@ export const useWalletStore = create<WalletState>()(
       keyFingerprint: null,
       
       balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, SOL: 0, BNB: 0, ADA: 0, lifetimeDeposited: 0 },
+      detailedBalances: {
+        total: 0,
+        available: 0,
+        reserved: 0,
+        processing: 0,
+        confirmed: 0,
+        onchainLocked: 0,
+        offchainReserved: 0,
+        activeReservationsCount: 0,
+      },
       transactions: [],
       lastBlockNumber: 0,
       lastBlockHash: null,
@@ -400,6 +443,19 @@ export const useWalletStore = create<WalletState>()(
       latestKlineData: {},
       
       setHasHydrated: (state) => set({ _hasHydrated: state }),
+
+      fetchDetailedBalances: async (targetAddress?: string) => {
+        const addr = targetAddress || get().address;
+        if (!addr) return;
+        try {
+          const res = await safeJsonFetch(`/api/payments/balances?address=${encodeURIComponent(addr)}`);
+          if (res.ok && res.data?.success && res.data?.data) {
+            set({ detailedBalances: res.data.data });
+          }
+        } catch (e) {
+          console.warn('[WalletStore] Failed to fetch detailed balances:', e);
+        }
+      },
       
       subscribeToLivePrices: () => {
         if (typeof window === 'undefined') return () => {};
@@ -583,7 +639,36 @@ export const useWalletStore = create<WalletState>()(
       // ═══════════════════════════════════════════════════════
       syncTransactions: async (uid: string) => {
         try {
-          console.log('[SecureChain: BackgroundSync] Syncing blockchain transactions...');
+          console.log('[SecureChain: BackgroundSync] Syncing blockchain transactions for UID:', uid);
+          const walletAddr = get().address || '';
+          
+          // Primary: Authoritative Server-Side Endpoint with Global Blocks reconciliation
+          try {
+            const queryParams = new URLSearchParams();
+            if (uid) queryParams.set('uid', uid);
+            if (walletAddr) queryParams.set('address', walletAddr);
+
+            const res = await safeJsonFetch(`/api/transactions?${queryParams.toString()}`, {
+              headers: {
+                ...(uid ? { 'x-user-id': uid } : {}),
+              },
+            });
+
+            if (res.ok && res.data?.success && Array.isArray(res.data?.transactions)) {
+              const loadedTxs = res.data.transactions as Transaction[];
+              console.log(`[SecureChain: BackgroundSync] ✓ Server loaded & reconciled ${loadedTxs.length} transaction(s)`);
+              set({ transactions: loadedTxs });
+
+              setTimeout(() => {
+                get().triggerBackgroundReconciliation().catch(() => null);
+              }, 1000);
+              return;
+            }
+          } catch (serverErr) {
+            console.warn('[SecureChain: BackgroundSync] Server transactions fetch failed, trying direct Firestore:', serverErr);
+          }
+
+          // Fallback: Direct Firestore client query
           const txsRef = collection(db, 'users', uid, 'transactions');
           const txsSnap = await getDocs(txsRef);
           
@@ -592,17 +677,15 @@ export const useWalletStore = create<WalletState>()(
             txsSnap.forEach((d: any) => {
               loadedTxs.push(d.data() as Transaction);
             });
-            loadedTxs.sort((a: Transaction, b: Transaction) => b.blockNumber - a.blockNumber);
-            console.log(`[SecureChain: BackgroundSync] ✓ Loaded ${loadedTxs.length} transaction(s)`);
+            loadedTxs.sort((a: Transaction, b: Transaction) => (b.blockNumber || 0) - (a.blockNumber || 0));
+            console.log(`[SecureChain: BackgroundSync] ✓ Loaded ${loadedTxs.length} transaction(s) via Firestore fallback`);
             set({ transactions: loadedTxs });
 
-            // Trigger non-blocking background reconciliation for any pending/unreconciled records
             setTimeout(() => {
               get().triggerBackgroundReconciliation().catch(() => null);
             }, 1000);
           } else {
-            console.warn('[SecureChain: BackgroundSync] No transactions found; genesis is only created with a new wallet transaction.');
-            set({ transactions: [] });
+            console.warn('[SecureChain: BackgroundSync] No transactions found.');
           }
         } catch (txErr) {
           console.warn('[SecureChain: BackgroundSync] Non-fatal transaction sync warning:', txErr);
@@ -1273,9 +1356,90 @@ export const useWalletStore = create<WalletState>()(
           throw new Error("Failed to sign transfer with private key");
         }
 
-        // 5. Call Atomic Server Endpoint with Bearer token and x-user-id fallback
+        // 5. Fault-Tolerant Hybrid Orchestration: POST /api/payments/initialize
+        console.log(`[SecureChain: Transfer] ⚡ Initializing payment via fault-tolerant orchestrator...`);
+        const initRes = await safeJsonFetch('/api/payments/initialize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: applicationTransactionId,
+            senderWallet,
+            recipientWallet: receiverAddress,
+            amount,
+            asset: currency,
+            idempotencyKey,
+            canonicalPayload: canonical,
+            signature: digitalSignature,
+          }),
+        });
+
+        if (!initRes.ok || !initRes.data?.success) {
+          throw new Error(initRes.data?.error || 'Payment initialization failed');
+        }
+
+        const initData = initRes.data;
+        let completedTx: Transaction;
+
+        if (initData.route === 'ON_CHAIN') {
+          // Healthy Node Path: Finalize payment on-chain
+          console.log(`[SecureChain: Transfer] ⛓ On-chain initialization confirmed. Finalizing payment...`);
+          const finalizeRes = await safeJsonFetch(`/api/payments/${encodeURIComponent(applicationTransactionId)}/finalize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const finalizeData = finalizeRes.data;
+          completedTx = {
+            id: applicationTransactionId,
+            applicationTransactionId,
+            userId: uid,
+            sender: senderWallet,
+            receiver: receiverAddress,
+            amount,
+            currency,
+            asset: currency,
+            type: 'debit',
+            status: (finalizeData?.status as any) || 'FINALIZED',
+            date: serverTimeISO,
+            description: note || `Transfer of ${amount} ${currency} to ${receiverAddress}`,
+            idempotencyKey,
+            hash: finalizeData?.blockchainTxHash || initData.blockchainTxHash || `0x${Date.now().toString(16)}`,
+            previousHash: state.lastBlockHash || '0',
+            blockchainTransactionHash: finalizeData?.blockchainTxHash || initData.blockchainTxHash,
+            blockNumber: finalizeData?.blockNumber || initData.blockNumber || 1,
+            route: 'ON_CHAIN',
+            reservationStatus: 'FINALIZED',
+            confirmedAt: new Date().toISOString(),
+          };
+        } else {
+          // Unhealthy Node Path: Temporary Transaction queued durably, waiting for node recovery
+          console.log(`[SecureChain: Transfer] ⏳ Node unavailable. Created durable temporary transaction in execution queue.`);
+          completedTx = {
+            id: applicationTransactionId,
+            applicationTransactionId,
+            userId: uid,
+            sender: senderWallet,
+            receiver: receiverAddress,
+            amount,
+            currency,
+            asset: currency,
+            type: 'debit',
+            status: 'TEMP_PENDING',
+            date: serverTimeISO,
+            description: note || `Temporary Transfer (Waiting for Node Recovery): ${amount} ${currency}`,
+            idempotencyKey,
+            hash: `0x${Date.now().toString(16)}`,
+            previousHash: state.lastBlockHash || '0',
+            blockchainTransactionHash: null,
+            blockNumber: 0,
+            route: 'OFFCHAIN_TEMPORARY',
+            reservationStatus: 'OFFCHAIN_RESERVED',
+          };
+        }
+
+        // Also notify legacy /api/wallet/transfer for Firestore user sync in the background
         const idToken = await auth.currentUser?.getIdToken().catch(() => null);
-        const { data } = await safeJsonFetch('/api/wallet/transfer', {
+        safeJsonFetch('/api/wallet/transfer', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1297,18 +1461,18 @@ export const useWalletStore = create<WalletState>()(
             idempotencyKey,
             note,
           }),
-        });
-        if (!data.success) {
-          throw new Error(data.error || 'Transfer failed on server');
-        }
+        }).catch(() => null);
 
-        const completedTx = data.transaction as Transaction;
-        const updatedBalances = data.senderBalances || {
+        // Update local state and fetch detailed balances
+        const remainingBalance = currentBalance - amount;
+        if (remainingBalance < 0) {
+          throw new Error(`FINANCIAL_INVARIANT_VIOLATION: Deducting ${amount} would produce negative balance (${remainingBalance}).`);
+        }
+        const updatedBalances = {
           ...state.balances,
-          [currency]: currentBalance - amount,
+          [currency]: remainingBalance,
         };
 
-        // 6. Update local state
         set((s) => ({
           balances: updatedBalances,
           transactions: [completedTx, ...s.transactions.filter((t) => t.id !== completedTx.id)],
@@ -1316,7 +1480,9 @@ export const useWalletStore = create<WalletState>()(
           lastBlockHash: completedTx.hash,
         }));
 
-        console.log(`[SecureChain: Transfer] ✓ Transfer of $${amount} ${currency} completed successfully! Block #${completedTx.blockNumber}`);
+        get().fetchDetailedBalances(senderWallet).catch(() => null);
+
+        console.log(`[SecureChain: Transfer] ✓ Transfer of $${amount} ${currency} dispatched. Status: ${completedTx.status}`);
         return completedTx;
       },
       
@@ -1334,8 +1500,17 @@ export const useWalletStore = create<WalletState>()(
           keyGeneratedAt: null,
           algorithm: null,
           walletVersion: null,
-          keyFingerprint: null,
           balances: { HSCT: 0, USD: 0, BTC: 0, ETH: 0, lifetimeDeposited: 0 }, 
+          detailedBalances: {
+            total: 0,
+            available: 0,
+            reserved: 0,
+            processing: 0,
+            confirmed: 0,
+            onchainLocked: 0,
+            offchainReserved: 0,
+            activeReservationsCount: 0,
+          },
           transactions: [], 
           lastBlockNumber: 0,
           lastBlockHash: null

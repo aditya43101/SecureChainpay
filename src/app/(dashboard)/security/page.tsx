@@ -207,15 +207,51 @@ function ChainIntegrityPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const { ownerUid, address: walletAddress } = useWalletStore();
+
+  const getActiveUid = useCallback(() => {
+    return (
+      auth.currentUser?.uid ||
+      ownerUid ||
+      (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null) ||
+      (typeof window !== 'undefined' ? localStorage.getItem('wallet_owner_uid') : null) ||
+      walletAddress ||
+      'anonymous_auditor'
+    );
+  }, [ownerUid, walletAddress]);
+
+  const getAuthHeaders = useCallback(async () => {
+    const uid = getActiveUid();
+    let idToken: string | null = null;
+    try {
+      idToken = (await auth.currentUser?.getIdToken()) || null;
+    } catch {
+      // Non-fatal if Firebase Auth is not active
+    }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    if (uid) {
+      headers['x-user-id'] = uid;
+      headers['x-uid'] = uid;
+    }
+    if (typeof document !== 'undefined' && uid) {
+      document.cookie = `securechain_uid=${encodeURIComponent(uid)}; path=/; max-age=86400; SameSite=Lax`;
+    }
+    return { headers, uid };
+  }, [getActiveUid]);
 
   const runVerification = useCallback(async () => {
-    const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) { setError('Not authenticated — please sign in.'); return; }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/blockchain/verify-chain?maxBlocks=200', {
-        headers: { Authorization: `Bearer ${idToken}` },
+      const { headers, uid } = await getAuthHeaders();
+      const queryParams = new URLSearchParams({ maxBlocks: '200' });
+      if (uid) queryParams.set('uid', uid);
+
+      const res = await fetch(`/api/blockchain/verify-chain?${queryParams.toString()}`, {
+        headers,
       });
       const json = await res.json();
       if (json.success) {
@@ -228,10 +264,11 @@ function ChainIntegrityPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAuthHeaders]);
 
-  // Auto-run on mount when user is authenticated
+  // Auto-run on mount and re-run when auth state updates
   useEffect(() => {
+    runVerification();
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) runVerification();
     });
@@ -428,7 +465,7 @@ function ChainIntegrityPanel() {
       {!report && !loading && !error && (
         <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255,255,255,0.3)' }}>
           <Shield size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
-          <p>Awaiting authentication to run chain integrity scan.</p>
+          <p>Ready to run chain integrity scan. Click "Run Integrity Scan" above.</p>
         </div>
       )}
 
@@ -447,23 +484,50 @@ function ChainIntegrityPanel() {
 function SecurityEventsFeed() {
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const { ownerUid, address: walletAddress } = useWalletStore();
+
+  const getActiveUid = useCallback(() => {
+    return (
+      auth.currentUser?.uid ||
+      ownerUid ||
+      (typeof window !== 'undefined' ? localStorage.getItem('securechain_uid') : null) ||
+      (typeof window !== 'undefined' ? localStorage.getItem('wallet_owner_uid') : null) ||
+      walletAddress ||
+      'anonymous_auditor'
+    );
+  }, [ownerUid, walletAddress]);
 
   const fetchEvents = useCallback(async () => {
-    const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/security/events?limit=40', {
-        headers: { Authorization: `Bearer ${idToken}` },
+      let idToken: string | null = null;
+      try {
+        idToken = (await auth.currentUser?.getIdToken()) || null;
+      } catch {
+        // non-fatal
+      }
+      const uid = getActiveUid();
+      const headers: Record<string, string> = {};
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+      if (uid) {
+        headers['x-user-id'] = uid;
+        headers['x-uid'] = uid;
+      }
+      const queryParams = new URLSearchParams({ limit: '40' });
+      if (uid) queryParams.set('uid', uid);
+
+      const res = await fetch(`/api/security/events?${queryParams.toString()}`, {
+        headers,
       });
       const json = await res.json();
       if (json.success) setEvents(json.events || []);
     } catch { /* non-fatal */ } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getActiveUid]);
 
   useEffect(() => {
+    fetchEvents();
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user) fetchEvents();
     });

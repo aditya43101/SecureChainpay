@@ -344,6 +344,24 @@ export default function TransactionDetail({ transaction: initialTx, onClose }: T
               <span className="text-neutral-400 font-semibold">Timestamp</span>
               <span className="text-neutral-300">{formatDateTime(transaction.date)}</span>
             </div>
+
+            {transaction.route && (
+              <div className="flex justify-between items-center py-1 border-t border-white/5">
+                <span className="text-neutral-400 font-semibold">Execution Route</span>
+                <span className={`font-mono font-bold ${transaction.route === 'ON_CHAIN' ? 'text-indigo-400' : 'text-amber-400'}`}>
+                  {transaction.route === 'ON_CHAIN' ? '⛓ ON-CHAIN' : '⏳ OFF-CHAIN TEMPORARY QUEUE'}
+                </span>
+              </div>
+            )}
+
+            {transaction.reservationStatus && (
+              <div className="flex justify-between items-center py-1 border-t border-white/5">
+                <span className="text-neutral-400 font-semibold">Reservation Status</span>
+                <span className="font-mono text-[#FEEF8B] font-bold">
+                  {transaction.reservationStatus}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* 6-Layer Advanced Verification Results (Preserved logic) */}

@@ -1006,3 +1006,151 @@ model CopilotDecision {
   @@index([userId, intent])
   @@index([createdAt])
 }
+
+// ═══════════════════════════════════════════════════════════
+// Fault-Tolerant Hybrid Transaction Orchestration Models
+// ═══════════════════════════════════════════════════════════
+
+model TemporaryTransaction {
+  id              String   @id @default(uuid())
+  transactionId   String   @unique
+  senderWallet    String
+  recipientWallet String
+  amount          Decimal
+  asset           String   @default("HSCT")
+  chainId         Int      @default(31337)
+  idempotencyKey  String   @unique
+  status          String   @default("TEMP_PENDING") // CREATED, SECURITY_VALIDATED, TEMP_PENDING, ONCHAIN_INITIALIZING, ONCHAIN_INITIALIZED, FUNDS_RESERVED, PROCESSING, FINAL_VALIDATION, FINALIZATION_SUBMITTED, CONFIRMING, FINALIZED, CANCEL_REQUESTED, CANCELLED, EXPIRED, FAILED, QUARANTINED
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  reservationId   String   @unique
+  integrityHash   String
+  previousHash    String
+  retryCount      Int      @default(0)
+  lastAttemptAt   DateTime?
+  failureReason   String?
+  blockchainTxHash String?
+  blockNumber     Int?
+  processingOwner String?
+  lockExpiresAt   DateTime?
+  canonicalPayload String? @db.Text
+  signature       String?  @db.Text
+  sequenceNumber  Int?
+
+  @@index([transactionId])
+  @@index([idempotencyKey])
+  @@index([senderWallet])
+  @@index([recipientWallet])
+  @@index([status])
+  @@index([createdAt])
+  @@index([expiresAt])
+}
+
+model Reservation {
+  id              String   @id @default(uuid())
+  reservationId   String   @unique
+  transactionId   String   @unique
+  walletAddress   String
+  amount          Decimal
+  asset           String   @default("HSCT")
+  reservationType String   @default("OFFCHAIN_RESERVED") // OFFCHAIN_RESERVED, ONCHAIN_LOCKED
+  status          String   @default("ACTIVE") // ACTIVE, RELEASED, CONVERTED_TO_ONCHAIN, EXPIRED
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  idempotencyKey  String
+  integrityHash   String
+  sequenceNumber  Int      @default(autoincrement())
+
+  @@index([reservationId])
+  @@index([transactionId])
+  @@index([walletAddress, status])
+  @@index([expiresAt])
+}
+
+model LedgerEntry {
+  id              String   @id @default(uuid())
+  sequenceNumber  Int      @unique @default(autoincrement())
+  eventType       String   // RESERVATION_CREATED, RESERVATION_RELEASED, ONCHAIN_RESERVATION_CONFIRMED, FINALIZATION_SUBMITTED, PAYMENT_FINALIZED, PAYMENT_CANCELLED, PAYMENT_EXPIRED, ADJUSTMENT
+  transactionId   String
+  walletAddress   String
+  amount          Decimal
+  asset           String   @default("HSCT")
+  balanceAfter    Decimal?
+  previousHash    String
+  entryHash       String
+  timestamp       DateTime @default(now())
+
+  @@index([transactionId])
+  @@index([walletAddress])
+  @@index([eventType])
+  @@index([sequenceNumber])
+  @@index([timestamp])
+}
+
+model TransactionStateHistory {
+  id              String   @id @default(uuid())
+  transactionId   String
+  previousState   String?
+  newState        String
+  timestamp       DateTime @default(now())
+  actor           String   // User, Worker, System, NodeHealthEngine, SelfHealingEngine
+  systemComponent String   // TransactionStateMachine, SelfHealingEngine, NodeHealthEngine
+  reason          String
+  blockchainTxHash String?
+  blockNumber     Int?
+  confirmationInfo Json?
+  errorCode       String?
+
+  @@index([transactionId])
+  @@index([newState])
+  @@index([timestamp])
+}
+
+model MerkleCheckpointRecord {
+  id              String   @id @default(uuid())
+  checkpointId    String   @unique
+  firstSequence   Int
+  lastSequence    Int
+  merkleRoot      String
+  blockchainTxHash String?
+  blockNumber     Int?
+  status          String   @default("PENDING") // PENDING, ANCHORED, VERIFIED, QUARANTINED
+  createdAt       DateTime @default(now())
+
+  @@index([checkpointId])
+  @@index([status])
+}
+
+model QuarantineRecord {
+  id               String   @id @default(uuid())
+  transactionId    String   @unique
+  reason           String
+  detectedAt       DateTime @default(now())
+  expectedState    String?
+  actualState      String?
+  evidence         Json
+  status           String   @default("QUARANTINED") // QUARANTINED, INVESTIGATING, RESOLVED
+  resolvedAt       DateTime?
+  resolutionAction String?
+
+  @@index([transactionId])
+  @@index([status])
+}
+
+model NodeHealthRecord {
+  id                  String   @id @default(uuid())
+  providerUrl         String
+  providerName        String
+  status              String   // HEALTHY, DEGRADED, UNHEALTHY, UNAVAILABLE, STALE
+  latencyMs           Int
+  latestBlockNumber   Int
+  blockAgeSeconds     Int
+  consecutiveFailures Int      @default(0)
+  lastCheckedAt       DateTime @default(now())
+  lastError           String?
+
+  @@index([providerUrl])
+  @@index([status])
+  @@index([lastCheckedAt])
+}
+

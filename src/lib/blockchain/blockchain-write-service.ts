@@ -217,15 +217,24 @@ export class BlockchainWriteService {
     let targetReceiverUid = intent.receiverUid || null;
     if (!targetReceiverUid && intent.receiverAddress) {
       try {
+        const queryAddr = intent.receiverAddress.toLowerCase();
         const usersSnap = await adminDb.collection('users').get();
         for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data();
+          const docWallet = uData.walletAddress || uData.address;
+          if (docWallet && docWallet.toLowerCase() === queryAddr) {
+            targetReceiverUid = uDoc.id;
+            break;
+          }
           const wSnap = await uDoc.ref.collection('wallet').doc('data').get();
-          if (wSnap.exists && wSnap.data()?.address?.toLowerCase() === intent.receiverAddress.toLowerCase()) {
+          if (wSnap.exists && wSnap.data()?.address?.toLowerCase() === queryAddr) {
             targetReceiverUid = uDoc.id;
             break;
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('[BlockchainWriteService] Warning during receiver UID lookup:', err);
+      }
     }
 
     const receiverWalletRef = targetReceiverUid
@@ -233,6 +242,9 @@ export class BlockchainWriteService {
       : null;
     const receiverTxRef = targetReceiverUid
       ? adminDb.collection('users').doc(targetReceiverUid).collection('transactions').doc(blockDocId)
+      : null;
+    const receiverAppTxRef = targetReceiverUid && intent.applicationTransactionId && intent.applicationTransactionId !== blockDocId
+      ? adminDb.collection('users').doc(targetReceiverUid).collection('transactions').doc(intent.applicationTransactionId)
       : null;
 
     // Calculate Candidate Block Details
@@ -345,11 +357,15 @@ export class BlockchainWriteService {
 
         if (intent.type === 'debit' || intent.type === 'transfer' || intent.type === 'trade') {
           if (currentSenderBalance < transferAmount) {
-            throw new Error(`Insufficient funds: Required ${transferAmount} ${resolvedCurrency}, available ${currentSenderBalance} ${resolvedCurrency}`);
+            throw new Error(`INSUFFICIENT_FUNDS: Required ${transferAmount} ${resolvedCurrency}, available ${currentSenderBalance} ${resolvedCurrency}`);
+          }
+          const postSenderBalance = currentSenderBalance - transferAmount;
+          if (postSenderBalance < 0) {
+            throw new Error(`FINANCIAL_INVARIANT_VIOLATION: Sender balance cannot become negative (${postSenderBalance}).`);
           }
           senderBalances = {
             ...senderBalances,
-            [resolvedCurrency]: Math.max(0, currentSenderBalance - transferAmount),
+            [resolvedCurrency]: postSenderBalance,
           };
 
           if (intent.type === 'trade' && intent.tradeAsset && intent.tradeAmount) {
@@ -365,17 +381,16 @@ export class BlockchainWriteService {
         }
 
         let receiverBalances: any = null;
-        if (receiverWalletRef) {
+        // Recipient Credit Rule: Only credit recipient spendable balance if on-chain commitment was confirmed!
+        if (receiverWalletRef && onChainTxHash) {
           const receiverWalletSnap = await transaction.get(receiverWalletRef);
-          if (receiverWalletSnap.exists) {
-            const data = receiverWalletSnap.data();
-            receiverBalances = data?.balances || { HSCT: 0, BTC: 0, ETH: 0 };
-            receiverBalances = {
-              ...receiverBalances,
-              [resolvedCurrency]: (Number(receiverBalances[resolvedCurrency]) || 0) + transferAmount,
-              lifetimeDeposited: (Number(receiverBalances.lifetimeDeposited) || 0) + (resolvedCurrency === 'HSCT' ? transferAmount : 0),
-            };
-          }
+          const data = receiverWalletSnap.exists ? receiverWalletSnap.data() : {};
+          const existingBalances = data?.balances || { HSCT: 0, BTC: 0, ETH: 0 };
+          receiverBalances = {
+            ...existingBalances,
+            [resolvedCurrency]: (Number(existingBalances[resolvedCurrency]) || 0) + transferAmount,
+            lifetimeDeposited: (Number(existingBalances.lifetimeDeposited) || 0) + (resolvedCurrency === 'HSCT' ? transferAmount : 0),
+          };
         }
 
         committedBlock = {
@@ -436,13 +451,19 @@ export class BlockchainWriteService {
           type: intent.type === 'credit' ? 'credit' : 'debit',
         });
 
-        if (receiverWalletRef && receiverBalances && receiverTxRef) {
-          transaction.set(receiverWalletRef, { balances: receiverBalances }, { merge: true });
-          transaction.set(receiverTxRef, {
+        if (receiverTxRef) {
+          if (receiverWalletRef && receiverBalances) {
+            transaction.set(receiverWalletRef, { balances: receiverBalances }, { merge: true });
+          }
+          const receiverCreditTx = {
             ...committedBlock,
             type: 'credit',
             description: `Received ${transferAmount.toLocaleString()} ${resolvedCurrency}`,
-          });
+          };
+          transaction.set(receiverTxRef, receiverCreditTx);
+          if (receiverAppTxRef) {
+            transaction.set(receiverAppTxRef, receiverCreditTx);
+          }
         }
       });
 

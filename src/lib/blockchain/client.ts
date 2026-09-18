@@ -12,8 +12,18 @@ const getRpcUrl = () => {
   return process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:8545';
 };
 
+let cachedProvider: ethers.JsonRpcProvider | null = null;
+let cachedRpcUrl: string = '';
+
 export function getProvider(): ethers.JsonRpcProvider {
-  return new ethers.JsonRpcProvider(getRpcUrl());
+  const rpcUrl = getRpcUrl();
+  if (!cachedProvider || cachedRpcUrl !== rpcUrl) {
+    const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || 31337);
+    const network = ethers.Network.from(chainId);
+    cachedProvider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+    cachedRpcUrl = rpcUrl;
+  }
+  return cachedProvider;
 }
 
 export function getSystemWallet(): ethers.Wallet {

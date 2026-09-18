@@ -18,13 +18,13 @@ export function canonicalizePayload(params: {
   idempotencyKey: string;
   timestamp: string;
 }): string {
-  const cleanSender = params.sender.trim().toLowerCase();
-  const cleanReceiver = params.receiver.trim().toLowerCase();
-  const cleanAmount = Number(params.amount).toFixed(6);
-  const cleanAsset = params.asset.trim().toUpperCase();
-  const cleanAppId = params.applicationTransactionId.trim();
-  const cleanIdemp = params.idempotencyKey.trim();
-  const cleanTimestamp = params.timestamp.trim();
+  const cleanSender = (params.sender || '').trim().toLowerCase();
+  const cleanReceiver = (params.receiver || '').trim().toLowerCase();
+  const cleanAmount = Number(params.amount || 0).toFixed(6);
+  const cleanAsset = (params.asset || 'HSCT').trim().toUpperCase();
+  const cleanAppId = (params.applicationTransactionId || '').trim();
+  const cleanIdemp = (params.idempotencyKey || '').trim();
+  const cleanTimestamp = (params.timestamp || new Date().toISOString()).trim();
 
   return `appId:${cleanAppId}|sender:${cleanSender}|receiver:${cleanReceiver}|amount:${cleanAmount}|asset:${cleanAsset}|nonce:${cleanIdemp}|timestamp:${cleanTimestamp}`;
 }
@@ -132,16 +132,10 @@ export async function submitTransactionToLedger(params: {
       contractAddress: LEDGER_CONTRACT_ADDRESS,
     };
   } catch (error: any) {
-    console.warn('[HybridLedger] EVM RPC node offline/unreachable on cloud server — generating Hybrid Ledger Proof:', error?.message);
-    const txIdBytes32 = toTxIdBytes32(params.applicationTransactionId);
-    const mockBlockNum = Math.floor(Date.now() / 1000);
+    console.warn('[HybridLedger] EVM RPC node offline/unreachable or reverted:', error?.message);
     return {
-      success: true,
-      blockchainTransactionHash: txIdBytes32,
-      blockNumber: mockBlockNum,
-      blockHash: ethers.id(`block_${mockBlockNum}`),
-      chainId: 80002, // Polygon Amoy Testnet
-      contractAddress: LEDGER_CONTRACT_ADDRESS,
+      success: false,
+      error: error?.message || 'EVM RPC node offline or unreachable',
     };
   }
 }

@@ -17,6 +17,79 @@ export async function GET(request: Request) {
     const isEthAddress = /^0x[a-fA-F0-9]{40}$/.test(cleanQuery);
 
     if (isEthAddress) {
+      const queryLower = cleanQuery.toLowerCase();
+      try {
+        const adminDb = getAdminDb();
+        const usersSnap = await adminDb.collection('users').get();
+        for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data();
+          const docWallet = uData.walletAddress || uData.address;
+          if (docWallet && docWallet.toLowerCase() === queryLower) {
+            const username = uData.username || `user_${uDoc.id.substring(0, 6)}`;
+            const displayName = uData.displayName || uData.name || username;
+            const matchObj = {
+              uid: uDoc.id,
+              username: username.startsWith('@') ? username : `@${username}`,
+              displayName,
+              walletAddress: cleanQuery,
+              isExternal: false,
+            };
+            return NextResponse.json({
+              success: true,
+              isExternalAddress: false,
+              matches: [matchObj],
+              exactMatch: matchObj,
+            });
+          }
+          const wSnap = await uDoc.ref.collection('wallet').doc('data').get();
+          if (wSnap.exists && wSnap.data()?.address?.toLowerCase() === queryLower) {
+            const username = uData.username || `user_${uDoc.id.substring(0, 6)}`;
+            const displayName = uData.displayName || uData.name || username;
+            const matchObj = {
+              uid: uDoc.id,
+              username: username.startsWith('@') ? username : `@${username}`,
+              displayName,
+              walletAddress: cleanQuery,
+              isExternal: false,
+            };
+            return NextResponse.json({
+              success: true,
+              isExternalAddress: false,
+              matches: [matchObj],
+              exactMatch: matchObj,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[User Resolve API] Error checking address in Firestore:', err);
+      }
+
+      // Check Prisma DB
+      try {
+        const prismaWallet = await db.wallet.findFirst({
+          where: { address: { equals: cleanQuery, mode: 'insensitive' } },
+          include: { user: true },
+        });
+        if (prismaWallet?.user) {
+          const u = prismaWallet.user;
+          const displayName = (u.firstName ? `${u.firstName} ${u.lastName || ''}` : u.email?.split('@')[0] || 'SecureChain User').trim();
+          const username = `@${u.email?.split('@')[0] || u.id.substring(0, 6)}`;
+          const matchObj = {
+            uid: u.id,
+            username,
+            displayName,
+            walletAddress: cleanQuery,
+            isExternal: false,
+          };
+          return NextResponse.json({
+            success: true,
+            isExternalAddress: false,
+            matches: [matchObj],
+            exactMatch: matchObj,
+          });
+        }
+      } catch (_) {}
+
       return NextResponse.json({
         success: true,
         isExternalAddress: true,

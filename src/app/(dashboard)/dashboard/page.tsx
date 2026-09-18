@@ -12,9 +12,15 @@ import Link from 'next/link';
 export default function DashboardPage() {
   const [cryptoData, setCryptoData] = useState<any[]>([]);
   const [loadingMarkets, setLoadingMarkets] = useState(true);
-  const { transactions, fetchPrices, subscribeToLivePrices, prices, tickerStats } = useWalletStore();
+  const { transactions, fetchPrices, subscribeToLivePrices, prices, tickerStats, syncTransactions } = useWalletStore();
   const user = useAuthStore((s) => s.user);
   const realTransactions = transactions.filter(t => t.type !== 'genesis');
+
+  useEffect(() => {
+    if (user?.id) {
+      syncTransactions(user.id).catch(() => null);
+    }
+  }, [user?.id, syncTransactions]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();

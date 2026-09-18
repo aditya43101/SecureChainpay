@@ -1,13 +1,21 @@
 "use client";
 
 import { Eye, EyeOff, TrendingUp, Copy, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWalletStore, USD_TO_HSCT } from '@/stores/wallet-store';
 
 export function WalletCard() {
-  const { balances, address, prices } = useWalletStore();
+  const { balances, detailedBalances, fetchDetailedBalances, address, prices } = useWalletStore();
   const [showBalance, setShowBalance] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  // Sync detailed balances when wallet address is ready
+  useEffect(() => {
+    if (address) {
+      fetchDetailedBalances(address).catch(() => null);
+    }
+  }, [address, fetchDetailedBalances]);
 
   const handleCopy = () => {
     if (!address) return;
@@ -19,10 +27,17 @@ export function WalletCard() {
   const currentHsct = Number((balances.HSCT && balances.HSCT > 0) ? balances.HSCT : ((balances.USD && balances.USD > 0) ? balances.USD * USD_TO_HSCT : 0));
   const cryptoHsct = (balances.ETH * prices.ETH + balances.BTC * prices.BTC) * USD_TO_HSCT;
   const lifetimeHsct = currentHsct + cryptoHsct;
-  const spendableHsct = currentHsct;
+
+  // 5-Way Balance Accounting
+  const totalBalance = detailedBalances?.total > 0 ? detailedBalances.total : lifetimeHsct;
+  const availableBalance = detailedBalances?.available !== undefined ? detailedBalances.available : currentHsct;
+  const reservedBalance = detailedBalances?.reserved || 0;
+  const processingBalance = detailedBalances?.processing || 0;
+  const onchainLocked = detailedBalances?.onchainLocked || 0;
+  const offchainReserved = detailedBalances?.offchainReserved || 0;
 
   return (
-    <div className="relative p-6 sm:p-8 md:p-10 rounded-3xl overflow-hidden group min-h-[300px] sm:min-h-[320px] flex flex-col justify-between bg-[#0a0a0a] border border-[#FEEF8B]/20 shadow-2xl">
+    <div className="relative p-6 sm:p-8 md:p-10 rounded-3xl overflow-hidden group min-h-[300px] sm:min-h-[340px] flex flex-col justify-between bg-[#0a0a0a] border border-[#FEEF8B]/20 shadow-2xl">
       {/* Background ambient lighting */}
       <div className="absolute top-[-25%] right-[-10%] w-[70%] h-[70%] bg-[#FEEF8B]/10 rounded-full blur-[100px] pointer-events-none group-hover:bg-[#FEEF8B]/15 transition-colors duration-700" />
       <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] bg-[#F5C542]/5 rounded-full blur-[90px] pointer-events-none" />
@@ -46,10 +61,10 @@ export function WalletCard() {
         <div className="flex items-start justify-between">
           <div className="space-y-2 min-w-0">
             <div className="flex items-center gap-2 text-neutral-400">
-              <span className="text-xs sm:text-sm font-semibold uppercase tracking-wider">Total Portfolio Balance</span>
+              <span className="text-xs sm:text-sm font-semibold uppercase tracking-wider">Total Balance</span>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Live (2s)
+                Anchored PoA
               </span>
               <button 
                 onClick={() => setShowBalance(!showBalance)}
@@ -62,10 +77,10 @@ export function WalletCard() {
 
             <div className="flex items-baseline flex-wrap gap-1">
               <h2 className="text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight break-all">
-                {showBalance ? `${lifetimeHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}` : '••••••'}
+                {showBalance ? `${totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[0]}` : '••••••'}
                 {showBalance && (
                   <span className="text-xl sm:text-3xl text-neutral-400 font-bold ml-0.5">
-                    .{lifetimeHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[1]}
+                    .{totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).split('.')[1]}
                   </span>
                 )}
                 {showBalance && (
@@ -76,13 +91,35 @@ export function WalletCard() {
               </h2>
             </div>
 
-            <p className="text-xs sm:text-sm text-neutral-400 font-medium flex items-center gap-1.5">
-              <span>Spendable:</span>
-              <span className="text-[#FEEF8B] font-bold">
-                {showBalance ? `${spendableHsct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}
-              </span>
-              <span className="text-neutral-500">• (₹1 = 1 HSCT)</span>
-            </p>
+            {/* 5-Way Concept Accounting Bar */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+              <div className="px-2.5 py-1 bg-white/[0.04] border border-white/10 rounded-lg flex items-center gap-1.5">
+                <span className="text-neutral-400">Available:</span>
+                <span className="text-[#FEEF8B] font-bold font-mono">
+                  {showBalance ? `${availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} HSCT` : '••••••'}
+                </span>
+              </div>
+
+              {reservedBalance > 0 && (
+                <div className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-1.5 text-amber-400">
+                  <span>Reserved:</span>
+                  <span className="font-bold font-mono">
+                    {showBalance ? `${reservedBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '••'}
+                  </span>
+                  <span className="text-[10px] text-amber-300/80">
+                    ({onchainLocked > 0 ? `⛓ Locked: ${onchainLocked}` : ''}{onchainLocked > 0 && offchainReserved > 0 ? ' | ' : ''}{offchainReserved > 0 ? `⏳ Queue: ${offchainReserved}` : ''})
+                  </span>
+                </div>
+              )}
+
+              {processingBalance > 0 && (
+                <div className="px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-1.5 text-blue-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+                  <span>In-Flight:</span>
+                  <span className="font-bold font-mono">{processingBalance.toLocaleString()} HSCT</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

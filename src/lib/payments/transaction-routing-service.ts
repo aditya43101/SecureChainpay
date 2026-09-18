@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { getProvider } from '@/lib/blockchain/client';
 import { PaymentRiskAssessment } from '@/lib/payments/payment-risk-engine';
 import { PredictiveEngine } from './predictive-engine';
+import { NodeHealthEngine } from '@/lib/blockchain/node-health-engine';
 
 export type SettlementRoute = 'OFF_CHAIN' | 'ON_CHAIN' | 'HYBRID' | 'DEFERRED_ON_CHAIN';
 
@@ -65,52 +66,45 @@ export const ROUTING_POLICY_VERSION = 'v1.2-adaptive';
  * Service to query current EVM Blockchain RPC health and latency.
  */
 export async function getBlockchainHealth(): Promise<BlockchainHealth> {
-  const startTime = Date.now();
-  const defaultProviderUrl = process.env.NEXT_PUBLIC_RPC_URL || 'http-[#070707]';
-  const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || 31337);
+  const contractAddress = process.env.PAYMENT_CONTRACT_ADDRESS || process.env.LEDGER_CONTRACT_ADDRESS;
+  const healthEngine = NodeHealthEngine.getInstance();
+  const { report, allReports } = await healthEngine.getHealthyProvider(contractAddress);
 
-  try {
-    const provider = getProvider();
-    const [blockNumber, feeData] = await Promise.all([
-      provider.getBlockNumber(),
-      provider.getFeeData(),
-    ]);
-
-    const latency = Date.now() - startTime;
-    const gasPriceGwei = feeData.gasPrice
-      ? Number(ethers.formatUnits(feeData.gasPrice, 'gwei'))
-      : 20;
-
-    let status: HealthStatus = 'HEALTHY';
-    if (latency > 1500) {
-      status = 'DEGRADED';
-    } else if (latency > 4000) {
-      status = 'UNAVAILABLE';
-    }
+  if (report) {
+    let mappedStatus: HealthStatus = 'HEALTHY';
+    if (report.status === 'DEGRADED') mappedStatus = 'DEGRADED';
+    else if (report.status === 'UNAVAILABLE') mappedStatus = 'UNAVAILABLE';
+    else if (report.status === 'UNHEALTHY' || report.status === 'STALE') mappedStatus = 'DEGRADED';
 
     return {
-      status,
-      rpcLatencyMs: latency,
-      latestBlockNumber: blockNumber,
+      status: mappedStatus,
+      rpcLatencyMs: report.latencyMs,
+      latestBlockNumber: report.latestBlockNumber,
       latestBlockTimestamp: new Date().toISOString(),
       successRate24h: 99.4,
-      gasPriceGwei: Number(gasPriceGwei.toFixed(2)),
-      providerUrl: 'Hardhat PoA Local Node (31337)',
-      chainId,
-    };
-  } catch (err: any) {
-    console.warn('[TransactionRoutingService] Blockchain RPC query notice:', err);
-    return {
-      status: 'DEGRADED',
-      rpcLatencyMs: 120,
-      latestBlockNumber: 42,
-      latestBlockTimestamp: new Date().toISOString(),
-      successRate24h: 99.0,
-      gasPriceGwei: 20,
-      providerUrl: 'Hardhat PoA Fallback Node',
-      chainId,
+      gasPriceGwei: report.gasPriceGwei,
+      providerUrl: report.name,
+      chainId: report.chainId,
     };
   }
+
+  // If no node is healthy or reachable, use evaluated primary report without duplicate delay:
+  const primaryReport = allReports?.[0] || await healthEngine.evaluateProvider(
+    process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:8545',
+    'Primary RPC (Node A)',
+    contractAddress
+  );
+
+  return {
+    status: primaryReport.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DEGRADED',
+    rpcLatencyMs: primaryReport.latencyMs,
+    latestBlockNumber: primaryReport.latestBlockNumber,
+    latestBlockTimestamp: new Date().toISOString(),
+    successRate24h: 0,
+    gasPriceGwei: 0,
+    providerUrl: primaryReport.name,
+    chainId: primaryReport.chainId || 31337,
+  };
 }
 
 /**

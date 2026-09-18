@@ -69,15 +69,20 @@ export default function TransactionList({ transactions, limit }: TransactionList
                     <span className="w-1 h-1 rounded-full bg-neutral-700" />
                     <span
                       className={`text-[10px] font-bold px-2 py-0.2 rounded-full uppercase tracking-wider ${
-                        tx.status === 'completed' || tx.status === 'CONFIRMED'
+                        tx.status === 'completed' || tx.status === 'CONFIRMED' || tx.status === 'FINALIZED'
                           ? 'bg-emerald-500/10 text-emerald-400'
-                          : tx.status === 'pending' || tx.status === 'SUBMITTED'
+                          : tx.status === 'pending' || tx.status === 'SUBMITTED' || tx.status === 'TEMP_PENDING' || tx.status === 'PROCESSING' || tx.status === 'FUNDS_RESERVED'
                           ? 'bg-amber-500/10 text-amber-300'
                           : 'bg-rose-500/10 text-rose-400'
                       }`}
                     >
-                      {tx.status}
+                      {tx.status === 'TEMP_PENDING' ? 'QUEUED / TEMP' : tx.status}
                     </span>
+                    {tx.route && (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${tx.route === 'ON_CHAIN' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}`}>
+                        {tx.route === 'ON_CHAIN' ? '⛓ ON-CHAIN' : '⏳ QUEUED'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

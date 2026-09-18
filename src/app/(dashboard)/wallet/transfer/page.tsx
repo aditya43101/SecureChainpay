@@ -972,45 +972,151 @@ async function safeParseJson(res: Response): Promise<any> {
             </div>
           )}
 
-          {/* STEP 4: SUCCESS STATE */}
+          {/* STEP 4: TRANSACTION LIFECYCLE & RECEIPT STATE */}
           {step === 'success' && selectedRecipient && (
             <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-6 py-4 animate-in zoom-in-95 duration-400">
-              <div className="w-18 h-18 sm:w-20 sm:h-20 bg-[#FEEF8B]/15 text-[#FEEF8B] rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(254,239,139,0.3)] border border-[#FEEF8B]/30">
-                <CheckCircle2 size={42} />
-              </div>
+              {completedTx?.status === 'TEMP_PENDING' || completedTx?.route === 'OFFCHAIN_TEMPORARY' ? (
+                // ─── TEMPORARY TRANSACTION VIEW (WAITING FOR BLOCKCHAIN) ───
+                <>
+                  <div className="w-18 h-18 sm:w-20 sm:h-20 bg-amber-500/15 text-amber-400 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(245,158,11,0.3)] border border-amber-500/30">
+                    <Clock size={42} className="animate-pulse" />
+                  </div>
 
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-1">Payment Sent!</h2>
-                <p className="text-neutral-400 text-xs sm:text-sm">
-                  Transferred <span className="text-[#FEEF8B] font-bold">{numericAmount.toLocaleString()} HSCT</span> to {selectedRecipient.displayName}
-                </p>
-              </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 mb-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      TEMPORARY / WAITING FOR BLOCKCHAIN
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-1">Application Reservation Placed</h2>
+                    <p className="text-neutral-400 text-xs sm:text-sm max-w-md mx-auto">
+                      All blockchain nodes are temporarily offline. <span className="text-[#FEEF8B] font-bold">{numericAmount.toLocaleString()} HSCT</span> is reserved in your application balance.
+                    </p>
+                  </div>
 
-              {/* Transaction Receipt Card */}
-              <div className="bg-[#121212] border border-white/10 rounded-2xl p-5 w-full text-left space-y-3 font-mono text-xs">
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-neutral-400 font-sans">Recipient</span>
-                  <span className="text-white font-bold">{selectedRecipient.displayName}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-neutral-400 font-sans">Recipient Wallet</span>
-                  <span className="text-[#FEEF8B]">{abbreviateAddress(selectedRecipient.walletAddress)}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-neutral-400 font-sans">Transaction ID</span>
-                  <span className="text-neutral-300">{completedTx?.id || 'TX_CONFIRMED'}</span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-white/5">
-                  <span className="text-neutral-400 font-sans">Global Block</span>
-                  <span className="text-[#FEEF8B] font-bold">#{completedTx?.blockNumber ?? 1}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-neutral-400 font-sans">Blockchain Status</span>
-                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[10px] font-bold">
-                    CONFIRMED ON-CHAIN ✓
-                  </span>
-                </div>
-              </div>
+                  {/* Lifecycle Pipeline Tracker */}
+                  <div className="w-full bg-[#121212] border border-amber-500/20 rounded-2xl p-4 text-left space-y-2.5 text-xs">
+                    <div className="font-bold text-neutral-300 uppercase tracking-wider text-[11px] pb-1 border-b border-white/5">
+                      Transaction Lifecycle Progress
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="flex items-center gap-2 text-emerald-400">
+                        <span>✓</span> <span>SECURITY_VALIDATED</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-amber-300">
+                        <span className="animate-pulse">⏳</span> <span>OFFCHAIN_RESERVED</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-neutral-500">
+                        <span>○</span> <span>ONCHAIN_INITIALIZING</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-neutral-500">
+                        <span>○</span> <span>CONFIRMED ON-CHAIN</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Warning Notice */}
+                  <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left text-xs text-amber-200/90 flex items-start gap-2.5">
+                    <AlertCircle size={18} className="flex-shrink-0 text-amber-400 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-amber-300">Zero Balance Fraud Guarantee</p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                        Recipient ({selectedRecipient.displayName}) has <strong>NOT</strong> been credited yet. Your spendable balance is safely reserved. The Self-Healing Engine will automatically broadcast on-chain as soon as a healthy node recovers.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Details Card */}
+                  <div className="bg-[#121212] border border-white/10 rounded-2xl p-5 w-full text-left space-y-2.5 font-mono text-xs">
+                    <div className="flex justify-between py-1 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Transaction ID</span>
+                      <span className="text-neutral-200">{completedTx?.id}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Execution Route</span>
+                      <span className="text-amber-400 font-bold">OFFCHAIN_TEMPORARY</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Reservation Status</span>
+                      <span className="text-amber-300 font-bold">OFFCHAIN_RESERVED</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-neutral-400 font-sans">Recipient</span>
+                      <span className="text-white font-bold">{selectedRecipient.displayName}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // ─── CONFIRMED ON-CHAIN VIEW ───
+                <>
+                  <div className="w-18 h-18 sm:w-20 sm:h-20 bg-emerald-500/15 text-emerald-400 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.3)] border border-emerald-500/30">
+                    <CheckCircle2 size={42} />
+                  </div>
+
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 mb-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      ON-CHAIN FINALIZED
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-1">Payment Confirmed!</h2>
+                    <p className="text-neutral-400 text-xs sm:text-sm">
+                      Transferred <span className="text-[#FEEF8B] font-bold">{numericAmount.toLocaleString()} HSCT</span> to {selectedRecipient.displayName}
+                    </p>
+                  </div>
+
+                  {/* Lifecycle Pipeline Tracker */}
+                  <div className="w-full bg-[#121212] border border-emerald-500/20 rounded-2xl p-4 text-left space-y-2.5 text-xs">
+                    <div className="font-bold text-neutral-300 uppercase tracking-wider text-[11px] pb-1 border-b border-white/5">
+                      Transaction Lifecycle Progress
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
+                      <div className="flex items-center gap-1.5 text-emerald-400"><span>✓</span> <span>INITIALIZING</span></div>
+                      <div className="flex items-center gap-1.5 text-emerald-400"><span>✓</span> <span>FUNDS_RESERVED</span></div>
+                      <div className="flex items-center gap-1.5 text-emerald-400"><span>✓</span> <span>PROCESSING</span></div>
+                      <div className="flex items-center gap-1.5 text-emerald-400"><span>✓</span> <span>VALIDATING</span></div>
+                      <div className="flex items-center gap-1.5 text-emerald-400"><span>✓</span> <span>FINALIZING</span></div>
+                      <div className="flex items-center gap-1.5 text-emerald-400 font-bold"><span>✓</span> <span>CONFIRMED</span></div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Receipt Card */}
+                  <div className="bg-[#121212] border border-white/10 rounded-2xl p-5 w-full text-left space-y-2.5 font-mono text-xs">
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Recipient</span>
+                      <span className="text-white font-bold">{selectedRecipient.displayName}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Recipient Wallet</span>
+                      <span className="text-[#FEEF8B]">{abbreviateAddress(selectedRecipient.walletAddress)}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Transaction ID</span>
+                      <span className="text-neutral-300">{completedTx?.id}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Route</span>
+                      <span className="text-emerald-400 font-bold">ON_CHAIN (Smart Contract Escrow)</span>
+                    </div>
+                    {completedTx?.blockchainTransactionHash && (
+                      <div className="flex justify-between py-1.5 border-b border-white/5">
+                        <span className="text-neutral-400 font-sans">Tx Hash</span>
+                        <span className="text-[#FEEF8B] truncate max-w-[220px]" title={completedTx.blockchainTransactionHash}>
+                          {completedTx.blockchainTransactionHash.slice(0, 10)}...{completedTx.blockchainTransactionHash.slice(-8)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1.5 border-b border-white/5">
+                      <span className="text-neutral-400 font-sans">Global Block</span>
+                      <span className="text-[#FEEF8B] font-bold">#{completedTx?.blockNumber ?? 1}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5">
+                      <span className="text-neutral-400 font-sans">Blockchain Status</span>
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[10px] font-bold">
+                        CONFIRMED ON-CHAIN ✓
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-3 w-full pt-1">
                 <Button

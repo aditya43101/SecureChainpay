@@ -87,7 +87,11 @@ export class BalanceReconstructionService {
 
         if (block.type === 'debit' || block.type === 'transfer' || block.type === 'trade') {
           const currentBal = Number((sender.balances as any)[currency] || 0);
-          (sender.balances as any)[currency] = Math.max(0, currentBal - amount);
+          const computedBal = currentBal - amount;
+          if (computedBal < 0) {
+            console.warn(`[BalanceReconstruction] Warning: Negative balance detected in block #${block.blockNumber} for ${senderAddr} (${computedBal}).`);
+          }
+          (sender.balances as any)[currency] = computedBal < 0 ? 0 : computedBal;
 
           if (block.type === 'trade' && block.payload?.tradeAsset && block.payload?.tradeAmount) {
             const tradeAsset = block.payload.tradeAsset.toUpperCase();

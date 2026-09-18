@@ -8,6 +8,7 @@ import { BlockchainWriteService } from '@/lib/blockchain/blockchain-write-servic
 import { PaymentContinuityService } from '@/lib/payments/continuity-service';
 import { PaymentRetryEngine } from '@/lib/payments/retry-engine';
 import { TransactionSecurityGate } from '@/lib/security/transaction-security-gate';
+import { FundsService } from '@/lib/payments/funds-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -137,14 +138,43 @@ export async function POST(request: Request) {
       );
     }
 
+    // 2.5 Strict Pre-Transaction Funds Validation (Rule #3)
+    const fundsCheck = await FundsService.validateFunds({
+      walletAddress: authoritativeSenderAddress,
+      amount: transferAmount,
+      asset: currency,
+      recipientAddress: receiverAddress,
+    });
+
+    if (!fundsCheck.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: fundsCheck.code || 'INSUFFICIENT_FUNDS',
+          error: fundsCheck.error || 'Pre-transaction funds validation failed.',
+          totalBalance: fundsCheck.totalBalance,
+          availableBalance: fundsCheck.availableBalance,
+          reservedBalance: fundsCheck.reservedBalance,
+        },
+        { status: 400 }
+      );
+    }
+
     // Auto-resolve receiverUid by wallet address if missing
     let targetReceiverUid = receiverUid || '';
     if (!targetReceiverUid && receiverAddress) {
       try {
+        const queryLower = receiverAddress.toLowerCase();
         const usersSnap = await adminDb.collection('users').get();
         for (const uDoc of usersSnap.docs) {
+          const uData = uDoc.data();
+          const docWallet = uData.walletAddress || uData.address;
+          if (docWallet && docWallet.toLowerCase() === queryLower) {
+            targetReceiverUid = uDoc.id;
+            break;
+          }
           const wSnap = await uDoc.ref.collection('wallet').doc('data').get();
-          if (wSnap.exists && wSnap.data()?.address?.toLowerCase() === receiverAddress.toLowerCase()) {
+          if (wSnap.exists && wSnap.data()?.address?.toLowerCase() === queryLower) {
             targetReceiverUid = uDoc.id;
             break;
           }

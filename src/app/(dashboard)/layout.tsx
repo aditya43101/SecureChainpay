@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   Home, Wallet, History, Settings, Bell, Search, Database, User, Bot, 
-  ShieldCheck, Sliders, ShieldAlert, Activity, Fingerprint, Menu, X, ArrowUpRight, ArrowDownLeft, RefreshCcw, Users
+  ShieldCheck, Sliders, ShieldAlert, Activity, Fingerprint, Menu, X, ArrowUpRight, ArrowDownLeft, RefreshCcw, Users, Cpu
 } from 'lucide-react';
 import UserProfile from '@/components/dashboard/UserProfile';
 import AuthProvider from '@/components/auth/AuthProvider';
 import { AIAssistiveBall } from '@/components/trading-ai/AIAssistiveBall';
+import { BlockchainStatusBanner } from '@/components/common/BlockchainStatusBanner';
 
 interface NavLinkItem {
   href: string;
@@ -39,6 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const enterpriseNavLinks: NavLinkItem[] = [
+    { href: '/architecture-simulator', icon: <Cpu size={18} />, label: 'Architecture Simulator' },
     { href: '/security', icon: <ShieldCheck size={18} />, label: 'Payment Security' },
     { href: '/routing', icon: <Sliders size={18} />, label: 'Routing Engine' },
     { href: '/integrity', icon: <ShieldAlert size={18} />, label: 'Integrity Layer' },
@@ -175,6 +177,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-black">
+          {/* Non-blocking Blockchain Availability Status Banner */}
+          <BlockchainStatusBanner />
+
           {/* Topbar */}
           <header className="h-16 sm:h-20 flex items-center justify-between px-4 sm:px-6 lg:px-8 border-b border-white/5 bg-black/90 backdrop-blur-xl sticky top-0 z-20">
             <div className="flex items-center gap-3">

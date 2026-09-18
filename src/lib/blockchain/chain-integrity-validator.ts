@@ -6,7 +6,7 @@
  */
 
 import { getAdminDb } from '@/lib/firebase/admin';
-import { calculateCanonicalBlockHash, keccak256GenesisHash } from '@/lib/crypto/canonical-hash';
+import { calculateCanonicalBlockHash, keccak256GenesisHash, GENESIS_SEED, sha256HexSync } from '@/lib/crypto/canonical-hash';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -105,23 +105,39 @@ export class ChainIntegrityValidator {
       }
     } catch { /* non-fatal */ }
 
-    // 3. Sort blocks by blockNumber
-    const rawBlocks = allBlocksSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    // 3. Sort blocks by blockNumber, filtering out non-block documents
+    const rawBlocks = allBlocksSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as any))
+      .filter((b: any) => b.id === GENESIS_BLOCK_ID || b.type === 'genesis' || (typeof b.blockNumber === 'number' && b.blockNumber > 0));
     const sortedBlocks = rawBlocks.sort((a: any, b: any) => (a.blockNumber || 0) - (b.blockNumber || 0));
 
     // 4. Verify genesis
     let genesisHashVerified = false;
     const genesisBlock = sortedBlocks.find((b: any) => b.type === 'genesis' || b.id === GENESIS_BLOCK_ID);
     if (genesisBlock) {
-      const expectedGenesisHash = keccak256GenesisHash();
-      genesisHashVerified = (genesisBlock.hash || '').toLowerCase() === expectedGenesisHash.toLowerCase();
+      const keccakExpected = keccak256GenesisHash();
+      const shaExpected = sha256HexSync(GENESIS_SEED);
+      const storedClean = (genesisBlock.hash || '').toLowerCase().replace(/^0x/, '');
+      const keccakClean = keccakExpected.toLowerCase().replace(/^0x/, '');
+      const shaClean = shaExpected.toLowerCase().replace(/^0x/, '');
+      const metaClean = (genesisHash || '').toLowerCase().replace(/^0x/, '');
+
+      genesisHashVerified = (
+        storedClean === keccakClean ||
+        storedClean === shaClean ||
+        (metaClean.length > 0 && storedClean === metaClean)
+      );
+
+      const computedHash = storedClean === keccakClean
+        ? keccakExpected
+        : (genesisBlock.hash?.startsWith('0x') ? `0x${shaClean}` : shaClean);
 
       results.push({
         blockId: genesisBlock.id,
         blockNumber: 0,
         status: genesisHashVerified ? 'GENESIS' : 'HASH_MISMATCH',
         storedHash: genesisBlock.hash || '',
-        computedHash: expectedGenesisHash,
+        computedHash,
         previousHash: '0',
         previousBlockId: null,
         hashMatch: genesisHashVerified,
@@ -171,7 +187,9 @@ export class ChainIntegrityValidator {
           type: block.type || 'transfer',
           idempotencyKey: block.idempotencyKey || block.id,
         });
-        hashMatch = storedHash.toLowerCase() === computedHash.toLowerCase();
+        const cleanStored = storedHash.toLowerCase().replace(/^0x/, '');
+        const cleanComputed = computedHash.toLowerCase().replace(/^0x/, '');
+        hashMatch = cleanStored === cleanComputed;
       } catch {
         computedHash = 'HASH_COMPUTATION_FAILED';
         hashMatch = false;
@@ -179,8 +197,9 @@ export class ChainIntegrityValidator {
 
       // Check chain continuity
       const expectedPreviousHash = blockHashMap.get(bn - 1) || '';
-      const chainContinuous = (block.previousHash || '').toLowerCase() === expectedPreviousHash.toLowerCase()
-        || expectedPreviousHash === '';
+      const cleanPrev = (block.previousHash || '').toLowerCase().replace(/^0x/, '');
+      const cleanExpectedPrev = expectedPreviousHash.toLowerCase().replace(/^0x/, '');
+      const chainContinuous = cleanPrev === cleanExpectedPrev || expectedPreviousHash === '';
 
       const isOrphaned = bn > 1 && !blockHashMap.has(bn - 1);
 

@@ -144,6 +144,42 @@
       "artifacts": [
         "SecureChainAnchor"
       ]
+    },
+    "/Users/adityasingh/Desktop/bloackchain/contracts/SecureChainPayment.sol": {
+      "lastModificationDate": 1789649474532,
+      "contentHash": "6e8bd8c91a93b301115cc46ce99a953b",
+      "sourceName": "contracts/SecureChainPayment.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "SecureChainPayment"
+      ]
     }
   }
 }

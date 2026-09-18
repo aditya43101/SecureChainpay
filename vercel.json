@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/blockchain/verify-chain/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/reconciliation/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/integrity/status/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/transactions/execute/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
