@@ -42,6 +42,9 @@ export function ScenarioControlBar() {
     clearAllFailures,
     setAllNodesOffline,
     setNodeStatus,
+    restoreAllNodes,
+    drainTemporaryQueue,
+    queue,
   } = useSimulation();
 
   return (
@@ -64,7 +67,29 @@ export function ScenarioControlBar() {
           </div>
 
           {/* Speed & Reset Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {queue.length > 0 && (
+              <button
+                onClick={() => restoreAllNodes()}
+                disabled={isSimulating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-xs font-bold animate-pulse transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                title="Restore cluster nodes and process pending transactions"
+              >
+                <Sparkles size={13} />
+                <span>Restore & Drain Queue ({queue.length})</span>
+              </button>
+            )}
+
+            <button
+              onClick={restoreAllNodes}
+              disabled={isSimulating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-all"
+              title="Restore all nodes to HEALTHY state"
+            >
+              <CheckCircle2 size={13} />
+              <span>Restore Nodes</span>
+            </button>
+
             <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 text-xs font-mono">
               <span className="px-2 text-neutral-400 text-[10px] uppercase font-bold">Speed:</span>
               {[0.5, 1, 2].map((s) => (

@@ -72,6 +72,7 @@ interface SimulationContextType {
   runDemo5_DbChainMismatch: () => Promise<void>;
   runDemo6_IntegrityAttack: () => Promise<void>;
   sendCustomTransaction: (amount: number, expiryMinutes?: number) => Promise<void>;
+  drainTemporaryQueue: () => Promise<void>;
   resetSimulation: () => void;
 }
 
@@ -220,6 +221,58 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     [simulationSpeed]
   );
 
+  const queueRef = useRef<QueueNodeItem[]>([]);
+  queueRef.current = queue;
+
+  const balancesRef = useRef<SimulationBalances>(INITIAL_BALANCES);
+  balancesRef.current = balances;
+
+  const isSimulatingRef = useRef<boolean>(false);
+  isSimulatingRef.current = isSimulating;
+
+  // Non-negotiable financial invariant: balances must NEVER be negative
+  const safeReserveFunds = useCallback((amount: number): boolean => {
+    let allowed = false;
+    setBalances((prev) => {
+      if (prev.senderAvailable < amount) {
+        return prev;
+      }
+      allowed = true;
+      return {
+        ...prev,
+        senderAvailable: Math.max(0, prev.senderAvailable - amount),
+        senderReserved: prev.senderReserved + amount,
+        recipientIncoming: prev.recipientIncoming + amount,
+      };
+    });
+    return allowed;
+  }, []);
+
+  const safeCommitFunds = useCallback((amount: number) => {
+    setBalances((prev) => {
+      const deductReserved = Math.min(prev.senderReserved, amount);
+      return {
+        senderTotal: Math.max(0, prev.senderTotal - amount),
+        senderAvailable: Math.max(0, prev.senderAvailable),
+        senderReserved: Math.max(0, prev.senderReserved - deductReserved),
+        recipientIncoming: Math.max(0, prev.recipientIncoming - amount),
+        recipientConfirmed: prev.recipientConfirmed + amount,
+      };
+    });
+  }, []);
+
+  const safeReleaseFunds = useCallback((amount: number) => {
+    setBalances((prev) => {
+      const releaseAmount = Math.min(prev.senderReserved, amount);
+      return {
+        ...prev,
+        senderAvailable: prev.senderAvailable + releaseAmount,
+        senderReserved: Math.max(0, prev.senderReserved - releaseAmount),
+        recipientIncoming: Math.max(0, prev.recipientIncoming - releaseAmount),
+      };
+    });
+  }, []);
+
   const healthyNodeCount = nodes.filter((n) => n.status === 'HEALTHY' && n.acceptsNewTransactions).length;
 
   const setNodeStatus = (nodeId: string, status: NodeStatus) => {
@@ -237,6 +290,15 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           : n
       )
     );
+    addTimelineEvent('Node Status Updated', `Node ${nodeId} manually updated to ${status}`, status === 'HEALTHY' ? 'SUCCESS' : 'WARNING');
+
+    // Invariant: when nodes are manually restored to HEALTHY by user and queue has pending transactions,
+    // trigger promotion worker so transactions proceed upon manual node restore!
+    if (status === 'HEALTHY' && queueRef.current.length > 0 && !isSimulatingRef.current) {
+      setTimeout(() => {
+        drainTemporaryQueue(nodeId);
+      }, 350);
+    }
   };
 
   const makeNodeBusy = (nodeId = 'node-a') => {
@@ -285,6 +347,11 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
   const restoreAllNodes = () => {
     setNodes(INITIAL_NODES);
     addTimelineEvent('Nodes Restored to HEALTHY', 'Primary & Failover RPC providers restored and synced', 'SUCCESS');
+    if (queueRef.current.length > 0 && !isSimulatingRef.current) {
+      setTimeout(() => {
+        drainTemporaryQueue('node-a');
+      }, 350);
+    }
   };
 
   const toggleFailure = (failureKey: string) => {
@@ -547,6 +614,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setCurrentScenario('DEMO_1');
     isCancelledRef.current = false;
 
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
+
     restoreAllNodes();
     await delay(300);
 
@@ -584,12 +657,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       blockNumber: 125431,
       confirmations: 1,
     });
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
     addTimelineEvent('Funds Reserved On-Chain', 'Sender Available: ₹6,000 | Reserved: ₹4,000. Recipient spendable balance remains UNCREDITED.', 'WARNING', 'FUNDS_RESERVED', tx.id);
     await delay(1200);
 
@@ -615,13 +683,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
     // Step 10: Recipient Credit (Rule #22)
     setActiveArchitectureStep('RECIPIENT_CREDIT');
-    setBalances((prev) => ({
-      senderTotal: prev.senderTotal - 4000,
-      senderAvailable: prev.senderAvailable,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-      recipientConfirmed: prev.recipientConfirmed + 4000,
-    }));
+    safeCommitFunds(4000);
     addTimelineEvent('Recipient Credited', 'Spendable balance transferred to Recipient: Available += ₹4,000. Balance conserved.', 'SUCCESS', 'RECIPIENT_CREDIT', tx.id);
     await delay(1000);
 
@@ -642,6 +704,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setIsSimulating(true);
     setCurrentScenario('DEMO_2');
     isCancelledRef.current = false;
+
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
 
     setAllNodesOffline();
     await delay(500);
@@ -673,12 +741,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
     // Application-level reservation
     setActiveArchitectureStep('OFFCHAIN_RESERVE');
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
 
     const queueItem: QueueNodeItem = {
       id: `queue_${Date.now()}`,
@@ -770,13 +833,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     await delay(800);
 
     setActiveArchitectureStep('RECIPIENT_CREDIT');
-    setBalances((prev) => ({
-      senderTotal: prev.senderTotal - 4000,
-      senderAvailable: prev.senderAvailable,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-      recipientConfirmed: prev.recipientConfirmed + 4000,
-    }));
+    safeCommitFunds(4000);
     addTimelineEvent('Recipient Credited', 'Funds credited to Recipient: ₹4,000 confirmed spendable.', 'SUCCESS', 'RECIPIENT_CREDIT', tx.id);
     await delay(1000);
 
@@ -800,6 +857,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setIsSimulating(true);
     setCurrentScenario('DEMO_3');
     isCancelledRef.current = false;
+
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
 
     restoreAllNodes();
     await delay(300);
@@ -840,12 +903,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       blockNumber: 125433,
       confirmations: 2,
     });
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
     addTimelineEvent('Existing State Recovered', `Duplicate prevented! Found on-chain reservation: ${mockHash}`, 'SUCCESS', 'RECOVER', tx.id);
     await delay(1200);
 
@@ -857,13 +915,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
     setActiveArchitectureStep('FINALIZE');
     updateTxState('FINALIZED', 'FINALIZED', 'Finalized successfully after timeout reconciliation', { confirmations: 4 });
-    setBalances((prev) => ({
-      senderTotal: prev.senderTotal - 4000,
-      senderAvailable: prev.senderAvailable,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-      recipientConfirmed: prev.recipientConfirmed + 4000,
-    }));
+    safeCommitFunds(4000);
     addTimelineEvent('Settlement Completed', 'Payment settled without replaying or double-spending funds', 'SUCCESS', 'FINALIZE', tx.id);
     await delay(1000);
 
@@ -887,15 +939,16 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setCurrentScenario('DEMO_4');
     isCancelledRef.current = false;
 
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
+
     const tx = createNewTransaction(4000, 10);
     addTimelineEvent('Transaction in Progress', `ID: ${tx.id} placed in processing state`, 'INFO', 'PROCESSING', tx.id);
     updateTxState('PROCESSING', 'FUNDS_RESERVED', 'Worker processing transaction batch');
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
     setActiveArchitectureStep('PROCESSING');
     await delay(1000);
 
@@ -940,13 +993,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setQueue([]);
     setArrayIndex([]);
     setActiveQueueIndex(null);
-    setBalances((prev) => ({
-      senderTotal: prev.senderTotal - 4000,
-      senderAvailable: prev.senderAvailable,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-      recipientConfirmed: prev.recipientConfirmed + 4000,
-    }));
+    safeCommitFunds(4000);
     addTimelineEvent('Recovered Without Replaying Payment', 'Processed to completion from durable state checkpoint', 'SUCCESS', 'FINALIZE', tx.id);
     await delay(1000);
 
@@ -970,18 +1017,19 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setCurrentScenario('DEMO_5');
     isCancelledRef.current = false;
 
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
+
     const tx = createNewTransaction(4000, 10);
     updateTxState('PROCESSING', 'FINALIZED', 'Artificially induced state mismatch: App is PROCESSING, but Chain is FINALIZED', {
       blockchainTxHash: `0xreconcile${Date.now().toString(16)}mismatch`,
       blockNumber: 125435,
       confirmations: 12,
     });
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
     setActiveArchitectureStep('PROCESSING');
     addTimelineEvent('State Mismatch Injected', 'Database state: PROCESSING | Blockchain state: FINALIZED', 'WARNING', 'PROCESSING', tx.id);
     await delay(1200);
@@ -997,13 +1045,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
     setActiveHealingStep('RECONCILE');
     updateTxState('RECONCILED', 'FINALIZED', 'Reconciliation Engine synchronized database record with authoritative blockchain state');
-    setBalances((prev) => ({
-      senderTotal: prev.senderTotal - 4000,
-      senderAvailable: prev.senderAvailable,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-      recipientConfirmed: prev.recipientConfirmed + 4000,
-    }));
+    safeCommitFunds(4000);
     addTimelineEvent('State Reconciled', 'Blockchain state verified → application state reconciled. Audit record logged.', 'SUCCESS', 'RECONCILE', tx.id);
     await delay(1200);
 
@@ -1027,6 +1069,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setCurrentScenario('DEMO_6');
     isCancelledRef.current = false;
 
+    if (balancesRef.current.senderAvailable < 4000) {
+      setBalances(INITIAL_BALANCES);
+      addTimelineEvent('Demo Wallet Replenished', 'Demo balance reset to ₹10,000 for scenario execution.', 'INFO');
+      await delay(200);
+    }
+
     const tx = createNewTransaction(4000, 10);
     updateTxState('TEMP_PENDING', 'NOT_ANCHORED', 'Created temporary transaction with genuine cryptographic commitment (₹4,000)', {
       route: 'TEMPORARY_OFF_CHAIN',
@@ -1045,12 +1093,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     ]);
     setArrayIndex([tx.id]);
     setActiveQueueIndex(0);
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable - 4000,
-      senderReserved: prev.senderReserved + 4000,
-      recipientIncoming: prev.recipientIncoming + 4000,
-    }));
+    safeReserveFunds(4000);
     setActiveArchitectureStep('TEMP_TX');
     addTimelineEvent('Original Temporary Tx Created', `Genuine amount: ₹4,000 | Hash: ${tx.integrityHash.substring(0, 18)}...`, 'INFO', 'TEMP_TX', tx.id);
     await delay(1200);
@@ -1078,12 +1121,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setActiveQueueIndex(null);
 
     // Release sender reservation, recipient receives NOTHING
-    setBalances((prev) => ({
-      ...prev,
-      senderAvailable: prev.senderAvailable + 4000,
-      senderReserved: prev.senderReserved - 4000,
-      recipientIncoming: prev.recipientIncoming - 4000,
-    }));
+    safeReleaseFunds(4000);
 
     addTimelineEvent('Transaction Quarantined', 'CRITICAL DEFENSE: Recipient uncredited. Funds released safely. Incident quarantined.', 'QUARANTINE', 'QUARANTINE', tx.id);
     setMetrics((prev) => ({
@@ -1098,13 +1136,357 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setIsSimulating(false);
   };
 
+  const drainTemporaryQueue = async (targetNodeId?: string) => {
+    if (isSimulatingRef.current) return;
+    if (queueRef.current.length === 0) {
+      addTimelineEvent('Temporary Queue Empty', 'No pending transactions waiting in temporary pool.', 'INFO');
+      return;
+    }
+
+    const availableHealthy = nodes.filter((n) => n.status === 'HEALTHY' && n.acceptsNewTransactions);
+    const chosenNode = targetNodeId
+      ? nodes.find((n) => n.id === targetNodeId && n.status === 'HEALTHY' && n.acceptsNewTransactions) || availableHealthy[0]
+      : availableHealthy[0];
+
+    if (!chosenNode) {
+      addTimelineEvent(
+        'Cannot Drain Temporary Queue',
+        'All RPC nodes are still OFFLINE or BUSY. Please turn at least one node to HEALTHY first in the cluster above.',
+        'WARNING',
+        'NODE_HEALTH'
+      );
+      return;
+    }
+
+    setIsSimulating(true);
+    isCancelledRef.current = false;
+
+    // Self-Healing Engine detects recovery & Starvation Prevention prioritizes DB queue
+    setActiveHealingStep('DETECT');
+    addTimelineEvent(
+      'Node Recovery Detected',
+      `Cluster node restored (${chosenNode.name}). Triggering Starvation-Free Queue Promotion worker for ${queueRef.current.length} pending payment(s).`,
+      'RECOVERY',
+      'DETECT'
+    );
+    await delay(700);
+
+    const itemsToProcess = [...queueRef.current];
+    for (let i = 0; i < itemsToProcess.length; i++) {
+      if (isCancelledRef.current) break;
+      const item = itemsToProcess[i];
+      setActiveQueueIndex(i);
+
+      setActiveHealingStep('VERIFY');
+      addTimelineEvent(
+        'Pre-Promotion Verification',
+        `Verifying cryptographic integrity hash & TTL for ${item.transactionId} (₹${item.amount.toLocaleString()})`,
+        'INFO',
+        'VERIFY',
+        item.transactionId
+      );
+      await delay(700);
+
+      setActiveHealingStep('RECOVER');
+      setActiveArchitectureStep('BLOCKCHAIN_INIT');
+      updateTxState('ONCHAIN_INITIALIZING', 'NOT_ANCHORED', `Promoting temporary transaction ${item.transactionId} to ${chosenNode.name}`);
+      addTimelineEvent(
+        'Promoting to Blockchain',
+        `Same Transaction ID preserved: ${item.transactionId} (One payment, one identity)`,
+        'SUCCESS',
+        'BLOCKCHAIN_INIT',
+        item.transactionId
+      );
+      await delay(800);
+
+      // On-chain reservation
+      setActiveArchitectureStep('FUNDS_RESERVED');
+      const mockHash = `0x${Date.now().toString(16)}${Math.random().toString(16).substring(2, 8)}`;
+      updateTxState('FUNDS_RESERVED', 'FUNDS_RESERVED', `Blockchain reservation confirmed on ${chosenNode.name}`, {
+        blockchainTxHash: mockHash,
+        blockNumber: chosenNode.latestBlockNumber + 1,
+        confirmations: 1,
+        inQueue: false,
+      });
+      addTimelineEvent(
+        'On-Chain Funds Reserved',
+        `Anchored on EVM. Blockchain state: FUNDS_RESERVED | Tx: ${mockHash}`,
+        'SUCCESS',
+        'FUNDS_RESERVED',
+        item.transactionId
+      );
+      await delay(800);
+
+      // Processing
+      setActiveArchitectureStep('PROCESSING');
+      updateTxState('PROCESSING', 'FUNDS_RESERVED', 'Executing compliance & finalizing on-chain');
+      await delay(700);
+
+      // Final validation
+      setActiveArchitectureStep('FINAL_VALIDATION');
+      updateTxState('FINAL_VALIDATION', 'FUNDS_RESERVED', 'Pre-settlement invariant validation passed');
+      await delay(600);
+
+      // Finalize
+      setActiveArchitectureStep('FINALIZE');
+      updateTxState('FINALIZED', 'FINALIZED', `Finalized on blockchain via promotion worker (${chosenNode.name})`, {
+        confirmations: 3,
+      });
+      addTimelineEvent(
+        'Promotion Finalized',
+        `Temporary transaction ${item.transactionId} successfully anchored and finalized on blockchain`,
+        'SUCCESS',
+        'FINALIZE',
+        item.transactionId
+      );
+      await delay(700);
+
+      // Recipient Credit
+      setActiveArchitectureStep('RECIPIENT_CREDIT');
+      safeCommitFunds(item.amount);
+      addTimelineEvent(
+        'Recipient Credited',
+        `Funds credited to Recipient: Available += ₹${item.amount.toLocaleString()}. Balance strictly conserved.`,
+        'SUCCESS',
+        'RECIPIENT_CREDIT',
+        item.transactionId
+      );
+      await delay(800);
+
+      setMetrics((prev) => ({
+        ...prev,
+        completedTransactions: prev.completedTransactions + 1,
+        recoveryEvents: prev.recoveryEvents + 1,
+        temporaryTransactions: Math.max(0, prev.temporaryTransactions - 1),
+        reservedAmount: Math.max(0, prev.reservedAmount - item.amount),
+      }));
+    }
+
+    setQueue([]);
+    setArrayIndex([]);
+    setActiveQueueIndex(null);
+    setActiveHealingStep('IDLE');
+    setActiveArchitectureStep('IDLE');
+    setIsSimulating(false);
+  };
+
   const sendCustomTransaction = async (amount: number, expiryMinutes: number = 10) => {
     if (isSimulating) return;
-    const healthy = nodes.some((n) => n.status === 'HEALTHY' && n.acceptsNewTransactions);
-    if (healthy && !activeFailures.has('RPC_TIMEOUT')) {
-      await runDemo1_NormalPayment();
+    if (!amount || amount <= 0 || isNaN(amount)) {
+      addTimelineEvent('Invalid Amount', 'Transfer amount must be greater than ₹0', 'ERROR');
+      return;
+    }
+
+    isCancelledRef.current = false;
+    setIsSimulating(true);
+    setCurrentScenario('NONE');
+
+    // -----------------------------------------------------------------
+    // 1. NON-NEGOTIABLE INVARIANT: PRE-TRANSACTION FUNDS VALIDATION
+    // If available balance < amount: CANCEL IMMEDIATELY BEFORE ANY MUTATION
+    // -----------------------------------------------------------------
+    if (balancesRef.current.senderAvailable < amount) {
+      const tx = createNewTransaction(amount, expiryMinutes);
+      setActiveArchitectureStep('SECURITY');
+      addTimelineEvent(
+        'Pre-Transaction Funds Validation',
+        `Evaluating: Attempted (₹${amount.toLocaleString()}) > Available (₹${balancesRef.current.senderAvailable.toLocaleString()}). Deficit of ₹${(amount - balancesRef.current.senderAvailable).toLocaleString()} prevented.`,
+        'WARNING',
+        'SECURITY',
+        tx.id
+      );
+      await delay(700);
+
+      // Immediate Rejection before financial mutation
+      setActiveArchitectureStep('IDLE');
+      updateTxState(
+        'FAILED',
+        'NOT_ANCHORED',
+        `REJECTED: INSUFFICIENT_FUNDS. Attempted ₹${amount.toLocaleString()} with available balance ₹${balancesRef.current.senderAvailable.toLocaleString()}.`
+      );
+      addTimelineEvent(
+        'Transaction REJECTED (INSUFFICIENT_FUNDS)',
+        `Hard Invariant Upheld: Operation rejected BEFORE financial mutation. Zero reservation. Zero recipient credit. Balance strictly ₹${balancesRef.current.senderAvailable.toLocaleString()}.`,
+        'ERROR',
+        'SECURITY',
+        tx.id
+      );
+
+      setMetrics((prev) => ({
+        ...prev,
+        failedTransactions: prev.failedTransactions + 1,
+      }));
+      setIsSimulating(false);
+      return;
+    }
+
+    // -----------------------------------------------------------------
+    // 2. Funds are sufficient -> Create Transaction with EXACT amount
+    // -----------------------------------------------------------------
+    const tx = createNewTransaction(amount, expiryMinutes);
+    addTimelineEvent(
+      'Payment Created',
+      `ID: ${tx.id} | Amount: ₹${amount.toLocaleString()} | Available Wallet: ₹${balancesRef.current.senderAvailable.toLocaleString()}`,
+      'INFO',
+      'USER',
+      tx.id
+    );
+    setActiveArchitectureStep('USER');
+    await delay(700);
+
+    setActiveArchitectureStep('SECURITY');
+    addTimelineEvent(
+      'Funds & Security Validated',
+      `Pre-flight passed: ₹${balancesRef.current.senderAvailable.toLocaleString()} available >= ₹${amount.toLocaleString()} requested. Zero deficit.`,
+      'SUCCESS',
+      'SECURITY',
+      tx.id
+    );
+    await delay(700);
+
+    // 3. Node Health Check
+    const healthyNodes = nodes.filter((n) => n.status === 'HEALTHY' && n.acceptsNewTransactions);
+    const hasRpcTimeoutFailure = activeFailures.has('RPC_TIMEOUT');
+
+    if (healthyNodes.length > 0 && !hasRpcTimeoutFailure) {
+      // -------------------------------------------------------------
+      // PATH A: HEALTHY ON-CHAIN FLOW (Transfers exact custom amount)
+      // -------------------------------------------------------------
+      const chosenNode = healthyNodes[0];
+      setActiveArchitectureStep('NODE_HEALTH');
+      addTimelineEvent(
+        'Node Health Verified',
+        `${chosenNode.name} HEALTHY, latency ${chosenNode.latencyMs}ms, sync confirmed`,
+        'SUCCESS',
+        'NODE_HEALTH',
+        tx.id
+      );
+      await delay(700);
+
+      setActiveArchitectureStep('ROUTER');
+      addTimelineEvent(
+        'Routing Decision: ON-CHAIN',
+        `Healthy blockchain node available (${chosenNode.name}) → ON-CHAIN INITIALIZATION`,
+        'INFO',
+        'ROUTER',
+        tx.id
+      );
+      await delay(700);
+
+      setActiveArchitectureStep('ONCHAIN_PATH');
+      updateTxState('ONCHAIN_INITIALIZING', 'NOT_ANCHORED', `Submitting initializePayment(₹${amount.toLocaleString()}) to SecureChainPayment.sol`);
+      addTimelineEvent('Blockchain Initialization', `Broadcasting initializePayment(₹${amount.toLocaleString()}) to EVM mempool`, 'INFO', 'BLOCKCHAIN_INIT', tx.id);
+      await delay(800);
+
+      // Reserve funds on-chain
+      setActiveArchitectureStep('FUNDS_RESERVED');
+      const mockHash = `0x${Date.now().toString(16)}${Math.random().toString(16).substring(2, 8)}`;
+      updateTxState('FUNDS_RESERVED', 'FUNDS_RESERVED', 'Smart contract confirmed accounting balance lock', {
+        blockchainTxHash: mockHash,
+        blockNumber: chosenNode.latestBlockNumber + 1,
+        confirmations: 1,
+      });
+      safeReserveFunds(amount);
+      addTimelineEvent(
+        'Funds Reserved On-Chain',
+        `Locked ₹${amount.toLocaleString()}. Recipient spendable balance remains strictly UNCREDITED until final block confirmation.`,
+        'WARNING',
+        'FUNDS_RESERVED',
+        tx.id
+      );
+      await delay(900);
+
+      // Application Processing
+      setActiveArchitectureStep('PROCESSING');
+      updateTxState('PROCESSING', 'FUNDS_RESERVED', 'Executing off-chain regulatory compliance & AML clearance');
+      await delay(800);
+
+      // Final Validation
+      setActiveArchitectureStep('FINAL_VALIDATION');
+      updateTxState('FINAL_VALIDATION', 'FUNDS_RESERVED', 'Pre-settlement invariant validation passed');
+      await delay(700);
+
+      // Finalization
+      setActiveArchitectureStep('FINALIZE');
+      updateTxState('FINALIZED', 'FINALIZED', 'Smart contract finalizePayment() verified with 3 confirmations', {
+        confirmations: 3,
+      });
+      addTimelineEvent('Blockchain Verified & Final', 'Transaction confirmed on blockchain. Recipient credit unlocked.', 'SUCCESS', 'FINALIZE', tx.id);
+      await delay(800);
+
+      // Recipient Credit
+      setActiveArchitectureStep('RECIPIENT_CREDIT');
+      safeCommitFunds(amount);
+      addTimelineEvent(
+        'Recipient Credited',
+        `Spendable balance transferred to Recipient: Available += ₹${amount.toLocaleString()}. Balance conserved.`,
+        'SUCCESS',
+        'RECIPIENT_CREDIT',
+        tx.id
+      );
+      await delay(900);
+
+      setMetrics((prev) => ({
+        ...prev,
+        completedTransactions: prev.completedTransactions + 1,
+        onChainTransactions: prev.onChainTransactions + 1,
+      }));
+      setActiveArchitectureStep('IDLE');
+      setIsSimulating(false);
     } else {
-      await runDemo2_BlockchainUnavailable();
+      // -------------------------------------------------------------
+      // PATH B: NODES OFFLINE / BUSY -> DURABLE TEMPORARY QUEUE
+      // Invariant: Nodes DO NOT auto-restore! User controls recovery.
+      // -------------------------------------------------------------
+      setActiveArchitectureStep('NODE_HEALTH');
+      addTimelineEvent('Node Health Check: UNAVAILABLE', 'All RPC endpoints unavailable or offline for new transactions', 'ERROR', 'NODE_HEALTH', tx.id);
+      await delay(700);
+
+      setActiveArchitectureStep('ROUTER');
+      addTimelineEvent('Routing Decision: TEMPORARY PATH', 'No healthy node available → Routing to Durable Temporary Pool', 'WARNING', 'ROUTER', tx.id);
+      await delay(700);
+
+      setActiveArchitectureStep('TEMPORARY_PATH');
+      updateTxState('TEMP_PENDING', 'NOT_ANCHORED', 'Enqueued in temporary transaction pool (NOT YET ANCHORED ON BLOCKCHAIN)', {
+        route: 'TEMPORARY_OFF_CHAIN',
+        inQueue: true,
+        queueIndex: queue.length,
+      });
+      await delay(700);
+
+      // Application-level reservation for exact amount
+      setActiveArchitectureStep('OFFCHAIN_RESERVE');
+      safeReserveFunds(amount);
+
+      const queueItem: QueueNodeItem = {
+        id: `queue_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        transactionId: tx.id,
+        amount,
+        asset: 'HSCT',
+        enqueuedAt: new Date().toISOString(),
+        status: 'TEMP_PENDING',
+      };
+      setQueue((prev) => [...prev, queueItem]);
+      setArrayIndex((prev) => [...prev, tx.id]);
+      setActiveQueueIndex(queue.length);
+
+      addTimelineEvent(
+        'Application Reservation Locked (Awaiting Node Recovery)',
+        `NOT YET ANCHORED ON BLOCKCHAIN. Off-chain reserved: ₹${amount.toLocaleString()}. Nodes are OFFLINE. Turn on any node above to proceed with on-chain settlement.`,
+        'WARNING',
+        'OFFCHAIN_RESERVE',
+        tx.id
+      );
+      setMetrics((prev) => ({
+        ...prev,
+        temporaryTransactions: prev.temporaryTransactions + 1,
+        reservedAmount: prev.reservedAmount + amount,
+      }));
+
+      // CRITICAL: DO NOT AUTO-RESTORE NODES!
+      // System stays in this state until user manually sets a node to HEALTHY or clicks restore!
+      setActiveArchitectureStep('TEMP_TX');
+      setIsSimulating(false);
     }
   };
 
@@ -1167,6 +1549,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
         runDemo5_DbChainMismatch,
         runDemo6_IntegrityAttack,
         sendCustomTransaction,
+        drainTemporaryQueue,
         resetSimulation,
       }}
     >

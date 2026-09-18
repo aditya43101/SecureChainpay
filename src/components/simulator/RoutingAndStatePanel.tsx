@@ -27,7 +27,7 @@ export function RoutingAndStatePanel() {
     setSelectedTransaction,
   } = useSimulation();
 
-  const [amount, setAmount] = useState<number>(4000);
+  const [amount, setAmount] = useState<number>(50);
   const [expiry, setExpiry] = useState<number>(10);
 
   const handleSend = () => {
@@ -84,16 +84,35 @@ export function RoutingAndStatePanel() {
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">
-              Amount (₹ INR)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] uppercase font-bold text-neutral-400 block">
+                Amount (₹ INR)
+              </label>
+              <div className="flex items-center gap-1">
+                {[50, 500, 4000, 7000].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setAmount(p)}
+                    disabled={isSimulating}
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded border transition-all ${
+                      amount === p
+                        ? 'bg-[#FEEF8B]/20 border-[#FEEF8B] text-[#FEEF8B] font-bold'
+                        : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    ₹{p}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               type="number"
-              min="100"
-              max="20000"
-              step="500"
+              min="1"
+              max="100000"
+              step="1"
               value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
+              onChange={(e) => setAmount(Math.max(1, Number(e.target.value)))}
               disabled={isSimulating}
               className="w-full px-3 py-2 rounded-xl bg-white/[0.03] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-[#FEEF8B]/50"
             />

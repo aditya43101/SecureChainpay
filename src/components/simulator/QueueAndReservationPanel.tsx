@@ -16,7 +16,17 @@ import {
 } from 'lucide-react';
 
 export function QueueAndReservationPanel() {
-  const { queue, arrayIndex, activeQueueIndex, balances, activeTransaction } = useSimulation();
+  const {
+    queue,
+    arrayIndex,
+    activeQueueIndex,
+    balances,
+    activeTransaction,
+    drainTemporaryQueue,
+    restoreAllNodes,
+    healthyNodeCount,
+    isSimulating,
+  } = useSimulation();
 
   // Calculate percentages for Sender Balance bar
   const total = balances.senderTotal || 10000;
@@ -58,7 +68,7 @@ export function QueueAndReservationPanel() {
 
         {/* Temporary Pool Card */}
         {queue.length > 0 ? (
-          <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2 relative overflow-hidden">
+          <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-white font-mono flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -89,7 +99,7 @@ export function QueueAndReservationPanel() {
             </div>
 
             {/* Starvation Prevention Details */}
-            <div className="pt-2 mt-2 border-t border-amber-500/20 grid grid-cols-4 gap-2 text-[9px] font-mono">
+            <div className="pt-2 border-t border-amber-500/20 grid grid-cols-4 gap-2 text-[9px] font-mono">
               <div>
                 <span className="text-neutral-500 block">Queue Age</span>
                 <span className="text-amber-300 font-bold">
@@ -108,6 +118,29 @@ export function QueueAndReservationPanel() {
                 <span className="text-neutral-500 block">Next Slot</span>
                 <span className="text-cyan-400 font-bold">NEXT ELIGIBLE</span>
               </div>
+            </div>
+
+            {/* Action Bar for Queued Transactions */}
+            <div className="pt-2.5 border-t border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-2 bg-black/40 -mx-3.5 -mb-3.5 p-3 rounded-b-xl">
+              <span className="text-[10px] text-amber-200/90 font-mono text-center sm:text-left">
+                {healthyNodeCount > 0
+                  ? `⚡ Cluster node active. Ready to anchor on-chain.`
+                  : `⚠️ All nodes OFFLINE. Turn on a node above or click to restore:`}
+              </span>
+              <button
+                onClick={() => {
+                  if (healthyNodeCount === 0) {
+                    restoreAllNodes();
+                  } else {
+                    drainTemporaryQueue();
+                  }
+                }}
+                disabled={isSimulating}
+                className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-[#FEF9C3] via-[#FEEF8B] to-[#F5C542] text-black font-extrabold text-[10px] uppercase font-mono hover:opacity-90 transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(254,239,139,0.3)] cursor-pointer"
+              >
+                <Sparkles size={12} />
+                <span>{healthyNodeCount > 0 ? 'Process & Finalize Now' : 'Restore Nodes & Process Queue'}</span>
+              </button>
             </div>
           </div>
         ) : (
