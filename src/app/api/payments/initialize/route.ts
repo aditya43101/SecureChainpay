@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { prisma } from '@/lib/prisma';
 import { NodeHealthEngine } from '@/lib/blockchain/node-health-engine';
@@ -203,6 +204,39 @@ export async function POST(request: Request) {
             blockchainTxHash: receipt.hash,
             blockNumber: receipt.blockNumber,
           });
+
+          // Durably record transaction so finalize route and ledger track recipient accurately
+          try {
+            const prevTx = await prisma.temporaryTransaction.findFirst({
+              orderBy: { createdAt: 'desc' },
+            });
+            const previousHash = prevTx?.integrityHash || '0'.repeat(64);
+            const hashPayload = `${resolvedTxId}|${cleanSender}|${cleanRecipient}|${numAmount}|${asset}|${idempotencyKey}|${previousHash}`;
+            const integrityHash = crypto.createHash('sha256').update(hashPayload).digest('hex');
+
+            await prisma.temporaryTransaction.create({
+              data: {
+                transactionId: resolvedTxId,
+                senderWallet: cleanSender,
+                recipientWallet: cleanRecipient,
+                amount: numAmount,
+                asset,
+                chainId: 31337,
+                idempotencyKey,
+                status: 'PROCESSING',
+                expiresAt,
+                reservationId: reservation.reservationId,
+                integrityHash,
+                previousHash,
+                blockchainTxHash: receipt.hash,
+                blockNumber: receipt.blockNumber,
+                canonicalPayload,
+                signature,
+              },
+            });
+          } catch (persistErr: any) {
+            console.warn('[API /payments/initialize] Warning persisting Path A temporary transaction record:', persistErr.message);
+          }
 
           return NextResponse.json({
             success: true,

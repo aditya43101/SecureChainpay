@@ -145,7 +145,17 @@ export async function POST(
     // 5. Commit Reserved Funds & Credit Recipient via authoritative FundsService
     const committed = await FundsService.commitReservedFunds(transactionId);
 
-    const recipientWallet = tempTx?.recipientWallet;
+    let recipientWallet = tempTx?.recipientWallet;
+    if (!recipientWallet && contractAddress) {
+      try {
+        const readContract = getContract(contractAddress, SecureChainPaymentArtifact.abi, false);
+        const onChainPayment = await readContract.getPayment(ethers.id(transactionId)).catch(() => null);
+        if (onChainPayment && onChainPayment.recipient && onChainPayment.recipient !== ethers.ZeroAddress) {
+          recipientWallet = onChainPayment.recipient.toLowerCase();
+        }
+      } catch (_) {}
+    }
+
     if (recipientWallet) {
       await FundsService.creditRecipient({
         transactionId,
