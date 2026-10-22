@@ -55,13 +55,19 @@ export async function POST(request: Request) {
 
     const resolvedTxId = customTxId || `SC_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-    // 2. IDEMPOTENCY CHECK (§5)
-    // If request with same idempotencyKey or transactionId already exists, return existing state
-    const existingTemp = await prisma.temporaryTransaction.findFirst({
-      where: {
-        OR: [{ idempotencyKey }, { transactionId: resolvedTxId }],
-      },
-    });
+    let existingTemp: any = null;
+    try {
+      existingTemp = await Promise.race([
+        prisma.temporaryTransaction.findFirst({
+          where: {
+            OR: [{ idempotencyKey }, { transactionId: resolvedTxId }],
+          },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 2000)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /payments/initialize] Prisma idempotency check warning (DB offline):', e.message);
+    }
 
     if (existingTemp) {
       console.info(`[API /payments/initialize] Idempotent request hit for ${existingTemp.transactionId}. Returning current state.`);

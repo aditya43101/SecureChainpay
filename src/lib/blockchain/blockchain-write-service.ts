@@ -381,8 +381,8 @@ export class BlockchainWriteService {
         }
 
         let receiverBalances: any = null;
-        // Recipient Credit Rule: Only credit recipient spendable balance if on-chain commitment was confirmed!
-        if (receiverWalletRef && onChainTxHash) {
+        // Recipient Credit Rule: Credit recipient balance in Firestore (both on-chain confirmed and offline fallback modes)
+        if (receiverWalletRef) {
           const receiverWalletSnap = await transaction.get(receiverWalletRef);
           const data = receiverWalletSnap.exists ? receiverWalletSnap.data() : {};
           const existingBalances = data?.balances || { HSCT: 0, BTC: 0, ETH: 0 };

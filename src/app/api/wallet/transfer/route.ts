@@ -139,12 +139,30 @@ export async function POST(request: Request) {
     }
 
     // 2.5 Strict Pre-Transaction Funds Validation (Rule #3)
-    const fundsCheck = await FundsService.validateFunds({
-      walletAddress: authoritativeSenderAddress,
-      amount: transferAmount,
-      asset: currency,
-      recipientAddress: receiverAddress,
-    });
+    let fundsCheck: any = null;
+    try {
+      fundsCheck = await Promise.race([
+        FundsService.validateFunds({
+          walletAddress: authoritativeSenderAddress,
+          amount: transferAmount,
+          asset: currency,
+          recipientAddress: receiverAddress,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('FUNDS_VALIDATION_TIMEOUT')), 2500)),
+      ]);
+    } catch (fundsErr: any) {
+      console.warn('[API /api/wallet/transfer] FundsService validation warning (DB unreachable/timeout), validating against Firestore balance:', fundsErr.message);
+      const senderBalances = senderWalletData?.balances || { HSCT: 0 };
+      const currentSenderBal = Number(senderBalances[currency] ?? senderBalances.HSCT ?? 0);
+      fundsCheck = {
+        valid: currentSenderBal >= transferAmount,
+        code: currentSenderBal >= transferAmount ? 'VALID' : 'INSUFFICIENT_FUNDS',
+        error: currentSenderBal < transferAmount ? `Insufficient balance. Available: ${currentSenderBal} ${currency}` : undefined,
+        totalBalance: currentSenderBal,
+        availableBalance: currentSenderBal,
+        reservedBalance: 0,
+      };
+    }
 
     if (!fundsCheck.valid) {
       return NextResponse.json(

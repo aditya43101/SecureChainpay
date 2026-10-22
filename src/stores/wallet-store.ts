@@ -1358,37 +1358,144 @@ export const useWalletStore = create<WalletState>()(
 
         // 5. Fault-Tolerant Hybrid Orchestration: POST /api/payments/initialize
         console.log(`[SecureChain: Transfer] ⚡ Initializing payment via fault-tolerant orchestrator...`);
-        const initRes = await safeJsonFetch('/api/payments/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            transactionId: applicationTransactionId,
-            senderWallet,
-            recipientWallet: receiverAddress,
-            amount,
-            asset: currency,
-            idempotencyKey,
-            canonicalPayload: canonical,
-            signature: digitalSignature,
-          }),
-        });
-
-        if (!initRes.ok || !initRes.data?.success) {
-          throw new Error(initRes.data?.error || 'Payment initialization failed');
-        }
-
-        const initData = initRes.data;
-        let completedTx: Transaction;
-
-        if (initData.route === 'ON_CHAIN') {
-          // Healthy Node Path: Finalize payment on-chain
-          console.log(`[SecureChain: Transfer] ⛓ On-chain initialization confirmed. Finalizing payment...`);
-          const finalizeRes = await safeJsonFetch(`/api/payments/${encodeURIComponent(applicationTransactionId)}/finalize`, {
+        let initRes: any = null;
+        try {
+          initRes = await safeJsonFetch('/api/payments/initialize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transactionId: applicationTransactionId,
+              senderWallet,
+              recipientWallet: receiverAddress,
+              amount,
+              asset: currency,
+              idempotencyKey,
+              canonicalPayload: canonical,
+              signature: digitalSignature,
+            }),
+          });
+        } catch (initErr) {
+          console.warn('[SecureChain: Transfer] Payment orchestrator connection error:', initErr);
+        }
+
+        const idToken = await auth.currentUser?.getIdToken().catch(() => null);
+        let completedTx: Transaction;
+
+        if (initRes && initRes.ok && initRes.data?.success) {
+          const initData = initRes.data;
+          if (initData.route === 'ON_CHAIN') {
+            // Healthy Node Path: Finalize payment on-chain
+            console.log(`[SecureChain: Transfer] ⛓ On-chain initialization confirmed. Finalizing payment...`);
+            const finalizeRes = await safeJsonFetch(`/api/payments/${encodeURIComponent(applicationTransactionId)}/finalize`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            });
+
+            const finalizeData = finalizeRes.data;
+            completedTx = {
+              id: applicationTransactionId,
+              applicationTransactionId,
+              userId: uid,
+              sender: senderWallet,
+              receiver: receiverAddress,
+              amount,
+              currency,
+              asset: currency,
+              type: 'debit',
+              status: (finalizeData?.status as any) || 'FINALIZED',
+              date: serverTimeISO,
+              description: note || `Transfer of ${amount} ${currency} to ${receiverAddress}`,
+              idempotencyKey,
+              hash: finalizeData?.blockchainTxHash || initData.blockchainTxHash || `0x${Date.now().toString(16)}`,
+              previousHash: state.lastBlockHash || '0',
+              blockchainTransactionHash: finalizeData?.blockchainTxHash || initData.blockchainTxHash,
+              blockNumber: finalizeData?.blockNumber || initData.blockNumber || 1,
+              route: 'ON_CHAIN',
+              reservationStatus: 'FINALIZED',
+              confirmedAt: new Date().toISOString(),
+            };
+          } else {
+            // Unhealthy Node Path: Temporary Transaction queued durably, waiting for node recovery
+            console.log(`[SecureChain: Transfer] ⏳ Node unavailable. Created durable temporary transaction in execution queue.`);
+            completedTx = {
+              id: applicationTransactionId,
+              applicationTransactionId,
+              userId: uid,
+              sender: senderWallet,
+              receiver: receiverAddress,
+              amount,
+              currency,
+              asset: currency,
+              type: 'debit',
+              status: 'TEMP_PENDING',
+              date: serverTimeISO,
+              description: note || `Temporary Transfer (Waiting for Node Recovery): ${amount} ${currency}`,
+              idempotencyKey,
+              hash: `0x${Date.now().toString(16)}`,
+              previousHash: state.lastBlockHash || '0',
+              blockchainTransactionHash: null,
+              blockNumber: 0,
+              route: 'OFFCHAIN_TEMPORARY',
+              reservationStatus: 'OFFCHAIN_RESERVED',
+            };
+          }
+
+          // Background sync to Firestore ledger
+          safeJsonFetch('/api/wallet/transfer', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': uid,
+              ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+            },
+            body: JSON.stringify({
+              applicationTransactionId,
+              senderUid: uid,
+              senderAddress: senderWallet,
+              receiverUid,
+              receiverAddress,
+              receiverUsername,
+              receiverDisplayName,
+              amount,
+              currency,
+              canonicalPayload: canonical,
+              signature: digitalSignature,
+              idempotencyKey,
+              note,
+            }),
+          }).catch(() => null);
+        } else {
+          // Cloud Serverless Fallback: When PostgreSQL is unreachable (e.g. Vercel hosted DB pending)
+          console.warn('[SecureChain: Transfer] Orchestrator DB offline/timed out. Executing authoritative direct ledger transfer via /api/wallet/transfer...');
+          const transferRes = await safeJsonFetch('/api/wallet/transfer', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': uid,
+              ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+            },
+            body: JSON.stringify({
+              applicationTransactionId,
+              senderUid: uid,
+              senderAddress: senderWallet,
+              receiverUid,
+              receiverAddress,
+              receiverUsername,
+              receiverDisplayName,
+              amount,
+              currency,
+              canonicalPayload: canonical,
+              signature: digitalSignature,
+              idempotencyKey,
+              note,
+            }),
           });
 
-          const finalizeData = finalizeRes.data;
+          if (!transferRes.ok || !transferRes.data?.success) {
+            throw new Error(transferRes.data?.error || initRes?.data?.error || 'Transfer failed. Please check network and retry.');
+          }
+
+          const transferData = transferRes.data;
           completedTx = {
             id: applicationTransactionId,
             applicationTransactionId,
@@ -1399,69 +1506,19 @@ export const useWalletStore = create<WalletState>()(
             currency,
             asset: currency,
             type: 'debit',
-            status: (finalizeData?.status as any) || 'FINALIZED',
+            status: 'CONFIRMED',
             date: serverTimeISO,
             description: note || `Transfer of ${amount} ${currency} to ${receiverAddress}`,
             idempotencyKey,
-            hash: finalizeData?.blockchainTxHash || initData.blockchainTxHash || `0x${Date.now().toString(16)}`,
-            previousHash: state.lastBlockHash || '0',
-            blockchainTransactionHash: finalizeData?.blockchainTxHash || initData.blockchainTxHash,
-            blockNumber: finalizeData?.blockNumber || initData.blockNumber || 1,
-            route: 'ON_CHAIN',
+            hash: transferData.block?.hash || `0x${Date.now().toString(16)}`,
+            previousHash: transferData.block?.previousHash || state.lastBlockHash || '0',
+            blockchainTransactionHash: transferData.onChainTxHash || transferData.block?.onChainTxHash || null,
+            blockNumber: transferData.block?.blockNumber || 1,
+            route: 'OFFCHAIN_TEMPORARY',
             reservationStatus: 'FINALIZED',
             confirmedAt: new Date().toISOString(),
           };
-        } else {
-          // Unhealthy Node Path: Temporary Transaction queued durably, waiting for node recovery
-          console.log(`[SecureChain: Transfer] ⏳ Node unavailable. Created durable temporary transaction in execution queue.`);
-          completedTx = {
-            id: applicationTransactionId,
-            applicationTransactionId,
-            userId: uid,
-            sender: senderWallet,
-            receiver: receiverAddress,
-            amount,
-            currency,
-            asset: currency,
-            type: 'debit',
-            status: 'TEMP_PENDING',
-            date: serverTimeISO,
-            description: note || `Temporary Transfer (Waiting for Node Recovery): ${amount} ${currency}`,
-            idempotencyKey,
-            hash: `0x${Date.now().toString(16)}`,
-            previousHash: state.lastBlockHash || '0',
-            blockchainTransactionHash: null,
-            blockNumber: 0,
-            route: 'OFFCHAIN_TEMPORARY',
-            reservationStatus: 'OFFCHAIN_RESERVED',
-          };
         }
-
-        // Also notify legacy /api/wallet/transfer for Firestore user sync in the background
-        const idToken = await auth.currentUser?.getIdToken().catch(() => null);
-        safeJsonFetch('/api/wallet/transfer', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': uid,
-            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-          },
-          body: JSON.stringify({
-            applicationTransactionId,
-            senderUid: uid,
-            senderAddress: senderWallet,
-            receiverUid,
-            receiverAddress,
-            receiverUsername,
-            receiverDisplayName,
-            amount,
-            currency,
-            canonicalPayload: canonical,
-            signature: digitalSignature,
-            idempotencyKey,
-            note,
-          }),
-        }).catch(() => null);
 
         // Update local state and fetch detailed balances
         const remainingBalance = currentBalance - amount;

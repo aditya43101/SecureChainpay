@@ -87,22 +87,34 @@ export class FundsService {
   ): Promise<BalanceBreakdown> {
     const normalizedWallet = walletAddress.toLowerCase().trim();
 
-    // 1. Fetch base wallet from Prisma
-    const walletRecord = await prisma.wallet.findFirst({
-      where: { address: { equals: normalizedWallet, mode: 'insensitive' } },
-    });
+    // 1. Fetch base wallet from Prisma with fallback
+    let walletRecord: any = null;
+    let activeReservations: any[] = [];
+    try {
+      walletRecord = await Promise.race([
+        prisma.wallet.findFirst({
+          where: { address: { equals: normalizedWallet, mode: 'insensitive' } },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 2000)),
+      ]);
+
+      // 2. Fetch all active unexpired reservations
+      const now = new Date();
+      activeReservations = (await Promise.race([
+        prisma.reservation.findMany({
+          where: {
+            walletAddress: normalizedWallet,
+            status: 'ACTIVE',
+            expiresAt: { gt: now },
+          },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 2000)),
+      ])) as any[];
+    } catch (err: any) {
+      console.warn(`[FundsService] Prisma DB query timed out or failed for ${normalizedWallet}:`, err.message);
+    }
 
     const totalBalance = walletRecord ? Number(walletRecord.balance) : 10000;
-
-    // 2. Fetch all active unexpired reservations
-    const now = new Date();
-    const activeReservations = await prisma.reservation.findMany({
-      where: {
-        walletAddress: normalizedWallet,
-        status: 'ACTIVE',
-        expiresAt: { gt: now },
-      },
-    });
 
     let onchainLocked = 0;
     let offchainReserved = 0;
