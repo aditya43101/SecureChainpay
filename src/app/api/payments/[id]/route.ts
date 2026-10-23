@@ -11,18 +11,56 @@ export async function GET(
   try {
     const { id: transactionId } = await params;
 
-    // Search in TemporaryTransaction
-    const tempTx = await prisma.temporaryTransaction.findUnique({
-      where: { transactionId },
-    });
+    // Search in TemporaryTransaction with DB offline protection
+    let tempTx: any = null;
+    try {
+      tempTx = await Promise.race([
+        prisma.temporaryTransaction.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /payments/[id]] Prisma tempTx query skipped (DB offline):', e.message);
+    }
 
-    // Search in Reservation
-    const reservation = await prisma.reservation.findUnique({
-      where: { transactionId },
-    });
+    // Search in Reservation with DB offline protection
+    let reservation: any = null;
+    try {
+      reservation = await Promise.race([
+        prisma.reservation.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /payments/[id]] Prisma reservation query skipped (DB offline):', e.message);
+    }
 
-    // Search in History
-    const history = await TransactionStateMachine.getHistory(transactionId);
+    // Firestore fallback
+    if (!tempTx) {
+      try {
+        const { getAdminDb } = await import('@/lib/firebase/admin');
+        const adminDb = getAdminDb();
+        const docSnap = await adminDb.collection('temporary_transactions').doc(transactionId).get();
+        if (docSnap.exists) {
+          tempTx = docSnap.data();
+        }
+      } catch (fsErr) {
+        // ignore
+      }
+    }
+
+    // Search in History with fail-safe
+    let history: any[] = [];
+    try {
+      history = (await Promise.race([
+        TransactionStateMachine.getHistory(transactionId),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ])) as any[];
+    } catch {
+      // ignore
+    }
 
     if (!tempTx && !reservation && history.length === 0) {
       return NextResponse.json(

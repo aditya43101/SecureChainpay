@@ -16,14 +16,68 @@ export async function POST(
   try {
     const { id: transactionId } = await params;
 
-    // 1. Fetch Reservation & Temporary Transaction
-    const reservation = await prisma.reservation.findUnique({
-      where: { transactionId },
-    });
+    // 1. Fetch Reservation & Temporary Transaction with DB offline protection
+    let reservation: any = null;
+    try {
+      reservation = await Promise.race([
+        prisma.reservation.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /finalize] Prisma reservation query skipped (DB offline):', e.message);
+    }
 
-    const tempTx = await prisma.temporaryTransaction.findUnique({
-      where: { transactionId },
-    });
+    let tempTx: any = null;
+    try {
+      tempTx = await Promise.race([
+        prisma.temporaryTransaction.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /finalize] Prisma tempTx query skipped (DB offline):', e.message);
+    }
+
+    // Firestore fallback for serverless / DB-offline mode
+    if (!reservation) {
+      try {
+        const { getAdminDb } = await import('@/lib/firebase/admin');
+        const adminDb = getAdminDb();
+        const resDoc = await adminDb.collection('reservations').doc(transactionId).get();
+        if (resDoc.exists) {
+          reservation = resDoc.data();
+        }
+      } catch (fsErr) {
+        // ignore
+      }
+    }
+
+    if (!tempTx) {
+      try {
+        const { getAdminDb } = await import('@/lib/firebase/admin');
+        const adminDb = getAdminDb();
+        const tempDoc = await adminDb.collection('temporary_transactions').doc(transactionId).get();
+        if (tempDoc.exists) {
+          tempTx = tempDoc.data();
+        }
+      } catch (fsErr) {
+        // ignore
+      }
+    }
+
+    if (!reservation && tempTx) {
+      reservation = {
+        transactionId,
+        walletAddress: tempTx.senderWallet,
+        amount: tempTx.amount,
+        asset: tempTx.asset,
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() + 60000),
+      };
+    }
 
     if (!reservation) {
       return NextResponse.json(

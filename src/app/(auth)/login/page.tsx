@@ -9,6 +9,7 @@ import {
   signInWithPopup, 
   updateProfile, 
   signInAnonymously,
+  signInWithCustomToken,
   onAuthStateChanged 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -185,8 +186,28 @@ function LoginContent() {
     setIsLoading(true);
     setError(null);
     try {
-      const cred = await signInAnonymously(auth);
-      const testUsername = username || `dev_user_${Math.floor(1000 + Math.random() * 9000)}`;
+      let customToken = '';
+      try {
+        const res = await fetch('/api/auth/dev-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: 'TS9MJCioBBeuQ5RFHafERm1E6JY2' })
+        });
+        const data = await res.json();
+        if (data.success && data.customToken) {
+          customToken = data.customToken;
+        }
+      } catch (tokenErr) {
+        console.warn('dev-token fetch failed, trying anonymous fallback:', tokenErr);
+      }
+
+      let cred;
+      if (customToken) {
+        cred = await signInWithCustomToken(auth, customToken);
+      } else {
+        cred = await signInAnonymously(auth);
+      }
+      const testUsername = username || 'Aditya Singh';
       await handleAuthSuccess(cred.user, testUsername);
     } catch (devErr: any) {
       console.error('Dev login bypass error:', devErr);

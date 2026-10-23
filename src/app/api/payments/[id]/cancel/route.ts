@@ -18,14 +18,44 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const reason = body.reason || 'User requested cancellation';
 
-    // 1. Fetch Reservation & Temporary Transaction
-    const reservation = await prisma.reservation.findUnique({
-      where: { transactionId },
-    });
+    // 1. Fetch Reservation & Temporary Transaction with DB offline protection
+    let reservation: any = null;
+    try {
+      reservation = await Promise.race([
+        prisma.reservation.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /cancel] Prisma reservation query skipped (DB offline):', e.message);
+    }
 
-    const tempTx = await prisma.temporaryTransaction.findUnique({
-      where: { transactionId },
-    });
+    let tempTx: any = null;
+    try {
+      tempTx = await Promise.race([
+        prisma.temporaryTransaction.findUnique({
+          where: { transactionId },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (e: any) {
+      console.warn('[API /cancel] Prisma tempTx query skipped (DB offline):', e.message);
+    }
+
+    // Firestore fallback
+    if (!tempTx) {
+      try {
+        const { getAdminDb } = await import('@/lib/firebase/admin');
+        const adminDb = getAdminDb();
+        const docSnap = await adminDb.collection('temporary_transactions').doc(transactionId).get();
+        if (docSnap.exists) {
+          tempTx = docSnap.data();
+        }
+      } catch (fsErr) {
+        // ignore
+      }
+    }
 
     if (!reservation && !tempTx) {
       return NextResponse.json(

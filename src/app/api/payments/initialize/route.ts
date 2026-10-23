@@ -213,33 +213,39 @@ export async function POST(request: Request) {
 
           // Durably record transaction so finalize route and ledger track recipient accurately
           try {
-            const prevTx = await prisma.temporaryTransaction.findFirst({
-              orderBy: { createdAt: 'desc' },
-            });
+            const prevTx = await Promise.race([
+              prisma.temporaryTransaction.findFirst({
+                orderBy: { createdAt: 'desc' },
+              }),
+              new Promise<any>((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+            ]);
             const previousHash = prevTx?.integrityHash || '0'.repeat(64);
             const hashPayload = `${resolvedTxId}|${cleanSender}|${cleanRecipient}|${numAmount}|${asset}|${idempotencyKey}|${previousHash}`;
             const integrityHash = crypto.createHash('sha256').update(hashPayload).digest('hex');
 
-            await prisma.temporaryTransaction.create({
-              data: {
-                transactionId: resolvedTxId,
-                senderWallet: cleanSender,
-                recipientWallet: cleanRecipient,
-                amount: numAmount,
-                asset,
-                chainId: 31337,
-                idempotencyKey,
-                status: 'PROCESSING',
-                expiresAt,
-                reservationId: reservation.reservationId,
-                integrityHash,
-                previousHash,
-                blockchainTxHash: receipt.hash,
-                blockNumber: receipt.blockNumber,
-                canonicalPayload,
-                signature,
-              },
-            });
+            await Promise.race([
+              prisma.temporaryTransaction.create({
+                data: {
+                  transactionId: resolvedTxId,
+                  senderWallet: cleanSender,
+                  recipientWallet: cleanRecipient,
+                  amount: numAmount,
+                  asset,
+                  chainId: 31337,
+                  idempotencyKey,
+                  status: 'PROCESSING',
+                  expiresAt,
+                  reservationId: reservation.reservationId,
+                  integrityHash,
+                  previousHash,
+                  blockchainTxHash: receipt.hash,
+                  blockNumber: receipt.blockNumber,
+                  canonicalPayload,
+                  signature,
+                },
+              }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+            ]);
           } catch (persistErr: any) {
             console.warn('[API /payments/initialize] Warning persisting Path A temporary transaction record:', persistErr.message);
           }

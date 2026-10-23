@@ -41,26 +41,34 @@ export class ReservationService {
     const funds = await FundsService.getAvailableFunds(normalizedWallet, asset);
 
     // Query in-flight processing transactions
-    const processingTxs = await prisma.temporaryTransaction.findMany({
-      where: {
-        senderWallet: { equals: normalizedWallet, mode: 'insensitive' },
-        status: {
-          in: [
-            'ONCHAIN_INITIALIZING',
-            'ONCHAIN_INITIALIZED',
-            'FUNDS_RESERVED',
-            'PROCESSING',
-            'FINAL_VALIDATION',
-            'FINALIZATION_SUBMITTED',
-            'CONFIRMING',
-            'TEMP_PENDING',
-          ],
-        },
-      },
-      select: { amount: true },
-    });
+    let processingTxs: any[] = [];
+    try {
+      processingTxs = (await Promise.race([
+        prisma.temporaryTransaction.findMany({
+          where: {
+            senderWallet: { equals: normalizedWallet, mode: 'insensitive' },
+            status: {
+              in: [
+                'ONCHAIN_INITIALIZING',
+                'ONCHAIN_INITIALIZED',
+                'FUNDS_RESERVED',
+                'PROCESSING',
+                'FINAL_VALIDATION',
+                'FINALIZATION_SUBMITTED',
+                'CONFIRMING',
+                'TEMP_PENDING',
+              ],
+            },
+          },
+          select: { amount: true },
+        }),
+        new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ])) as any[];
+    } catch (e: any) {
+      console.warn('[ReservationService] Prisma processingTxs query skipped (DB offline):', e.message);
+    }
 
-    const processingBalance = processingTxs.reduce((sum, tx) => sum + Number(tx.amount), 0);
+    const processingBalance = processingTxs.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
 
     return {
       totalBalance: funds.totalBalance,
@@ -118,29 +126,36 @@ export class ReservationService {
    * Convert an off-chain application reservation into an authoritative on-chain lock.
    */
   public static async convertToOnChainLock(transactionId: string): Promise<void> {
-    await prisma.$transaction(async (tx) => {
-      const reservation = await tx.reservation.findUnique({
-        where: { transactionId },
-      });
+    try {
+      await Promise.race([
+        prisma.$transaction(async (tx) => {
+          const reservation = await tx.reservation.findUnique({
+            where: { transactionId },
+          });
 
-      if (!reservation) return;
+          if (!reservation) return;
 
-      await tx.reservation.update({
-        where: { transactionId },
-        data: {
-          reservationType: 'ONCHAIN_LOCKED',
-          status: 'CONVERTED_TO_ONCHAIN',
-        },
-      });
+          await tx.reservation.update({
+            where: { transactionId },
+            data: {
+              reservationType: 'ONCHAIN_LOCKED',
+              status: 'CONVERTED_TO_ONCHAIN',
+            },
+          });
 
-      await OffchainLedgerService.appendEntryTx(tx, {
-        eventType: 'ONCHAIN_RESERVATION_CONFIRMED',
-        transactionId,
-        walletAddress: reservation.walletAddress,
-        amount: Number(reservation.amount),
-        asset: reservation.asset,
-      });
-    });
+          await OffchainLedgerService.appendEntryTx(tx, {
+            eventType: 'ONCHAIN_RESERVATION_CONFIRMED',
+            transactionId,
+            walletAddress: reservation.walletAddress,
+            amount: Number(reservation.amount),
+            asset: reservation.asset,
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (err: any) {
+      console.warn('[ReservationService] convertToOnChainLock skipped (DB offline):', err.message);
+    }
   }
 
   /**

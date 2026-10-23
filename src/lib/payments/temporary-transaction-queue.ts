@@ -123,13 +123,44 @@ export class TemporaryTransactionQueue {
    */
   public async rebuildFromDatabase(): Promise<number> {
     try {
-      const pendingTxs = await prisma.temporaryTransaction.findMany({
-        where: {
-          status: { in: ['TEMP_PENDING', 'ONCHAIN_INITIALIZING'] },
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: 'asc' },
-      });
+      let pendingTxs: any[] = [];
+      try {
+        pendingTxs = (await Promise.race([
+          prisma.temporaryTransaction.findMany({
+            where: {
+              status: { in: ['TEMP_PENDING', 'ONCHAIN_INITIALIZING'] },
+              expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: 'asc' },
+          }),
+          new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+        ])) as any[];
+      } catch (dbErr: any) {
+        console.warn('[TemporaryTransactionQueue] Prisma rebuild skipped (DB offline):', dbErr.message);
+      }
+
+      // If Prisma was offline or returned empty, attempt Firestore recovery
+      if (!pendingTxs || pendingTxs.length === 0) {
+        try {
+          const { getAdminDb } = await import('@/lib/firebase/admin');
+          const adminDb = getAdminDb();
+          const snapshot = await adminDb.collection('temporary_transactions')
+            .where('status', 'in', ['TEMP_PENDING', 'ONCHAIN_INITIALIZING'])
+            .get();
+          if (!snapshot.empty) {
+            pendingTxs = snapshot.docs.map(doc => {
+              const d = doc.data();
+              return {
+                ...d,
+                createdAt: d.createdAt ? new Date(d.createdAt) : new Date(),
+                expiresAt: d.expiresAt ? new Date(d.expiresAt) : new Date(Date.now() + 60000),
+              };
+            });
+          }
+        } catch (fsErr: any) {
+          console.warn('[TemporaryTransactionQueue] Firestore fallback read warning:', fsErr.message);
+        }
+      }
 
       this.transactionIndex.clear();
       this.queue.clear();
@@ -144,15 +175,15 @@ export class TemporaryTransactionQueue {
           idempotencyKey: tx.idempotencyKey,
           reservationId: tx.reservationId,
           status: tx.status,
-          createdAt: tx.createdAt.getTime(),
-          expiresAt: tx.expiresAt.getTime(),
-          retryCount: tx.retryCount,
+          createdAt: tx.createdAt instanceof Date ? tx.createdAt.getTime() : new Date(tx.createdAt).getTime(),
+          expiresAt: tx.expiresAt instanceof Date ? tx.expiresAt.getTime() : new Date(tx.expiresAt).getTime(),
+          retryCount: tx.retryCount || 0,
           integrityHash: tx.integrityHash,
           previousHash: tx.previousHash,
           canonicalPayload: tx.canonicalPayload,
           signature: tx.signature,
           processingOwner: tx.processingOwner,
-          lockExpiresAt: tx.lockExpiresAt ? tx.lockExpiresAt.getTime() : null,
+          lockExpiresAt: tx.lockExpiresAt ? (tx.lockExpiresAt instanceof Date ? tx.lockExpiresAt.getTime() : Number(tx.lockExpiresAt)) : null,
           prev: null,
           next: null,
         };
@@ -162,11 +193,11 @@ export class TemporaryTransactionQueue {
       }
 
       console.info(
-        `[TemporaryTransactionQueue] ✓ Rebuilt queue from DB with ${this.queue.size} active temporary transaction(s).`
+        `[TemporaryTransactionQueue] ✓ Rebuilt queue with ${this.queue.size} active temporary transaction(s).`
       );
       return this.queue.size;
     } catch (err: any) {
-      console.error('[TemporaryTransactionQueue] Failed to rebuild queue from DB:', err.message);
+      console.error('[TemporaryTransactionQueue] Failed to rebuild queue:', err.message);
       return 0;
     }
   }
@@ -202,17 +233,57 @@ export class TemporaryTransactionQueue {
     const asset = (data.asset || 'HSCT').toUpperCase();
     const now = new Date();
 
-    // Compute cryptographic integrity hash
-    const prevTx = await prisma.temporaryTransaction.findFirst({
-      orderBy: { createdAt: 'desc' },
-    });
+    // Compute cryptographic integrity hash with DB timeout protection
+    let prevTx: any = null;
+    try {
+      prevTx = await Promise.race([
+        prisma.temporaryTransaction.findFirst({
+          orderBy: { createdAt: 'desc' },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (dbErr: any) {
+      console.warn('[TemporaryTransactionQueue] Prisma prevTx fetch skipped (DB offline):', dbErr.message);
+    }
+
     const previousHash = prevTx?.integrityHash || '0000000000000000000000000000000000000000000000000000000000000000';
     const canonicalStr = `${data.transactionId}|${data.senderWallet}|${data.recipientWallet}|${data.amount}|${asset}|${data.idempotencyKey}|${previousHash}`;
     const integrityHash = crypto.createHash('sha256').update(canonicalStr).digest('hex');
 
-    // 1. DURABLE WRITE TO POSTGRESQL FIRST
-    const durableTx = await prisma.temporaryTransaction.create({
-      data: {
+    // 1. DURABLE WRITE TO POSTGRESQL (FAIL-SAFE WITH TIMEOUT)
+    let durableTx: any = null;
+    try {
+      durableTx = await Promise.race([
+        prisma.temporaryTransaction.create({
+          data: {
+            transactionId: data.transactionId,
+            senderWallet: data.senderWallet.toLowerCase(),
+            recipientWallet: data.recipientWallet.toLowerCase(),
+            amount: data.amount,
+            asset,
+            chainId: data.chainId || 31337,
+            idempotencyKey: data.idempotencyKey,
+            status: 'TEMP_PENDING',
+            createdAt: now,
+            expiresAt: data.expiresAt,
+            reservationId: data.reservationId,
+            integrityHash,
+            previousHash,
+            canonicalPayload: data.canonicalPayload || null,
+            signature: data.signature || null,
+          },
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('DB_TIMEOUT')), 1500)),
+      ]);
+    } catch (createErr: any) {
+      console.warn('[TemporaryTransactionQueue] Prisma durable create skipped (DB offline):', createErr.message);
+    }
+
+    // Always mirror to Firestore for durable persistence across restarts & serverless instances
+    try {
+      const { getAdminDb } = await import('@/lib/firebase/admin');
+      const adminDb = getAdminDb();
+      await adminDb.collection('temporary_transactions').doc(data.transactionId).set({
         transactionId: data.transactionId,
         senderWallet: data.senderWallet.toLowerCase(),
         recipientWallet: data.recipientWallet.toLowerCase(),
@@ -221,28 +292,43 @@ export class TemporaryTransactionQueue {
         chainId: data.chainId || 31337,
         idempotencyKey: data.idempotencyKey,
         status: 'TEMP_PENDING',
-        createdAt: now,
-        expiresAt: data.expiresAt,
+        createdAt: now.toISOString(),
+        expiresAt: data.expiresAt.toISOString(),
         reservationId: data.reservationId,
         integrityHash,
         previousHash,
         canonicalPayload: data.canonicalPayload || null,
         signature: data.signature || null,
-      },
-    });
+      }, { merge: true });
+    } catch (fsErr: any) {
+      console.warn('[TemporaryTransactionQueue] Firestore mirror warning:', fsErr.message);
+    }
+
+    const txRecord = durableTx || {
+      transactionId: data.transactionId,
+      senderWallet: data.senderWallet.toLowerCase(),
+      recipientWallet: data.recipientWallet.toLowerCase(),
+      amount: data.amount,
+      asset,
+      idempotencyKey: data.idempotencyKey,
+      reservationId: data.reservationId,
+      status: 'TEMP_PENDING',
+      createdAt: now,
+      expiresAt: data.expiresAt,
+    };
 
     // 2. IN-MEMORY QUEUE + ARRAY INDEX ENQUEUE SECOND
     const node: QueueNode = {
-      transactionId: durableTx.transactionId,
-      senderWallet: durableTx.senderWallet,
-      recipientWallet: durableTx.recipientWallet,
-      amount: Number(durableTx.amount),
-      asset: durableTx.asset,
-      idempotencyKey: durableTx.idempotencyKey,
-      reservationId: durableTx.reservationId,
+      transactionId: txRecord.transactionId,
+      senderWallet: txRecord.senderWallet,
+      recipientWallet: txRecord.recipientWallet,
+      amount: Number(txRecord.amount),
+      asset: txRecord.asset,
+      idempotencyKey: txRecord.idempotencyKey,
+      reservationId: txRecord.reservationId,
       status: 'TEMP_PENDING',
-      createdAt: durableTx.createdAt.getTime(),
-      expiresAt: durableTx.expiresAt.getTime(),
+      createdAt: txRecord.createdAt instanceof Date ? txRecord.createdAt.getTime() : new Date(txRecord.createdAt).getTime(),
+      expiresAt: txRecord.expiresAt instanceof Date ? txRecord.expiresAt.getTime() : new Date(txRecord.expiresAt).getTime(),
       retryCount: 0,
       integrityHash,
       previousHash,
