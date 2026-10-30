@@ -15,13 +15,19 @@ export async function GET(request: Request) {
 
     const vehicles = getVehicles();
 
-    // If authenticated as non-admin, filter by user; otherwise return demo vehicles for inspection
-    let userVehicles = vehicles;
-    if (currentUser && currentUser.role !== 'ADMIN') {
-      const owned = vehicles.filter((v) => v.currentOwnerId === currentUser.id);
-      if (owned.length > 0) {
-        userVehicles = owned;
+    // If authenticated as non-admin, filter strictly by user ownership.
+    // If the user has 0 vehicles (e.g., clicked "Continue without vehicle" or "Skip for now"),
+    // return an empty array [] so the user sees their clean empty dashboard without demo vehicles.
+    let userVehicles: Vehicle[] = [];
+    if (currentUser) {
+      if (currentUser.role === 'ADMIN') {
+        userVehicles = vehicles;
+      } else {
+        userVehicles = vehicles.filter((v) => v.currentOwnerId === currentUser.id);
       }
+    } else {
+      // Unauthenticated guest previewing system
+      userVehicles = vehicles;
     }
 
     return NextResponse.json({

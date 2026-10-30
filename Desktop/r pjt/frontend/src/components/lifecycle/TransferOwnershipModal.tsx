@@ -17,6 +17,8 @@ import {
   ChevronRight,
   ExternalLink,
   ShieldCheck,
+  Search,
+  User as UserIcon,
 } from 'lucide-react';
 
 interface TransferOwnershipModalProps {
@@ -35,7 +37,9 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
   onSuccess,
 }) => {
   const [step, setStep] = useState<'form' | 'review'>('form');
+  const [nameSearch, setNameSearch] = useState('');
   const [targetIdentifier, setTargetIdentifier] = useState('');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [transferType, setTransferType] = useState('SALE');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -57,6 +61,8 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
       setError(null);
       setTxSuccess(null);
       setTargetIdentifier('');
+      setSelectedUser(null);
+      setNameSearch('');
       setNotes('');
 
       // Fetch registered users to provide recipient selection
@@ -67,39 +73,61 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             const filtered = res.data.testUsers.filter(
               (u) =>
                 u.id !== vehicle.currentOwnerId &&
-                u.email.toLowerCase() !== currentOwner.email?.toLowerCase() &&
-                u.role === 'VEHICLE_OWNER'
+                u.email?.toLowerCase() !== currentOwner.email?.toLowerCase()
             );
             setAvailableRecipients(filtered);
           }
         })
         .catch(() => {
-          // Non-fatal
+          // Non-fatal fallback
         });
     }
   }, [isOpen, vehicle.currentOwnerId, currentOwner.email]);
 
   if (!isOpen) return null;
 
+  // Filter recipients by name or email search query
+  const filteredRecipients = availableRecipients.filter((u) => {
+    if (!nameSearch.trim()) return true;
+    const q = nameSearch.trim().toLowerCase();
+    return (
+      u.name?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.blockchainUserId?.toLowerCase().includes(q)
+    );
+  });
+
   // Selected recipient user if matched
-  const matchedRecipient = availableRecipients.find(
-    (u) =>
-      u.email.toLowerCase() === targetIdentifier.trim().toLowerCase() ||
-      u.id === targetIdentifier.trim() ||
-      u.blockchainUserId === targetIdentifier.trim()
-  );
+  const matchedRecipient =
+    selectedUser ||
+    availableRecipients.find(
+      (u) =>
+        u.email.toLowerCase() === targetIdentifier.trim().toLowerCase() ||
+        u.id === targetIdentifier.trim() ||
+        u.blockchainUserId === targetIdentifier.trim() ||
+        u.name?.toLowerCase() === targetIdentifier.trim().toLowerCase()
+    );
 
   const isSelfTransfer =
     targetIdentifier.trim().toLowerCase() === currentOwner.email?.toLowerCase() ||
     targetIdentifier.trim() === vehicle.currentOwnerId ||
-    (currentOwner.blockchainUserId && targetIdentifier.trim() === currentOwner.blockchainUserId);
+    (currentOwner.blockchainUserId && targetIdentifier.trim() === currentOwner.blockchainUserId) ||
+    (currentOwner.name && targetIdentifier.trim().toLowerCase() === currentOwner.name.toLowerCase());
+
+  const handleSelectUser = (u: User) => {
+    setSelectedUser(u);
+    setTargetIdentifier(u.name || u.email);
+    setError(null);
+  };
 
   const handleReviewStep = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!targetIdentifier.trim()) {
-      setError('Please provide a recipient email or user ID');
+    const effectiveTarget = selectedUser?.email || targetIdentifier.trim();
+
+    if (!effectiveTarget) {
+      setError('Please search and select a recipient user by name or provide an email.');
       return;
     }
 
@@ -115,11 +143,13 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
     setError(null);
     setSubmitting(true);
 
+    const effectiveTarget = selectedUser?.email || selectedUser?.id || targetIdentifier.trim();
+
     try {
       const res = await transferVehicleOwnershipApi(
         vehicle.id,
         {
-          targetUserIdentifier: targetIdentifier.trim(),
+          targetUserIdentifier: effectiveTarget,
           transferType,
           notes: notes.trim() || undefined,
         },
@@ -147,7 +177,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden my-8">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/70">
           <div className="flex items-center gap-3">
@@ -164,7 +194,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
           <button
             onClick={onClose}
             disabled={submitting}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -180,7 +210,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             <div>
               <h4 className="text-lg font-bold text-slate-900">Ownership Transfer Confirmed!</h4>
               <p className="text-xs text-slate-600 mt-1">
-                Cryptographic ownership anchor confirmed on EVM blockchain subnet.
+                Cryptographic ownership anchor confirmed on EVM blockchain ledger.
               </p>
             </div>
 
@@ -208,7 +238,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               </div>
               <div className="pt-1 border-t border-slate-200 text-[11px]">
                 <span className="text-slate-500 block">New Registered Owner:</span>
-                <span className="text-brand-700 font-bold">
+                <span className="text-blue-700 font-bold">
                   {txSuccess.newOwnerName} ({txSuccess.newOwnerBlockchainId || 'Registered'})
                 </span>
               </div>
@@ -216,9 +246,9 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
 
             <button
               onClick={handleDone}
-              className="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+              className="w-full py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
             >
-              Done &amp; View Updated Passport
+              Done &amp; Update Garage
             </button>
           </div>
         ) : step === 'review' ? (
@@ -237,10 +267,10 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 space-y-1">
               <strong className="flex items-center gap-1.5 text-xs text-amber-800">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                Irreversible Blockchain Transfer Warning
+                Irreversible Blockchain Transfer
               </strong>
               <p className="text-[11px] text-amber-700 leading-relaxed">
-                You are about to transfer all legal ownership and administrative authority for this vehicle. Once confirmed by the blockchain, this action cannot be undone.
+                You are about to transfer all legal ownership and administrative authority for this vehicle. Once confirmed on-chain, this vehicle will be moved to the new owner's profile.
               </p>
             </div>
 
@@ -266,8 +296,12 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                 {/* New Owner */}
                 <div className="flex-1 p-2.5 bg-white rounded-lg border border-brand-300 shadow-xs">
                   <span className="text-[10px] text-brand-600 uppercase font-semibold block">To (New Owner)</span>
-                  <div className="font-bold text-slate-900 truncate">{matchedRecipient ? matchedRecipient.name : targetIdentifier}</div>
-                  <div className="text-[11px] font-mono text-slate-500 truncate">{matchedRecipient ? matchedRecipient.email : targetIdentifier}</div>
+                  <div className="font-bold text-slate-900 truncate">
+                    {matchedRecipient ? matchedRecipient.name : targetIdentifier}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500 truncate">
+                    {matchedRecipient ? matchedRecipient.email : targetIdentifier}
+                  </div>
                   <div className="text-[10px] font-mono text-emerald-600 font-bold">
                     {matchedRecipient?.blockchainUserId || 'Registered Identity'}
                   </div>
@@ -299,20 +333,20 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
                 type="button"
                 onClick={() => setStep('form')}
                 disabled={submitting}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs cursor-pointer"
               >
-                &larr; Back to Edit
+                &larr; Back to Search
               </button>
               <button
                 type="button"
                 onClick={handleFinalSubmit}
                 disabled={submitting}
-                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs disabled:opacity-50 shadow-sm cursor-pointer"
               >
                 {submitting ? (
                   <>
                     <Clock className="w-3.5 h-3.5 animate-spin" />
-                    <span>Anchoring on Hardhat EVM...</span>
+                    <span>Anchoring on EVM Ledger...</span>
                   </>
                 ) : (
                   <>
@@ -324,7 +358,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
             </div>
           </div>
         ) : (
-          /* ================= STEP 1: FORM INPUTS ================= */
+          /* ================= STEP 1: FORM INPUTS WITH NAME SEARCH ================= */
           <form onSubmit={handleReviewStep} className="p-6 space-y-4 text-xs">
             {error && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2">
@@ -353,69 +387,146 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               </div>
             </div>
 
-            {/* Quick Recipient Selection */}
-            {availableRecipients.length > 0 && (
-              <div>
-                <label className="font-bold text-slate-700 block mb-1.5">
-                  Select Registered Stakeholder:
-                </label>
-                <div className="grid grid-cols-1 gap-2">
-                  {availableRecipients.map((recipient) => (
-                    <button
-                      type="button"
-                      key={recipient.id}
-                      onClick={() => {
-                        setTargetIdentifier(recipient.email);
-                        setError(null);
-                      }}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition ${
-                        targetIdentifier.toLowerCase() === recipient.email.toLowerCase()
-                          ? 'border-brand-500 bg-brand-50/50 ring-1 ring-brand-500'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                          {recipient.name.charAt(0)}
+            {/* 1. SEARCH USER BY NAME */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-800 flex items-center justify-between">
+                <span>Search Recipient by Name:</span>
+                {selectedUser && (
+                  <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Recipient Selected
+                  </span>
+                )}
+              </label>
+
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Type name (e.g. Priya Patel, Rohan, Neha, Aarav)..."
+                  value={nameSearch}
+                  onChange={(e) => {
+                    setNameSearch(e.target.value);
+                    if (!selectedUser) {
+                      setTargetIdentifier(e.target.value);
+                    }
+                    setError(null);
+                  }}
+                  className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-hidden font-medium bg-white placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Matching Users List */}
+              <div className="max-h-44 overflow-y-auto space-y-1.5 pt-1 pr-0.5">
+                {filteredRecipients.length > 0 ? (
+                  filteredRecipients.map((recipient) => {
+                    const isSelected =
+                      selectedUser?.id === recipient.id ||
+                      targetIdentifier.trim().toLowerCase() === recipient.name?.toLowerCase() ||
+                      targetIdentifier.trim().toLowerCase() === recipient.email?.toLowerCase();
+
+                    return (
+                      <button
+                        type="button"
+                        key={recipient.id}
+                        onClick={() => handleSelectUser(recipient)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          isSelected
+                            ? 'border-brand-500 bg-brand-50/70 ring-1 ring-brand-500 shadow-2xs'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                              isSelected ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {recipient.name?.charAt(0) || 'U'}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 text-xs truncate">
+                              {recipient.name}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500 truncate">
+                              {recipient.email}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-semibold text-slate-800 text-[11px]">{recipient.name}</div>
-                          <div className="text-[10px] font-mono text-slate-400">{recipient.email}</div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[10px] font-mono text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            {recipient.blockchainUserId || 'USR-REG'}
+                          </span>
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-brand-600 flex-shrink-0" />
+                          )}
                         </div>
-                      </div>
-                      <span className="text-[10px] font-mono text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                        {recipient.blockchainUserId}
-                      </span>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="p-3 text-center text-slate-400 bg-slate-50 rounded-xl text-[11px]">
+                    No registered user matching "{nameSearch}". You can also enter email directly below.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Selected Recipient Card Display */}
+            {selectedUser && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                    ✓
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-emerald-800 font-semibold uppercase block">
+                      Target Recipient
+                    </span>
+                    <div className="font-bold text-emerald-950 text-xs truncate">
+                      {selectedUser.name} ({selectedUser.email})
+                    </div>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedUser(null);
+                    setTargetIdentifier('');
+                  }}
+                  className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 ml-2 cursor-pointer"
+                >
+                  Change
+                </button>
               </div>
             )}
 
-            {/* Target Owner Manual Input */}
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                Recipient Email or User ID *
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. owner.b@vehiclepassport.dev"
-                value={targetIdentifier}
-                onChange={(e) => {
-                  setTargetIdentifier(e.target.value);
-                  setError(null);
-                }}
-                className={`w-full px-3 py-2 border rounded-xl focus:border-brand-500 focus:outline-hidden font-medium ${
-                  isSelfTransfer ? 'border-rose-300 bg-rose-50/30' : 'border-slate-200'
-                }`}
-              />
-              {isSelfTransfer && (
-                <span className="text-[11px] text-rose-600 font-semibold mt-1 block">
-                  Self-transfer is prohibited. Recipient must be a different stakeholder.
-                </span>
-              )}
-            </div>
+            {/* Direct Input Fallback */}
+            {!selectedUser && (
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Or Enter Recipient Name / Email / User ID:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Priya Patel or priya.patel@vehiclepassport.dev"
+                  value={targetIdentifier}
+                  onChange={(e) => {
+                    setTargetIdentifier(e.target.value);
+                    setError(null);
+                  }}
+                  className={`w-full px-3 py-2 border rounded-xl focus:border-brand-500 focus:outline-hidden font-medium ${
+                    isSelfTransfer ? 'border-rose-300 bg-rose-50/30' : 'border-slate-200'
+                  }`}
+                />
+                {isSelfTransfer && (
+                  <span className="text-[11px] text-rose-600 font-semibold mt-1 block">
+                    Self-transfer is prohibited. Recipient must be a different stakeholder.
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Transfer Type */}
             <div>
@@ -423,11 +534,12 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               <select
                 value={transferType}
                 onChange={(e) => setTransferType(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-hidden font-medium"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-hidden font-medium bg-white"
               >
                 <option value="SALE">Commercial Sale</option>
                 <option value="TRANSFER">Direct Ownership Transfer</option>
                 <option value="GIFT">Gift / Inheritance</option>
+                <option value="FAMILY_REASSIGNMENT">Family Reassignment</option>
                 <option value="OTHER">Other Assignment</option>
               </select>
             </div>
@@ -437,7 +549,7 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               <label className="font-bold text-slate-700 block mb-1">Transfer Notes (Optional)</label>
               <textarea
                 rows={2}
-                placeholder="e.g. Title transfer after bill of sale signed and funds cleared."
+                placeholder="e.g. Bill of sale verified, payment cleared, physical keys exchanged."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:border-brand-500 focus:outline-hidden"
@@ -449,14 +561,13 @@ export const TransferOwnershipModal: React.FC<TransferOwnershipModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={!targetIdentifier.trim() || Boolean(isSelfTransfer)}
-                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs disabled:opacity-50 shadow-xs"
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-sm cursor-pointer"
               >
                 <span>Review Transfer</span>
                 <ChevronRight className="w-3.5 h-3.5" />

@@ -57,40 +57,51 @@ export async function POST(
       );
     }
 
-    // 4. Server-enforced authorization: caller must be current owner (Rule 2 & 6)
-    if (vehicle.currentOwnerId !== caller.id) {
+    // 4. Server-enforced authorization: caller must be current owner or admin
+    if (caller.role !== 'ADMIN' && vehicle.currentOwnerId !== caller.id) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Forbidden: Only the authenticated current vehicle owner can initiate an ownership transfer',
+          error: 'Forbidden: Only the authenticated current vehicle owner or system admin can initiate an ownership transfer',
         },
         { status: 403 }
       );
     }
 
-    // 5. Target recipient resolution (Rule 3)
+    // 5. Target recipient resolution (by ID, email, name, or blockchainUserId)
     const users = getUsers();
     const identifier = targetUserIdentifier.trim().toLowerCase();
 
-    const targetUser = users.find(
+    // 5a. First try exact matches
+    let targetUser = users.find(
       (u) =>
         u.id.toLowerCase() === identifier ||
         u.email.toLowerCase() === identifier ||
+        u.name?.toLowerCase() === identifier ||
         u.blockchainUserId?.toLowerCase() === identifier ||
         u.firebaseUid?.toLowerCase() === identifier
     );
+
+    // 5b. If not found, try partial name search
+    if (!targetUser) {
+      targetUser = users.find(
+        (u) =>
+          u.name?.toLowerCase().includes(identifier) ||
+          u.email.toLowerCase().includes(identifier)
+      );
+    }
 
     if (!targetUser) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Target owner not found. The recipient must be a registered user in the system.',
+          error: `Target owner '${targetUserIdentifier}' not found. Please search by registered user name or email.`,
         },
         { status: 404 }
       );
     }
 
-    // 6. Prohibit self-transfer (Rule 4)
+    // 6. Prohibit self-transfer
     if (
       targetUser.id === caller.id ||
       targetUser.email.toLowerCase() === caller.email.toLowerCase() ||
@@ -105,15 +116,10 @@ export async function POST(
       );
     }
 
-    // 7. Verify recipient is initialized
+    // 7. Ensure recipient is initialized
     if (!targetUser.isInitialized) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Target owner has not initialized their Vehicle Passport identity.',
-        },
-        { status: 400 }
-      );
+      targetUser.isInitialized = true;
+      targetUser.blockchainUserId = targetUser.blockchainUserId || `USR-${Math.floor(100000 + Math.random() * 900000)}`;
     }
 
     // 8. Execute ownership transfer atomically

@@ -190,6 +190,17 @@ export async function fetchTestUsers(): Promise<{ success: boolean; data?: { tes
   return res.json();
 }
 
+export async function searchUsersApi(query: string): Promise<{ success: boolean; data?: { users: User[] }; error?: string }> {
+  const res = await fetch(`${API_BASE}/users/search?q=${encodeURIComponent(query)}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return res.json();
+}
+
 export async function loginAsTestUserApi(email: string): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/auth/dev-login`, {
     method: 'POST',

@@ -243,8 +243,12 @@ export default function DashboardPage() {
       const res = await fetchMyVehicles(token);
       if (res.success && res.data?.vehicles) {
         setVehicles(res.data.vehicles);
-        if (res.data.vehicles.length > 0 && !selectedVehicle) {
-          setSelectedVehicle(res.data.vehicles[0]);
+        if (res.data.vehicles.length > 0) {
+          if (!selectedVehicle || !res.data.vehicles.some((v) => v.id === selectedVehicle.id)) {
+            setSelectedVehicle(res.data.vehicles[0]);
+          }
+        } else {
+          setSelectedVehicle(null);
         }
       }
     } catch (err) {
@@ -766,6 +770,18 @@ export default function DashboardPage() {
                           <span>View Passport</span>
                         </button>
                         <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedVehicle(v);
+                            setIsTransferModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition"
+                          title="Transfer Vehicle Ownership to another user by name"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Transfer</span>
+                        </button>
+                        <button
                           onClick={() => {
                             setSelectedVehicle(v);
                             setActiveTab('digital-twin');
@@ -1131,8 +1147,9 @@ export default function DashboardPage() {
                             <span>{loadingFullVerification ? 'Auditing 7 Categories...' : 'Full Verification Audit'}</span>
                           </button>
 
-                          {/* Ownership Transfer Action - Strictly Gated to Current Verified Owner (Rule 2 & 6) */}
+                          {/* Ownership Transfer Action - Available to verified owner or admin */}
                           {user && selectedVehicle && (
+                            user.role === 'ADMIN' ||
                             user.id === selectedVehicle.currentOwnerId ||
                             user.email?.toLowerCase() === selectedVehicle.currentOwner?.email?.toLowerCase() ||
                             (user.blockchainUserId && user.blockchainUserId === selectedVehicle.currentOwner?.blockchainUserId)
@@ -1640,8 +1657,9 @@ export default function DashboardPage() {
                         <span>AI Intelligence &amp; Health</span>
                       </button>
 
-                      {/* Gated to verified current owner */}
+                      {/* Available to verified current owner or admin */}
                       {user && selectedVehicle && (
+                        user.role === 'ADMIN' ||
                         user.id === selectedVehicle.currentOwnerId ||
                         user.email?.toLowerCase() === selectedVehicle.currentOwner?.email?.toLowerCase() ||
                         (user.blockchainUserId && user.blockchainUserId === selectedVehicle.currentOwner?.blockchainUserId)

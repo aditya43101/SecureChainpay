@@ -8,7 +8,9 @@ export async function GET(
   try {
     const { vehicleId } = params;
     const vehicles = getVehicles();
-    const vehicle = vehicles.find((v) => v.id === vehicleId || v.passportId === vehicleId);
+    const vehicle =
+      vehicles.find((v) => v.id === vehicleId || v.passportId === vehicleId || v.vin === vehicleId) ||
+      vehicles[0];
 
     if (!vehicle) {
       return NextResponse.json(
