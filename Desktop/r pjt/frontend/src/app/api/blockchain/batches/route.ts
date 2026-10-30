@@ -29,6 +29,15 @@ export async function GET(request: Request) {
     const startIndex = (page - 1) * limit;
     const paginatedBatches = allBatches.slice(startIndex, startIndex + limit);
 
+    // Compute stats across all batches
+    const confirmedBatches = MERKLE_BATCHES_DATA.batches.filter((b) => b.status === 'CONFIRMED').length;
+    const pendingBatches = MERKLE_BATCHES_DATA.batches.filter((b) => b.status === 'PENDING_CONFIRMATION').length;
+    const failedBatches = MERKLE_BATCHES_DATA.batches.filter((b) => b.status === 'FAILED').length;
+    const totalCommittedRecords = MERKLE_BATCHES_DATA.batches.reduce(
+      (sum, b) => sum + (b.leafCount || (b.records ? b.records.length : 0)),
+      0
+    );
+
     return NextResponse.json({
       success: true,
       data: {
@@ -37,6 +46,14 @@ export async function GET(request: Request) {
         page,
         limit,
         totalPages,
+        stats: {
+          totalBatches: MERKLE_BATCHES_DATA.batches.length,
+          confirmedBatches,
+          pendingBatches,
+          failedBatches,
+          totalCommittedRecords,
+          committedRecords: totalCommittedRecords,
+        },
       },
     });
   } catch (error: any) {
@@ -46,4 +63,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
