@@ -1,0 +1,85 @@
+{
+  "environment": {
+    "nodeEnv": "development",
+    "network": "Local Hardhat Development Network",
+    "chainId": 31337,
+    "rpcUrl": "http://127.0.0.1:8545",
+    "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "contractVersion": "VehiclePassport.sol (v6 - Merkle Batched)",
+    "timestamp": "2026-10-15T17:21:53.776Z"
+  },
+  "individualAnchoring": {
+    "recordCount": 10,
+    "totalGasUsed": 2252198,
+    "avgGasPerRecord": 225220,
+    "avgTxLatencyMs": 71,
+    "totalLatencyMs": 711
+  },
+  "batchAnchoring": [
+    {
+      "batchSize": 1,
+      "treeConstructionTimeMs": 0.64,
+      "proofGenerationTotalTimeMs": 0.64,
+      "proofVerificationTotalTimeMs": 0.05,
+      "avgProofGenerationTimeMs": 0.64,
+      "avgProofVerificationTimeMs": 0.05,
+      "transactionHash": "0x16120d6892d9a1900b0e6fd9e8b3cfcc424772e4d526d55ca9f65f2dcd8c2c90",
+      "blockNumber": 51,
+      "gasUsedTotal": 232960,
+      "gasPerRecord": 232960,
+      "onChainVerificationGas": 24390,
+      "txLatencyMs": 66,
+      "gasSavingsPercent": -3.44
+    },
+    {
+      "batchSize": 10,
+      "treeConstructionTimeMs": 1.6,
+      "proofGenerationTotalTimeMs": 1.6,
+      "proofVerificationTotalTimeMs": 0.46,
+      "avgProofGenerationTimeMs": 0.16,
+      "avgProofVerificationTimeMs": 0.046,
+      "transactionHash": "0xbab8f79bc7a68914d65d5145827edf1dd4ea834ca8cfcc30bcb55255a0a8cc66",
+      "blockNumber": 52,
+      "gasUsedTotal": 232960,
+      "gasPerRecord": 23296,
+      "onChainVerificationGas": 29540,
+      "txLatencyMs": 79,
+      "gasSavingsPercent": 89.66
+    },
+    {
+      "batchSize": 50,
+      "treeConstructionTimeMs": 3.77,
+      "proofGenerationTotalTimeMs": 3.77,
+      "proofVerificationTotalTimeMs": 3.08,
+      "avgProofGenerationTimeMs": 0.075,
+      "avgProofVerificationTimeMs": 0.062,
+      "transactionHash": "0x8e9029e44bd000045b26cfe6ff1f1fb6375747a730018ad2d213756f06000022",
+      "blockNumber": 53,
+      "gasUsedTotal": 232924,
+      "gasPerRecord": 4658,
+      "onChainVerificationGas": 32070,
+      "txLatencyMs": 66,
+      "gasSavingsPercent": 97.93
+    },
+    {
+      "batchSize": 100,
+      "treeConstructionTimeMs": 6.99,
+      "proofGenerationTotalTimeMs": 6.99,
+      "proofVerificationTotalTimeMs": 6.98,
+      "avgProofGenerationTimeMs": 0.07,
+      "avgProofVerificationTimeMs": 0.07,
+      "transactionHash": "0xbee8615a0749da487e86837943d69ac20cb09c667a4d99258e77371180739d0c",
+      "blockNumber": 54,
+      "gasUsedTotal": 232948,
+      "gasPerRecord": 2329,
+      "onChainVerificationGas": 33350,
+      "txLatencyMs": 63,
+      "gasSavingsPercent": 98.97
+    }
+  ],
+  "summary": {
+    "maxBatchTested": 100,
+    "peakGasSavingsPercent": 98.97,
+    "peakThroughputMultiplier": 100
+  }
+}

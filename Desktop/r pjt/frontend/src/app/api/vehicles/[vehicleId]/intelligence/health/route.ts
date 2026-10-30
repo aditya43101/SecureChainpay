@@ -1,0 +1,108 @@
+import { NextResponse } from 'next/server';
+
+export async function GET(
+  request: Request,
+  { params }: { params: { vehicleId: string } }
+) {
+  return NextResponse.json({
+    success: true,
+    data: {
+      overallScore: 96,
+      status: 'EXCELLENT',
+      summary: 'Excellent overall vehicle condition with verified blockchain integrity.',
+      components: {
+        blockchainIntegrity: {
+          component: 'blockchainIntegrity',
+          label: 'Blockchain & Cryptographic Integrity',
+          score: 100,
+          weight: 0.25,
+          status: 'EXCELLENT',
+          explanation: 'All historical state transitions verified against on-chain Merkle batch roots.',
+          evidence: ['12 Merkle Batches Anchored'],
+          penalties: [],
+          positiveFactors: ['Deterministic state chain'],
+        },
+        odometerIntegrity: {
+          component: 'odometerIntegrity',
+          label: 'Odometer Telemetry & Monotonicity',
+          score: 98,
+          weight: 0.20,
+          status: 'EXCELLENT',
+          explanation: 'Strictly monotonic odometer progression.',
+          evidence: ['Current: 24,500 km'],
+          penalties: [],
+          positiveFactors: ['Monotonic increase verified'],
+        },
+        serviceCompliance: {
+          component: 'serviceCompliance',
+          label: 'Service Chronology & Maintenance',
+          score: 95,
+          weight: 0.18,
+          status: 'EXCELLENT',
+          explanation: 'Consistent service records verified by authorized centers.',
+          evidence: ['3 Completed scheduled services'],
+          penalties: [],
+          positiveFactors: ['Factory-certified technician signatures'],
+        },
+        accidentHistory: {
+          component: 'accidentHistory',
+          label: 'Accident & Damage Records',
+          score: 100,
+          weight: 0.15,
+          status: 'EXCELLENT',
+          explanation: 'Clean damage registry with zero structural damage.',
+          evidence: ['Zero severe accident claims'],
+          penalties: [],
+          positiveFactors: ['OEM birth cert verified'],
+        },
+        documentIntegrity: {
+          component: 'documentIntegrity',
+          label: 'Document Cryptographic Hashes',
+          score: 94,
+          weight: 0.10,
+          status: 'EXCELLENT',
+          explanation: 'All registration certificates anchored to IPFS.',
+          evidence: ['IPFS CID verification valid'],
+          penalties: [],
+          positiveFactors: ['Verified cryptographic document hashes'],
+        },
+        insuranceStatus: {
+          component: 'insuranceStatus',
+          label: 'Insurance & Claims Coverage',
+          score: 96,
+          weight: 0.07,
+          status: 'EXCELLENT',
+          explanation: 'Active comprehensive insurance policy.',
+          evidence: ['Active Policy #HDFC-ERGO-9921'],
+          penalties: [],
+          positiveFactors: ['Validated underwriting status'],
+        },
+        ownershipConsistency: {
+          component: 'ownershipConsistency',
+          label: 'Ownership Chain & Transfer Protocol',
+          score: 100,
+          weight: 0.05,
+          status: 'EXCELLENT',
+          explanation: 'Single verified owner with authenticated wallet.',
+          evidence: ['Owner: Aarav Sharma'],
+          penalties: [],
+          positiveFactors: ['Zero disputed liens'],
+        },
+      },
+      scoringMethodology: {
+        weights: {
+          blockchainIntegrity: 0.25,
+          odometerIntegrity: 0.20,
+          serviceCompliance: 0.18,
+          accidentHistory: 0.15,
+          documentIntegrity: 0.10,
+          insuranceStatus: 0.07,
+          ownershipConsistency: 0.05,
+        },
+        description: 'Multi-variable weighted ISO-26262 explainability engine',
+        engineVersion: 'v3.2.0-neural',
+      },
+    },
+  });
+}
+

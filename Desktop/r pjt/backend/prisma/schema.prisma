@@ -1,0 +1,1166 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  VEHICLE_OWNER
+  GARAGE
+  MANUFACTURER
+  INSURANCE_PROVIDER
+  ADMIN
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  COMPLETED_WITH_VEHICLE
+  COMPLETED_WITHOUT_VEHICLE
+}
+
+enum VehicleStatus {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+  SCRAPPED
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  ELECTRIC
+  HYBRID
+  CNG
+  LPG
+}
+
+enum BlockchainStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum MerkleBatchStatus {
+  CREATED
+  BUILDING
+  READY
+  SUBMITTING
+  PENDING_CONFIRMATION
+  CONFIRMED
+  FAILED
+  RETRYABLE
+  RECONCILIATION_REQUIRED
+}
+
+enum OwnershipTransferType {
+  INITIAL_REGISTRATION
+  SALE
+  TRANSFER
+  GIFT
+  OTHER
+}
+
+enum OdometerSourceType {
+  SERVICE
+  INSPECTION
+  OWNER
+  GARAGE
+  MANUFACTURER
+  INSURANCE
+  ADMIN
+}
+
+enum VerificationStatus {
+  VERIFIED
+  SUSPICIOUS
+  PENDING
+  FAILED
+}
+
+enum AccidentSeverity {
+  MINOR
+  MODERATE
+  SEVERE
+  UNKNOWN
+}
+
+enum RepairStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  NOT_REQUIRED
+}
+
+enum InsurancePolicyStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  CLAIM_IN_PROGRESS
+}
+
+enum DocumentType {
+  REGISTRATION_CERTIFICATE
+  INSURANCE_POLICY
+  SERVICE_INVOICE
+  INSPECTION_REPORT
+  ACCIDENT_REPORT
+  REPAIR_INVOICE
+  OTHER
+}
+
+model User {
+  id                      String             @id @default(uuid())
+  firebaseUid             String             @unique
+  name                    String
+  email                   String             @unique
+  photoUrl                String?
+  role                    UserRole           @default(VEHICLE_OWNER)
+  isInitialized           Boolean            @default(false)
+  onboardingStatus        OnboardingStatus   @default(NOT_STARTED)
+
+  // Blockchain Identity (Phase 3)
+  blockchainUserId        String?            @unique // e.g. USR-000001
+  blockchainAddress       String?            // Associated wallet address
+  blockchainTxHash        String?            // Transaction confirming initialization
+  blockchainInitializedAt DateTime?
+
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  // 1 User -> Many Vehicles
+  vehicles                Vehicle[]          @relation("UserVehicles")
+  blockchainRecords       BlockchainRecord[] @relation("UserBlockchainRecords")
+
+  // Phase 4 Lifecycle Relations
+  transfersAsPreviousOwner OwnershipHistory[] @relation("PreviousOwnerTransfers")
+  transfersAsNewOwner      OwnershipHistory[] @relation("NewOwnerTransfers")
+  garageServices           ServiceRecord[]    @relation("GarageServiceRecords")
+  odometerReadings         OdometerRecord[]   @relation("UserOdometerRecords")
+  reportedAccidents        AccidentRecord[]   @relation("ReportedAccidents")
+  providedInsurances       InsuranceRecord[]  @relation("ProviderInsurances")
+  uploadedDocuments        VehicleDocument[]  @relation("UserUploadedDocuments")
+  auditLogs                AuditLog[]         @relation("UserAuditLogs")
+
+  // Phase 4 Ecosystem Relations
+  manufacturerCertificates ManufacturerCertificate[] @relation("ManufacturerIssuedCertificates")
+  garageProfile            GarageProfile?     @relation("UserGarageProfile")
+
+  // Phase 5 Privacy & Admin Case Relations
+  disclosureProfiles       DisclosureProfile[] @relation("UserDisclosureProfiles")
+  assignedCases            AdminCase[]         @relation("AdminAssignedCases")
+
+  // Phase 6 Merkle Batch Relations
+  createdBatches           MerkleBatch[]       @relation("UserMerkleBatches")
+
+  // Phase 7 Fraud Graph Relations
+  assignedFraudCases       InvestigationCase[] @relation("UserAssignedFraudCases")
+  reviewedFindings         FraudFinding[]      @relation("UserReviewedFindings")
+
+  // Phase 8 Autonomous Investigation Agent Relations
+  investigationRuns        InvestigationRun[]  @relation("UserInvestigationRuns")
+
+  // Phase 9 Privacy & ZKP Verification Relations
+  issuedPrivacyCredentials PrivacyCredential[] @relation("IssuerPrivacyCredentials")
+  zkpSessions              ZkpVerificationSession[] @relation("VerifierZkpSessions")
+
+  // Phase 10 Digital Twin Relations
+  twinScenarios            TwinScenarioRun[]       @relation("UserTwinScenarios")
+  twinReconciliations      TwinReconciliationRun[] @relation("UserTwinReconciliations")
+
+  @@index([firebaseUid])
+  @@index([email])
+  @@index([blockchainUserId])
+}
+
+model Vehicle {
+  id                     String             @id @default(uuid())
+  passportId             String             @unique // e.g. VP-000001
+  vin                    String             @unique // Normalized 17 alphanumeric chars
+  registrationNumber     String             @unique // Normalized uppercase
+  manufacturer           String
+  model                  String
+  variant                String?
+  manufacturingYear      Int
+  fuelType               FuelType
+  color                  String?
+  engineNumber           String?
+  status                 VehicleStatus      @default(ACTIVE)
+
+  // Current Owner relationship
+  currentOwnerId         String
+  currentOwner           User               @relation("UserVehicles", fields: [currentOwnerId], references: [id])
+
+  // Blockchain Anchoring (Phase 3)
+  blockchainVehicleId    String?            @unique // e.g. VEH-000001
+  blockchainTxHash       String?            // Transaction registering vehicle on-chain
+  blockNumber            Int?               // Block number containing transaction
+  recordHash             String?            // Canonical SHA-256 hash of vehicle record
+  blockchainStatus       BlockchainStatus   @default(PENDING)
+  blockchainRegisteredAt DateTime?
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  blockchainRecords      BlockchainRecord[] @relation("VehicleBlockchainRecords")
+
+  // Phase 4 Lifecycle Relations
+  ownershipHistory       OwnershipHistory[] @relation("VehicleOwnershipHistory")
+  serviceRecords         ServiceRecord[]    @relation("VehicleServiceRecords")
+  odometerRecords        OdometerRecord[]   @relation("VehicleOdometerRecords")
+  accidentRecords        AccidentRecord[]   @relation("VehicleAccidentRecords")
+  insuranceRecords       InsuranceRecord[]  @relation("VehicleInsuranceRecords")
+  documents              VehicleDocument[]  @relation("VehicleDocuments")
+  auditLogs              AuditLog[]         @relation("VehicleAuditLogs")
+  intelligenceSnapshots  VehicleIntelligenceSnapshot[] @relation("VehicleIntelligenceSnapshots")
+  digitalTwins           VehicleDigitalTwin[] @relation("VehicleDigitalTwins")
+
+  // Phase 4 Ecosystem Relations
+  manufacturerCertificate ManufacturerCertificate? @relation("VehicleManufacturerCertificate")
+  batteryPassport        BatteryPassport?        @relation("VehicleBatteryPassport")
+
+  // Phase 5 Privacy & Admin Case Relations
+  disclosureProfiles     DisclosureProfile[]     @relation("VehicleDisclosureProfiles")
+  adminCases             AdminCase[]             @relation("VehicleAdminCases")
+
+  // Phase 6 Merkle Batch Relations
+  batchRecords           MerkleBatchRecord[]     @relation("VehicleMerkleBatchRecords")
+
+  // Phase 8 Autonomous Investigation Agent Relations
+  investigationRuns      InvestigationRun[]      @relation("VehicleInvestigationRuns")
+
+  // Phase 9 Privacy & ZKP Verification Relations
+  privacyCredentials     PrivacyCredential[]     @relation("VehiclePrivacyCredentials")
+  zkpSessions            ZkpVerificationSession[] @relation("VehicleZkpSessions")
+  privacyDisclosureLogs  PrivacyDisclosureLog[]  @relation("VehiclePrivacyDisclosureLogs")
+
+  // Phase 10 Autonomous Digital Vehicle Twin Relations
+  twinEvents             VehicleTwinEvent[]      @relation("VehicleTwinEvents")
+  twinScenarios          TwinScenarioRun[]       @relation("VehicleTwinScenarios")
+  twinReconciliations    TwinReconciliationRun[] @relation("VehicleTwinReconciliations")
+
+  @@index([passportId])
+  @@index([vin])
+  @@index([registrationNumber])
+  @@index([currentOwnerId])
+  @@index([blockchainVehicleId])
+  @@index([createdAt])
+}
+
+model BlockchainRecord {
+  id                String           @id @default(uuid())
+  vehicleId         String?
+  vehicle           Vehicle?         @relation("VehicleBlockchainRecords", fields: [vehicleId], references: [id])
+  userId            String?
+  user              User?            @relation("UserBlockchainRecords", fields: [userId], references: [id])
+  recordType        String           // VEHICLE_CREATED, USER_INITIALIZED, SERVICE, etc.
+  recordHash        String           // Cryptographic hash anchored on-chain
+  blockchainTxHash  String
+  blockNumber       Int
+  blockchainNetwork String           @default("hardhat-local")
+  status            BlockchainStatus @default(CONFIRMED)
+  createdAt         DateTime         @default(now())
+  confirmedAt       DateTime?
+
+  // Phase 6 Batch Anchoring Attributes
+  anchoringMode     String           @default("INDIVIDUAL") // "INDIVIDUAL" | "BATCH"
+  batchId           String?
+  merkleRoot        String?
+  leafHash          String?
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([recordType])
+  @@index([blockchainTxHash])
+  @@index([blockNumber])
+  @@index([createdAt])
+}
+
+model OwnershipHistory {
+  id                 String                @id @default(uuid())
+  vehicleId          String
+  vehicle            Vehicle               @relation("VehicleOwnershipHistory", fields: [vehicleId], references: [id], onDelete: Cascade)
+  previousOwnerId    String?
+  previousOwner      User?                 @relation("PreviousOwnerTransfers", fields: [previousOwnerId], references: [id])
+  newOwnerId         String
+  newOwner           User                  @relation("NewOwnerTransfers", fields: [newOwnerId], references: [id])
+  transferType       OwnershipTransferType @default(SALE)
+  transferDate       DateTime              @default(now())
+  notes              String?
+  recordHash         String                // SHA-256 canonical hash
+  blockchainRecordId String?               // e.g. REC-XXXXXX
+  blockchainTxHash   String?
+  blockNumber        Int?
+  status             BlockchainStatus      @default(CONFIRMED)
+  createdAt          DateTime              @default(now())
+
+  @@index([vehicleId])
+  @@index([previousOwnerId])
+  @@index([newOwnerId])
+  @@index([transferDate])
+}
+
+model ServiceRecord {
+  id                 String           @id @default(uuid())
+  vehicleId          String
+  vehicle            Vehicle          @relation("VehicleServiceRecords", fields: [vehicleId], references: [id], onDelete: Cascade)
+  garageId           String
+  garage             User             @relation("GarageServiceRecords", fields: [garageId], references: [id])
+  serviceDate        DateTime
+  mileage            Int
+  serviceType        String           // Periodic Maintenance, Brake Service, Battery, etc.
+  description        String
+  partsReplaced      String?          // Comma-separated or JSON list of parts
+  laborDescription   String?
+  cost               Float?
+  technician         String?
+  notes              String?
+  recordHash         String           // SHA-256 canonical hash
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  status             BlockchainStatus @default(CONFIRMED)
+  createdAt          DateTime         @default(now())
+
+  @@index([vehicleId])
+  @@index([garageId])
+  @@index([serviceDate])
+}
+
+model OdometerRecord {
+  id                 String             @id @default(uuid())
+  vehicleId          String
+  vehicle            Vehicle            @relation("VehicleOdometerRecords", fields: [vehicleId], references: [id], onDelete: Cascade)
+  mileage            Int
+  recordedAt         DateTime           @default(now())
+  sourceType         OdometerSourceType @default(OWNER)
+  sourceUserId       String
+  sourceUser         User               @relation("UserOdometerRecords", fields: [sourceUserId], references: [id])
+  notes              String?
+  verificationStatus VerificationStatus @default(VERIFIED)
+  rollbackDetected   Boolean            @default(false)
+  recordHash         String             // SHA-256 canonical hash
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  status             BlockchainStatus   @default(CONFIRMED)
+  createdAt          DateTime           @default(now())
+
+  @@index([vehicleId])
+  @@index([recordedAt])
+  @@index([verificationStatus])
+}
+
+model AccidentRecord {
+  id                  String           @id @default(uuid())
+  vehicleId           String
+  vehicle             Vehicle          @relation("VehicleAccidentRecords", fields: [vehicleId], references: [id], onDelete: Cascade)
+  reportedById        String
+  reportedBy          User             @relation("ReportedAccidents", fields: [reportedById], references: [id])
+  accidentDate        DateTime
+  severity            AccidentSeverity @default(MINOR)
+  description         String
+  damagedParts        String?
+  locationDescription String?
+  insuranceClaimId    String?
+  repairStatus        RepairStatus     @default(PENDING)
+  repairDescription   String?
+  repairedAt          DateTime?
+  recordHash          String           // SHA-256 canonical hash
+  blockchainRecordId  String?
+  blockchainTxHash    String?
+  blockNumber         Int?
+  status              BlockchainStatus @default(CONFIRMED)
+  createdAt           DateTime         @default(now())
+
+  // Phase 4 Insurance Claim Linkage
+  insuranceClaims     InsuranceClaimRecord[] @relation("AccidentInsuranceClaims")
+
+  @@index([vehicleId])
+  @@index([accidentDate])
+  @@index([severity])
+}
+
+model InsuranceRecord {
+  id                 String                @id @default(uuid())
+  vehicleId          String
+  vehicle            Vehicle               @relation("VehicleInsuranceRecords", fields: [vehicleId], references: [id], onDelete: Cascade)
+  providerId         String
+  provider           User                  @relation("ProviderInsurances", fields: [providerId], references: [id])
+  policyReference    String
+  startDate          DateTime
+  endDate            DateTime
+  status             InsurancePolicyStatus @default(ACTIVE)
+  claimReference     String?
+  coverageType       String                @default("Comprehensive")
+  notes              String?
+  recordHash         String                // SHA-256 canonical hash
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  blockchainStatus   BlockchainStatus      @default(CONFIRMED)
+  createdAt          DateTime              @default(now())
+
+  // Phase 4 Claim Relations
+  claims             InsuranceClaimRecord[] @relation("PolicyInsuranceClaims")
+
+  @@index([vehicleId])
+  @@index([providerId])
+  @@index([policyReference])
+  @@index([status])
+}
+
+model VehicleDocument {
+  id                 String           @id @default(uuid())
+  vehicleId          String
+  vehicle            Vehicle          @relation("VehicleDocuments", fields: [vehicleId], references: [id], onDelete: Cascade)
+  uploadedById       String
+  uploadedBy         User             @relation("UserUploadedDocuments", fields: [uploadedById], references: [id])
+  documentType       DocumentType     @default(REGISTRATION_CERTIFICATE)
+  title              String
+  fileUrl            String
+  fileName           String
+  fileSize           Int
+  mimeType           String
+  fileHash           String           // SHA-256 of the document content
+  recordHash         String           // SHA-256 canonical record proof
+  ipfsCid            String?          // IPFS CID (decentralized storage proof)
+  storageProvider    String           @default("local") // "local" | "ipfs" | "filecoin"
+  ocrStatus          String           @default("UNPROCESSED") // UNPROCESSED, PROCESSING, COMPLETED, FAILED
+  extractedData      String?          // Extracted OCR JSON payload
+  consistencyStatus  String           @default("UNVERIFIED") // CONSISTENT, INCONSISTENT, PARTIAL, UNVERIFIED
+  consistencyDetails String?          // Field-by-field consistency audit report JSON
+  isPublic           Boolean          @default(true) // Whether metadata proof is visible in public verification report
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  status             BlockchainStatus @default(CONFIRMED)
+  createdAt          DateTime         @default(now())
+
+  @@index([vehicleId])
+  @@index([uploadedById])
+  @@index([documentType])
+  @@index([ipfsCid])
+  @@index([consistencyStatus])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  status    String   @default("SUCCESS") // SUCCESS, FAILED, WARNING
+  vehicleId String?
+  vehicle   Vehicle? @relation("VehicleAuditLogs", fields: [vehicleId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?    @relation("UserAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([action])
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model VehicleIntelligenceSnapshot {
+  id               String   @id @default(uuid())
+  vehicleId        String
+  vehicle          Vehicle  @relation("VehicleIntelligenceSnapshots", fields: [vehicleId], references: [id], onDelete: Cascade)
+  healthScore      Int      // 0 - 100
+  healthStatus     String   // EXCELLENT, GOOD, FAIR, POOR
+  riskLevel        String   // LOW, MEDIUM, HIGH, CRITICAL
+  riskScore        Int      // 0 - 100
+  anomalyCount     Int      @default(0)
+  integrityStatus  String   // VERIFIED, SUSPICIOUS, TAMPERED
+  engineVersion    String   @default("v1.0.0")
+  ruleVersion      String   @default("v1.0.0")
+  fullReportJson   String   // Complete structured JSON payload
+  status           String   @default("CURRENT") // CURRENT, SUPERSEDED
+  calculatedAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([healthScore])
+  @@index([riskLevel])
+  @@index([calculatedAt])
+}
+
+model VehicleDigitalTwin {
+  id                         String   @id @default(uuid())
+  vehicleId                  String
+  vehicle                    Vehicle  @relation("VehicleDigitalTwins", fields: [vehicleId], references: [id], onDelete: Cascade)
+  currentState               String   // OPERATIONAL, MAINTENANCE_DUE, REPAIRED, SUSPICIOUS, ATTENTION_REQUIRED
+  lifecycleState             String   // ACTIVE, TRANSFERRED, SCRAPPED
+  currentOdometer            Int      // Last verified odometer reading in km
+  lastKnownOdometerDate      DateTime?
+  healthScore                Int      // 0 - 100
+  riskScore                  Int      // 0 - 100
+  riskLevel                  String   // LOW, MEDIUM, HIGH, CRITICAL
+  verificationStatus         String   // VERIFIED, SUSPICIOUS, TAMPERED
+  ownershipCount             Int      @default(1)
+  serviceCount               Int      @default(0)
+  accidentCount              Int      @default(0)
+  insuranceStatus            String   // ACTIVE, EXPIRED, LAPSED, NONE
+  documentVerificationStatus  String   // VERIFIED, PARTIAL, INCONSISTENT, UNVERIFIED
+  blockchainIntegrityStatus  String   // ANCHORED_VERIFIED, PENDING, TAMPER_DETECTED
+  twinSnapshotJson           String   // Complete structured digital twin payload
+  lastUpdatedAt              DateTime @default(now())
+  createdAt                  DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([healthScore])
+  @@index([riskLevel])
+  @@index([lastUpdatedAt])
+}
+
+// ============================================================================
+// PHASE 4: INDUSTRY + EV ECOSYSTEM INTELLIGENCE MODELS
+// ============================================================================
+
+model ManufacturerCertificate {
+  id                    String           @id @default(uuid())
+  vehicleId             String           @unique
+  vehicle               Vehicle          @relation("VehicleManufacturerCertificate", fields: [vehicleId], references: [id], onDelete: Cascade)
+  manufacturerId        String
+  manufacturer          User             @relation("ManufacturerIssuedCertificates", fields: [manufacturerId], references: [id])
+  certificateNumber     String           @unique // e.g. MBC-VP000001-2024
+  manufacturingPlant    String?          // e.g. Pune Plant Alpha, Fremont Gigafactory
+  manufacturingDate     DateTime
+  initialOdometer       Int              @default(0)
+  specificationSnapshot String           // JSON payload containing initial factory build specs
+  recordHash            String           // SHA-256 canonical hash
+  blockchainRecordId    String?
+  blockchainTxHash      String?
+  blockNumber           Int?
+  status                BlockchainStatus @default(CONFIRMED)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([vehicleId])
+  @@index([manufacturerId])
+  @@index([certificateNumber])
+  @@index([manufacturingDate])
+}
+
+model BatteryPassport {
+  id                 String                  @id @default(uuid())
+  vehicleId          String                  @unique
+  vehicle            Vehicle                 @relation("VehicleBatteryPassport", fields: [vehicleId], references: [id], onDelete: Cascade)
+  batterySerial      String                  @unique // e.g. BAT-TATA-NEXON-2024-001
+  chemistry          String                  // LFP, NMC, NCA, Solid-State
+  nominalCapacityKwh Float                   // Original rated capacity in kWh
+  currentCapacityKwh Float                   // Current measured/estimated capacity in kWh
+  sohPercentage      Float                   // State-of-Health percentage (0 - 100)
+  cycleCount         Int                     @default(0)
+  manufactureDate    DateTime
+  installationDate   DateTime
+  warrantyExpiryDate DateTime?
+  isOriginal         Boolean                 @default(true)
+  status             String                  @default("ACTIVE") // ACTIVE, REPLACED, DECOMMISSIONED
+  recordHash         String                  // SHA-256 canonical hash
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  events             BatteryLifecycleEvent[] @relation("BatteryPassportEvents")
+
+  @@index([vehicleId])
+  @@index([batterySerial])
+  @@index([chemistry])
+}
+
+model BatteryLifecycleEvent {
+  id                 String             @id @default(uuid())
+  batteryPassportId  String
+  batteryPassport    BatteryPassport    @relation("BatteryPassportEvents", fields: [batteryPassportId], references: [id], onDelete: Cascade)
+  eventType          String             // BATTERY_INSTALLED, BATTERY_INSPECTED, BATTERY_SERVICED, BATTERY_REPAIRED, BATTERY_REPLACED, BATTERY_DECOMMISSIONED
+  eventDate          DateTime           @default(now())
+  recordedBy         String             // Technician / Manufacturer / Inspector identity
+  capacityKwh        Float?             // Capacity measured during event
+  sohPercentage      Float?             // SoH measured during event
+  cycleCount         Int?               // Charge cycles at event time
+  description        String
+  verificationStatus VerificationStatus @default(VERIFIED)
+  evidenceRef        String?            // Diagnostic report ID, calibration certificate
+  recordHash         String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  createdAt          DateTime           @default(now())
+
+  @@index([batteryPassportId])
+  @@index([eventType])
+  @@index([eventDate])
+}
+
+model InsuranceClaimRecord {
+  id                 String           @id @default(uuid())
+  insuranceRecordId  String
+  insuranceRecord    InsuranceRecord  @relation("PolicyInsuranceClaims", fields: [insuranceRecordId], references: [id], onDelete: Cascade)
+  accidentRecordId   String?
+  accidentRecord     AccidentRecord?  @relation("AccidentInsuranceClaims", fields: [accidentRecordId], references: [id], onDelete: SetNull)
+  claimNumber        String           @unique // e.g. CLM-2025-0814-01
+  claimDate          DateTime
+  claimAmount        Float?
+  approvedAmount     Float?
+  claimStatus        String           @default("SUBMITTED") // SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, SETTLED
+  description        String
+  payoutDate         DateTime?
+  recordHash         String           // SHA-256 canonical hash
+  blockchainRecordId String?
+  blockchainTxHash   String?
+  blockNumber        Int?
+  createdAt          DateTime         @default(now())
+
+  @@index([insuranceRecordId])
+  @@index([accidentRecordId])
+  @@index([claimNumber])
+  @@index([claimStatus])
+}
+
+model GarageProfile {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation("UserGarageProfile", fields: [userId], references: [id], onDelete: Cascade)
+  businessName          String
+  licenseNumber         String?
+  verificationStatus    String   @default("VERIFIED") // VERIFIED, PENDING_VERIFICATION, UNVERIFIED, SUSPENDED
+  accreditations        String?  // e.g. Apex Certified, OEM Approved Partner, Bosch Network
+  specialties           String?  // e.g. EV Powertrain, Periodic Maintenance, Structural Repairs
+  contactPhone          String?
+  address               String?
+  verifiedServicesCount Int      @default(0)
+  anchoredServicesCount Int      @default(0)
+  anomalyCount          Int      @default(0)
+  trustIndex            Float    @default(100.0) // Factual trust index
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+  @@index([verificationStatus])
+}
+
+model DisclosureProfile {
+  id             String    @id @default(uuid())
+  vehicleId      String
+  vehicle        Vehicle   @relation("VehicleDisclosureProfiles", fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User      @relation("UserDisclosureProfiles", fields: [createdById], references: [id], onDelete: Cascade)
+  shareId        String    @unique // e.g. sh_9f81a7b6c5d4
+  title          String?
+  categories     String    // JSON string array e.g. ["vehicleIdentity", "odometer", "service"]
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  status         String    @default("ACTIVE") // ACTIVE, EXPIRED, REVOKED
+  accessCount    Int       @default(0)
+  lastAccessedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([vehicleId])
+  @@index([shareId])
+  @@index([createdById])
+  @@index([status])
+}
+
+model AdminCase {
+  id              String    @id @default(uuid())
+  caseNumber      String    @unique // e.g. CASE-2026-0001
+  vehicleId       String?
+  vehicle         Vehicle?  @relation("VehicleAdminCases", fields: [vehicleId], references: [id], onDelete: SetNull)
+  category        String    // TAMPER_DETECTION, ODOMETER_ANOMALY, DOCUMENT_MISMATCH, BLOCKCHAIN_MISMATCH, SUSPICIOUS_RECORD
+  title           String
+  description     String
+  severity        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status          String    @default("OPEN") // OPEN, UNDER_REVIEW, RESOLVED, DISMISSED
+  evidence        String?   // JSON structured evidence
+  assignedToId    String?
+  assignedTo      User?     @relation("AdminAssignedCases", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolutionNotes String?
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([vehicleId])
+  @@index([category])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// PHASE 6: MERKLE TREE & BATCH BLOCKCHAIN ANCHORING MODELS
+// ============================================================================
+
+model MerkleBatch {
+  id                   String             @id @default(uuid())
+  batchIdentifier      String             @unique // e.g. BATCH-2026-000001
+  batchIdHex           String             @unique // bytes32 hex string e.g. 0x...
+  merkleRoot           String             // 32-byte hex 0x...
+  leafCount            Int
+  algorithmVersion     String             @default("1")
+  hashAlgorithm        String             @default("KECCAK256_INTERNAL_SHA256_RECORD")
+  leafEncodingVersion  String             @default("LEAF_V1_ABI_ENCODE")
+  oddNodeConvention    String             @default("PROMOTE_UNCHANGED")
+  status               MerkleBatchStatus  @default(CREATED)
+  networkChainId       Int                @default(31337)
+  contractAddress      String?
+  transactionHash      String?
+  blockNumber          Int?
+  blockHash            String?
+  metadataHash         String?
+  submittedAt          DateTime?
+  confirmedAt          DateTime?
+  failedAt             DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+  retryCount           Int                @default(0)
+  createdByUserId      String?
+  createdByUser        User?              @relation("UserMerkleBatches", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  records              MerkleBatchRecord[] @relation("BatchRecords")
+
+  @@index([status])
+  @@index([batchIdentifier])
+  @@index([merkleRoot])
+  @@index([transactionHash])
+  @@index([createdAt])
+}
+
+model MerkleBatchRecord {
+  id                 String           @id @default(uuid())
+  batchId            String
+  batch              MerkleBatch      @relation("BatchRecords", fields: [batchId], references: [id], onDelete: Cascade)
+  recordId           String           // Authoritative record ID (e.g. REC-XXXXXX or UUID)
+  recordType         String           // SERVICE, ODOMETER, ACCIDENT, INSURANCE, DOCUMENT, etc.
+  vehicleId          String?
+  vehicle            Vehicle?         @relation("VehicleMerkleBatchRecords", fields: [vehicleId], references: [id], onDelete: SetNull)
+  recordHashSnapshot String           // The canonical SHA-256 hash snapshot at batch time
+  leafHash           String           // The domain-separated Keccak-256 leaf hash
+  leafIndex          Int              // Deterministic leaf index in sorted tree
+  proof              String           // JSON string array of 32-byte hex siblings
+  createdAt          DateTime         @default(now())
+
+  @@unique([batchId, recordId])
+  @@unique([batchId, leafIndex])
+  @@index([batchId])
+  @@index([recordId])
+  @@index([recordType])
+  @@index([vehicleId])
+  @@index([leafHash])
+}
+
+// ============================================================================
+// PHASE 7: FRAUD INTELLIGENCE GRAPH MODELS
+// ============================================================================
+
+model GraphNode {
+  id               String      @id @default(uuid())
+  nodeKey          String      @unique // e.g. "VEHICLE:07dfb0da-..." or "GARAGE:..."
+  entityType       String      // VEHICLE, USER, GARAGE, MANUFACTURER, INSURANCE_PROVIDER, SERVICE_RECORD, ODOMETER_RECORD, ACCIDENT_RECORD, INSURANCE_CLAIM, DOCUMENT, BLOCKCHAIN_RECORD, MERKLE_BATCH
+  entityId         String      // Reference to source entity ID
+  label            String
+  metadata         String?     // JSON string with entity attributes for graph visualization
+  sourceRecordHash String?     // SHA-256 snapshot if available
+  isAnchored       Boolean     @default(false)
+  anomalyScore     Float       @default(0.0) // 0 to 100 review priority
+  lastSyncedAt     DateTime    @default(now())
+  createdAt        DateTime    @default(now())
+
+  // Relationships
+  outgoingEdges    GraphEdge[] @relation("SourceNodeEdges")
+  incomingEdges    GraphEdge[] @relation("TargetNodeEdges")
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([anomalyScore])
+  @@index([lastSyncedAt])
+}
+
+model GraphEdge {
+  id               String    @id @default(uuid())
+  sourceNodeId     String
+  sourceNode       GraphNode @relation("SourceNodeEdges", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNodeId     String
+  targetNode       GraphNode @relation("TargetNodeEdges", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  relationshipType String    // OWNS, TRANSFERRED_TO, MANUFACTURED_BY, SERVICED_BY, HAS_ODOMETER_RECORD, HAS_ACCIDENT, HAS_INSURANCE_POLICY, CLAIM_RELATES_TO_ACCIDENT, DOCUMENT_SUPPORTS_RECORD, ANCHORED_ON_BLOCKCHAIN, INCLUDED_IN_MERKLE_BATCH, SHARES_EVIDENCE_WITH
+  isDirect         Boolean   @default(true)
+  isInferred       Boolean   @default(false)
+  confidence       Float     @default(1.0)
+  sourceReference  String?   // Table/record pointer
+  evidence         String?   // JSON string explaining relationship basis
+  validFrom        DateTime?
+  validTo          DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@unique([sourceNodeId, targetNodeId, relationshipType])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@index([relationshipType])
+  @@index([isDirect])
+}
+
+model FraudFinding {
+  id                  String             @id @default(uuid())
+  findingNumber       String             @unique // e.g. FINDING-2026-000001
+  ruleId              String             // RULE_ODOMETER_ROLLBACK, etc.
+  ruleVersion         String             @default("1.0")
+  ruleName            String
+  category            String             // ODOMETER_INTEGRITY, IDENTITY_CONFLICT, DOCUMENT_TAMPER, CHRONOLOGY_VIOLATION, CROSS_VEHICLE_PATTERN, BLOCKCHAIN_VERIFICATION
+  severity            String             @default("MEDIUM") // INFORMATIONAL, LOW, MEDIUM, HIGH
+  status              String             @default("NEW") // NEW, UNDER_REVIEW, NEEDS_MORE_EVIDENCE, RESOLVED, DISMISSED
+  primaryEntityId     String             // Reference to primary vehicleId or entityId
+  primaryEntityType   String             // VEHICLE, GARAGE, etc.
+  title               String
+  description         String
+  explanation         String             // Detailed narrative of what was detected
+  unknowns            String?            // Explicit statement of what remains unknown / unproven
+  recommendedAction   String?            // Recommended next step for reviewer
+  involvedNodeIds     String             // JSON string array of GraphNode IDs
+  evidenceReferences  String             // JSON string array of evidence objects
+  investigationCaseId String?
+  investigationCase   InvestigationCase? @relation("CaseFindings", fields: [investigationCaseId], references: [id], onDelete: SetNull)
+  reviewedById        String?
+  reviewedBy          User?              @relation("UserReviewedFindings", fields: [reviewedById], references: [id], onDelete: SetNull)
+  resolutionReason    String?
+  firstDetectedAt     DateTime           @default(now())
+  lastEvaluatedAt     DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([ruleId])
+  @@index([category])
+  @@index([severity])
+  @@index([status])
+  @@index([primaryEntityId])
+  @@index([investigationCaseId])
+  @@index([createdAt])
+}
+
+model InvestigationCase {
+  id               String         @id @default(uuid())
+  caseNumber       String         @unique // e.g. CASE-INV-2026-000001
+  title            String
+  description      String
+  priority         String         @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status           String         @default("OPEN") // OPEN, UNDER_REVIEW, NEEDS_MORE_EVIDENCE, RESOLVED, DISMISSED
+  assignedToId     String?
+  assignedTo       User?          @relation("UserAssignedFraudCases", fields: [assignedToId], references: [id], onDelete: SetNull)
+  notes            String?        // JSON string array of investigator notes { noteId, author, text, createdAt }
+  resolutionReason String?
+  resolutionNotes  String?
+  resolvedAt       DateTime?
+  resolvedById     String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  findings         FraudFinding[]     @relation("CaseFindings")
+  investigationRuns InvestigationRun[] @relation("CaseInvestigationRuns")
+
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+model GraphSyncMetadata {
+  id             String   @id @default("singleton")
+  lastSyncedAt   DateTime @default(now())
+  nodeCount      Int      @default(0)
+  edgeCount      Int      @default(0)
+  findingCount   Int      @default(0)
+  status         String   @default("IDLE") // IDLE, SYNCING, ERROR
+  lastError      String?
+  syncDurationMs Int      @default(0)
+  updatedAt      DateTime @updatedAt
+}
+
+// ============================================================================
+// PHASE 8: AUTONOMOUS VEHICLE PASSPORT INVESTIGATION AGENT MODELS
+// ============================================================================
+
+enum InvestigationStatus {
+  QUEUED
+  RUNNING
+  REVIEW_REQUIRED
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMED_OUT
+  PARTIALLY_COMPLETED
+}
+
+enum InvestigationType {
+  ODOMETER_ROLLBACK
+  OWNERSHIP_IDENTITY
+  DOCUMENT_INTEGRITY
+  FRAUD_GRAPH
+  MULTI_SIGNAL
+  GENERAL
+}
+
+enum StepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model InvestigationRun {
+  id                  String              @id @default(uuid())
+  runNumber           String              @unique // e.g. "INV-2026-000001"
+  initiatingUserId    String
+  initiatingUser      User                @relation("UserInvestigationRuns", fields: [initiatingUserId], references: [id])
+  targetType          String              // "VEHICLE", "FINDING", "DOCUMENT", "ENTITY"
+  targetId            String              // Primary target ID (vehicleId, findingId, etc.)
+  vehicleId           String?
+  vehicle             Vehicle?            @relation("VehicleInvestigationRuns", fields: [vehicleId], references: [id], onDelete: SetNull)
+  investigationType   InvestigationType   @default(GENERAL)
+  status              InvestigationStatus @default(QUEUED)
+  summary             String?
+  reportJson          String?             // Structured InvestigationReport JSON
+  errorCategory       String?
+  errorMessage        String?
+  stepCount           Int                 @default(0)
+  maxSteps            Int                 @default(20)
+  evidenceCount       Int                 @default(0)
+  executionBudgetMs   Int                 @default(60000) // 60s default
+  executionDurationMs Int                 @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  deadline            DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  investigationCaseId String?
+  investigationCase   InvestigationCase?  @relation("CaseInvestigationRuns", fields: [investigationCaseId], references: [id], onDelete: SetNull)
+
+  steps               InvestigationStep[] @relation("RunSteps")
+  evidence            InvestigationEvidence[] @relation("RunEvidence")
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([vehicleId])
+  @@index([initiatingUserId])
+  @@index([investigationType])
+  @@index([createdAt])
+}
+
+model InvestigationStep {
+  id             String           @id @default(uuid())
+  runId          String
+  run            InvestigationRun @relation("RunSteps", fields: [runId], references: [id], onDelete: Cascade)
+  stepIndex      Int
+  toolName       String
+  toolVersion    String           @default("1.0")
+  status         StepStatus       @default(PENDING)
+  inputMetadata  String?          // Sanitized JSON of input parameters
+  resultSummary  String?          // Sanitized summary of tool result
+  errorCategory  String?
+  errorMessage   String?
+  durationMs     Int              @default(0)
+  retryCount     Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  @@unique([runId, stepIndex])
+  @@index([runId])
+  @@index([toolName])
+  @@index([status])
+}
+
+model InvestigationEvidence {
+  id                 String           @id @default(uuid())
+  evidenceNumber     String           @unique // e.g. "EVD-2026-000001"
+  runId              String
+  run                InvestigationRun @relation("RunEvidence", fields: [runId], references: [id], onDelete: Cascade)
+  evidenceType       String           // ODOMETER_RECORD, SERVICE_RECORD, ACCIDENT_RECORD, INSURANCE_RECORD, DOCUMENT, BLOCKCHAIN_PROOF, MERKLE_PROOF, GRAPH_FINDING, GRAPH_RELATION
+  sourceRecordId     String           // Database record ID
+  contentHash        String?          // SHA-256 or Merkle root
+  verificationStatus String           // VERIFIED, UNVERIFIED, MISMATCH, UNAVAILABLE
+  description        String
+  limitations        String?
+  relationship       String           @default("SUPPORTING") // SUPPORTING, CONTRADICTING, NEUTRAL
+  provenanceJson     String?          // JSON containing source timestamps, entity refs, etc.
+  createdAt          DateTime         @default(now())
+
+  @@index([runId])
+  @@index([evidenceType])
+  @@index([sourceRecordId])
+  @@index([verificationStatus])
+}
+
+// ============================================================================
+// PHASE 9: PRIVACY-PRESERVING VEHICLE VERIFICATION & ZERO-KNOWLEDGE PROOFS
+// ============================================================================
+
+enum PrivacyCredentialStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum ZkpSessionStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+model PrivacyCredential {
+  id                   String                  @id @default(uuid())
+  credentialId         String                  @unique // e.g. "VC-2026-000001"
+  vehicleId            String
+  vehicle              Vehicle                 @relation("VehiclePrivacyCredentials", fields: [vehicleId], references: [id], onDelete: Cascade)
+  issuerId             String
+  issuer               User                    @relation("IssuerPrivacyCredentials", fields: [issuerId], references: [id])
+  credentialType       String                  // e.g. "VEHICLE_HEALTH_CLAIM", "ODOMETER_COMPLIANCE", "SERVICE_COMPLIANCE", "BATTERY_HEALTH"
+  schemaVersion        String                  @default("1.0")
+  rootCommitment       String                  // Merkle root or Pedersen root commitment (hex 0x...)
+  issuerPublicKey      String                  // Hex public key or address of issuer
+  issuerSignature      String                  // ECDSA signature over commitment payload
+  saltBlindingsJson    String                  // Encrypted / secured JSON record of attribute salts for owner
+  attributesJson       String                  // Structured credential attributes JSON for proof generation
+  status               PrivacyCredentialStatus @default(ACTIVE)
+  validFrom            DateTime                @default(now())
+  validUntil           DateTime
+  revokedAt            DateTime?
+  revocationReason     String?
+  onChainTxHash        String?                 // On-chain registration/receipt tx if anchored
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  disclosureLogs       PrivacyDisclosureLog[]  @relation("CredentialDisclosureLogs")
+
+  @@index([vehicleId])
+  @@index([issuerId])
+  @@index([credentialType])
+  @@index([status])
+  @@index([validUntil])
+  @@index([createdAt])
+}
+
+model ZkpVerificationSession {
+  id               String           @id @default(uuid())
+  sessionId        String           @unique // e.g. "ZKP-SESS-000001"
+  verifierId       String?
+  verifier         User?            @relation("VerifierZkpSessions", fields: [verifierId], references: [id], onDelete: SetNull)
+  vehicleId        String
+  vehicle          Vehicle          @relation("VehicleZkpSessions", fields: [vehicleId], references: [id], onDelete: Cascade)
+  claimType        String           // "ODOMETER_BELOW_THRESHOLD", "BATTERY_SOH_ABOVE_THRESHOLD", etc.
+  policyThreshold  Float?           // Threshold parameter (e.g. 80000 km, 80.0% SoH)
+  nonce            String           @unique // Ephemeral 256-bit cryptographically secure random challenge
+  status           ZkpSessionStatus @default(PENDING)
+  verifiedAt       DateTime?
+  expiresAt        DateTime
+  proofSummaryJson String?          // Non-private proof metadata (public inputs, verification time, etc.)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([vehicleId])
+  @@index([verifierId])
+  @@index([status])
+  @@index([nonce])
+  @@index([expiresAt])
+}
+
+model PrivacyDisclosureLog {
+  id                  String             @id @default(uuid())
+  logNumber           String             @unique // e.g. "DISC-2026-000001"
+  vehicleId           String
+  vehicle             Vehicle            @relation("VehiclePrivacyDisclosureLogs", fields: [vehicleId], references: [id], onDelete: Cascade)
+  credentialId        String?
+  credential          PrivacyCredential? @relation("CredentialDisclosureLogs", fields: [credentialId], references: [id], onDelete: SetNull)
+  disclosureType      String             // "SELECTIVE_DISCLOSURE", "ZKP_THRESHOLD_PROOF"
+  claimType           String
+  disclosedFields     String             // JSON string array of field names disclosed (values omitted for ZKP)
+  verifierIdentifier  String?            // Verifier label, email, or session ID
+  verificationStatus  String             // "VALID", "INVALID", "EXPIRED", "REVOKED", "UNSUPPORTED"
+  verificationDetails String?            // JSON structured proof metadata & timing
+  blockchainReceiptTx String?            // Optional on-chain receipt transaction hash
+  createdAt           DateTime           @default(now())
+
+  @@index([vehicleId])
+  @@index([credentialId])
+  @@index([disclosureType])
+  @@index([verificationStatus])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// PHASE 10: AUTONOMOUS DIGITAL VEHICLE TWIN & EVENT-SOURCED LIFECYCLE
+// ============================================================================
+
+model VehicleTwinEvent {
+  id                      String    @id @default(uuid())
+  vehicleId               String
+  vehicle                 Vehicle   @relation("VehicleTwinEvents", fields: [vehicleId], references: [id], onDelete: Cascade)
+  eventType               String    // e.g. "REGISTRATION", "OWNERSHIP_TRANSFER", "SERVICE_PERFORMED", "ODOMETER_LOGGED", "ACCIDENT_RECORDED", "INSURANCE_ISSUED", "DOCUMENT_VERIFIED", "BLOCKCHAIN_ANCHORED", "FRAUD_ANOMALY_DETECTED", "INVESTIGATION_RESOLVED", "ZKP_VERIFIED", "MANUFACTURER_BIRTH_CERTIFIED", "BATTERY_EVENT_LOGGED"
+  sourceRecordId          String?
+  sourceSystem            String    // "CORE_PASSPORT", "SERVICE_LEDGER", "FRAUD_GRAPH", "BLOCKCHAIN_SERVICE", "PRIVACY_VERIFIER", "MANUFACTURER_SYSTEM", "BATTERY_MANAGEMENT"
+  eventTime               DateTime  // Reported real-world event timestamp
+  recordedTime            DateTime  // Initial creation timestamp in DB
+  ingestionTime           DateTime  @default(now()) // Timestamp ingested into Twin event stream
+  actor                   String?
+  schemaVersion           String    @default("1.0.0")
+  sourceVerificationStatus String   @default("UNVERIFIED") // VERIFIED, DERIVED, ESTIMATED, UNVERIFIED, SUSPICIOUS, TAMPER_DETECTED
+  contentHash             String?
+  blockchainTxHash        String?
+  idempotencyKey          String    @unique // sha256(vehicleId + eventType + sourceRecordId + eventTime)
+  summary                 String
+  payloadJson             String?   // Sanitized non-sensitive event metadata
+  createdAt               DateTime  @default(now())
+
+  @@index([vehicleId, eventTime])
+  @@index([eventType])
+  @@index([idempotencyKey])
+}
+
+model TwinScenarioRun {
+  id                  String    @id @default(uuid())
+  vehicleId           String
+  vehicle             Vehicle   @relation("VehicleTwinScenarios", fields: [vehicleId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User      @relation("UserTwinScenarios", fields: [userId], references: [id])
+  scenarioType        String    // "SCHEDULED_MAINTENANCE", "ODOMETER_PROJECTION", "OWNERSHIP_PRECHECK", "BATTERY_DEGRADATION"
+  status              String    @default("COMPLETED") // COMPLETED, CANCELLED, FAILED, TIMED_OUT
+  scenarioInputsJson  String    // Hypothetical input parameters
+  baseTwinVersion     String    // Hash or version timestamp of base twin state
+  simulatedDiffJson   String    // Itemized differences between base state and simulated state
+  explanation         String    // Human-readable narrative explaining outcome and assumptions
+  isSimulated         Boolean   @default(true) // Explicit guard: NEVER authoritative
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  @@index([vehicleId])
+  @@index([userId])
+  @@index([scenarioType])
+}
+
+model TwinReconciliationRun {
+  id                    String    @id @default(uuid())
+  vehicleId             String
+  vehicle               Vehicle   @relation("VehicleTwinReconciliations", fields: [vehicleId], references: [id], onDelete: Cascade)
+  triggeredById         String?
+  triggeredBy           User?     @relation("UserTwinReconciliations", fields: [triggeredById], references: [id], onDelete: SetNull)
+  status                String    @default("SUCCESS") // "SUCCESS", "DRIFT_DETECTED_AND_REPAIRED", "FAILED"
+  startedAt             DateTime  @default(now())
+  completedAt           DateTime?
+  sourcesCompared       Int       @default(0)
+  discrepanciesCount    Int       @default(0)
+  discrepancySummaryJson String?   // Detected drifts between projection and authoritative records
+  repairedStateJson     String?   // Corrected snapshot summary
+  errorCategory         String?
+  createdAt             DateTime  @default(now())
+
+  @@index([vehicleId])
+  @@index([startedAt])
+}

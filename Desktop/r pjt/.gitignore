@@ -1,0 +1,47 @@
+# Node modules - DO NOT commit
+node_modules/
+**/node_modules/
+
+# Build outputs
+.next/
+dist/
+build/
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Prisma
+backend/prisma/migrations/*.db
+
+# Hardhat artifacts and cache
+blockchain/cache/
+blockchain/artifacts/
+blockchain/typechain-types/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Uploads
+uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Docs screenshots (large files)
+docs/screenshots/

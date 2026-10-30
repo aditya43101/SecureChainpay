@@ -1,0 +1,246 @@
+{
+  "network": "localhost",
+  "chainId": 31337,
+  "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "seededAt": "2026-10-29T05:58:31.255Z",
+  "users": [
+    {
+      "userId": "USR-DEMO-001",
+      "name": "Aarav Sharma",
+      "email": "aarav.sharma@vehiclepassport.dev",
+      "wallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "userRefHash": "0x4c579d91ca27a760ae9d095d4dd993b3784569b8c921b195e94089527f38fdc5",
+      "txHash": "0x7a35596aa439d77ad6d9a62e8246fa3743d401e60dd13567cc5771e5acf7ca26",
+      "blockNumber": 2,
+      "gasUsed": "254590",
+      "status": "CONFIRMED"
+    },
+    {
+      "userId": "USR-DEMO-002",
+      "name": "Priya Verma",
+      "email": "priya.verma@vehiclepassport.dev",
+      "wallet": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "userRefHash": "0x8dcee73117a62f3b0cec199bbbfe4d48e894ec0a8d88f26be9d3fdb475a239a6",
+      "txHash": "0xe3fba6168a165596c893a46e53ce84a059b6c6c318ade0e8aa37817512a30668",
+      "blockNumber": 3,
+      "gasUsed": "237478",
+      "status": "CONFIRMED"
+    },
+    {
+      "userId": "USR-DEMO-003",
+      "name": "Rohan Mehta",
+      "email": "rohan.mehta@vehiclepassport.dev",
+      "wallet": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "userRefHash": "0xc2911ecb155773a5dd5fe0654283be0f9d02cfdd653813156718a25a12defe95",
+      "txHash": "0x5982bc869797cab20a31cc05034c2bfdd7e19b3d798ec19a27f22b01fae0e42f",
+      "blockNumber": 4,
+      "gasUsed": "237490",
+      "status": "CONFIRMED"
+    },
+    {
+      "userId": "USR-DEMO-004",
+      "name": "Neha Kapoor",
+      "email": "neha.kapoor@vehiclepassport.dev",
+      "wallet": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+      "userRefHash": "0x24b194f06ddcde92f309c2c16fd2096dad594366274050feecd662ba0cd02f3e",
+      "txHash": "0x3c52d9be34ffb4b62f556d3ca56cb66a6a8c1efcc0f6649eab3c668fbe171e9b",
+      "blockNumber": 5,
+      "gasUsed": "237490",
+      "status": "CONFIRMED"
+    },
+    {
+      "userId": "USR-DEMO-GARAGE",
+      "name": "Apex Certified Garage",
+      "email": "garage@vehiclepassport.dev",
+      "wallet": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "userRefHash": "0x6093c7726bf2aa6df74eb6a2435f234fbe834aa8fcdc740c96908f4165fe1214",
+      "txHash": "0x8cc25c5f23631ee44b2ab56099ba1703d318a92b5f0c4a745041098d881b1a3e",
+      "blockNumber": 6,
+      "gasUsed": "237442",
+      "status": "CONFIRMED"
+    }
+  ],
+  "vehicles": [
+    {
+      "vehicleId": "VEH-DEMO-001",
+      "passportId": "VP-DEMO-001",
+      "vin": "DEMOV001X1SEDAN01",
+      "reg": "MH02DM1001",
+      "model": "Aurora X1 Sedan",
+      "initialOwnerWallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "recordHash": "0xa5bc5692c9f24eda55a1c26ef197a51e0cb91ac8bfd821379cb5d8cecae0fa65",
+      "txHash": "0xfac8079772ec473f8b1afd98988652c3d5c06cbb4f8bd02f78ba39a3810a271b",
+      "blockNumber": 7,
+      "gasUsed": "277244",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-002",
+      "passportId": "VP-DEMO-002",
+      "vin": "DEMOV002E2ELEC002",
+      "reg": "MH02DM1002",
+      "model": "Falcon E2 Electric Car",
+      "initialOwnerWallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "recordHash": "0x67d712f019dcad9b7665f910b0fe76cf21456e99cab8fc6cb3b6f938e7dde454",
+      "txHash": "0x6aba809af06de9344c74f6200c9b8d4595e31e919dd96d99d5bcadf8d9fc21ad",
+      "blockNumber": 8,
+      "gasUsed": "243044",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-003",
+      "passportId": "VP-DEMO-003",
+      "vin": "DEMOV003R5SUVD003",
+      "reg": "MH02DM1003",
+      "model": "Summit R5 SUV",
+      "initialOwnerWallet": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "recordHash": "0xf059a233065f50564724ff6e1282b482456e9668db978e7f76578d0370431541",
+      "txHash": "0x011a878d7b30f1f02ad312408730b5bcaef15a1b4f7bf93b19d14b6f86852452",
+      "blockNumber": 9,
+      "gasUsed": "260132",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-004",
+      "passportId": "VP-DEMO-004",
+      "vin": "DEMOV004C3HATCH04",
+      "reg": "MH02DM1004",
+      "model": "Metro C3 Hatchback",
+      "initialOwnerWallet": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "recordHash": "0xc5881d05744196a09d4d83e6e84ad30530de787f939a29f9317b4ce87d668ae9",
+      "txHash": "0x8dfd3d6fab4c7c55676aa41df052ba8e4838da60e218cccb72002bc5c707ea48",
+      "blockNumber": 10,
+      "gasUsed": "260144",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-005",
+      "passportId": "VP-DEMO-005",
+      "vin": "DEMOV005H7HYBRD05",
+      "reg": "MH02DM1005",
+      "model": "Terra H7 Hybrid SUV",
+      "initialOwnerWallet": "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc",
+      "recordHash": "0xc4774e43eddf666572038dd3cdb82cecf9d2e645fb73b69074582f86e7c7c752",
+      "txHash": "0x3d9314509027d771cb55aced4cd0673dbf59c2ada6e97e3191522f7208552470",
+      "blockNumber": 11,
+      "gasUsed": "260144",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-006",
+      "passportId": "VP-DEMO-006",
+      "vin": "DEMOV006S4SEDAN06",
+      "reg": "MH02DM1006",
+      "model": "Nova S4 Sedan",
+      "initialOwnerWallet": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "recordHash": "0xe9ed156205bdcd6080b64a0d798f40b2cd11196acc17900228b304b1ff1bd141",
+      "txHash": "0x5ea4d65a5b50e1e15764f9f67f1fc229fc5252da7a39c0a7e2257b39553ca1e5",
+      "blockNumber": 12,
+      "gasUsed": "243044",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-007",
+      "passportId": "VP-DEMO-007",
+      "vin": "DEMOV007E5ELEC007",
+      "reg": "MH02DM1007",
+      "model": "Volt E5 Electric Car",
+      "initialOwnerWallet": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "recordHash": "0x59fe7a46159c821513f12d3b676e67a3f84ee742d3d7e4d445f265b15d083cf9",
+      "txHash": "0x920ee4a6a35f1d3a8671e5cf2a4527613e7109f7dff11d849f8214e756062a58",
+      "blockNumber": 13,
+      "gasUsed": "243032",
+      "status": "CONFIRMED"
+    },
+    {
+      "vehicleId": "VEH-DEMO-008",
+      "passportId": "VP-DEMO-008",
+      "vin": "DEMOV008M2COMP008",
+      "reg": "MH02DM1008",
+      "model": "Orbit M2 Compact Car",
+      "initialOwnerWallet": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "recordHash": "0xd3afedb21f2c1fe9cc782c696d4ece288742696d7c292faf31a6eb1b399b861f",
+      "txHash": "0xa96b98905862e0ea30de6367b56c79a9b28ad60119ef4a5b6664209b60d0707f",
+      "blockNumber": 14,
+      "gasUsed": "243044",
+      "status": "CONFIRMED"
+    }
+  ],
+  "transfers": [
+    {
+      "step": 1,
+      "vehicleId": "VEH-DEMO-008",
+      "from": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "to": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "recordId": "REC-DEMO-TRF-001",
+      "deedHash": "0x7c356506b5f9388c8a60006e9124defecd7bad90087fa60d10c806302957feef",
+      "txHash": "0xc520bce38a6d6023d94d1fe914aa3a3ee22dca3e4a013d553d26c89cf487c89c",
+      "blockNumber": 15,
+      "gasUsed": "293300"
+    },
+    {
+      "step": 2,
+      "vehicleId": "VEH-DEMO-008",
+      "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "to": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "recordId": "REC-DEMO-TRF-002",
+      "deedHash": "0x9220586d27060a1835756e14c116de1e5ad77a566f8c4554a9a14e2ef722d378",
+      "txHash": "0x2fcefbab0473e6bf45e43f56ea977b305bf245e53e3e7f801914c447ce91651f",
+      "blockNumber": 16,
+      "gasUsed": "259124"
+    }
+  ],
+  "lifecycleRecords": [
+    {
+      "recordId": "REC-DEMO-SRV-001",
+      "vehicleId": "VEH-DEMO-001",
+      "type": "SERVICE",
+      "mileage": 10000,
+      "description": "Scheduled 10,000 km Service: Engine oil, air filter, and multipoint safety inspection",
+      "proofHash": "0x3b63313ffaf2d25de340b0f23db8e5e88ebd642f9a2ef03686fa63bd889e62a5",
+      "txHash": "0x55ab90b683b79964357454f2568c2d254b1f6a258880afbbedf704d98469f2cc",
+      "blockNumber": 17
+    },
+    {
+      "recordId": "REC-DEMO-SRV-002",
+      "vehicleId": "VEH-DEMO-001",
+      "type": "SERVICE",
+      "mileage": 22500,
+      "description": "Front brake disc pads inspection and brake fluid hydraulic flush",
+      "proofHash": "0x890c21474e3f23bab18665ba0c56287525516e426917d4847ca09856d6c91b71",
+      "txHash": "0xf804a13df24c402cb63eb8e9ec6f3af017c9d17e249cf6545daa2b5e82872039",
+      "blockNumber": 18
+    },
+    {
+      "recordId": "REC-DEMO-ODO-001",
+      "vehicleId": "VEH-DEMO-001",
+      "type": "ODOMETER",
+      "mileage": 22500,
+      "description": "Odometer Certification at 22,500 km",
+      "proofHash": "0x1ae1e743b92f147a59baf7374472784d23e405bab4c3796253c16431fa8b19a7",
+      "txHash": "0x8919a380c626e6de21b95fc3829d33bc80361351f102c608f47853125f03c3fa",
+      "blockNumber": 19
+    },
+    {
+      "recordId": "REC-DEMO-SRV-003",
+      "vehicleId": "VEH-DEMO-002",
+      "type": "SERVICE",
+      "mileage": 15000,
+      "description": "High-voltage battery diagnostic (State of Health: 99.2%), cell voltage balancing",
+      "proofHash": "0xc3763ef193cdf74f6a774a3632bc83cd9940c7fd38f9345fc705ca447e084c11",
+      "txHash": "0x0d81b9c0be11666b7b94260ca04391bc9e5bbe32d4b7a395f47ec1b274549efa",
+      "blockNumber": 20
+    },
+    {
+      "recordId": "REC-DEMO-ODO-002",
+      "vehicleId": "VEH-DEMO-002",
+      "type": "ODOMETER",
+      "mileage": 30000,
+      "description": "Odometer Certification at 30,000 km",
+      "proofHash": "0x10dfa9bc97f2e56906e29fda979b45a3fb637c516736c1c0362f98ff6a985d7b",
+      "txHash": "0xab29942fce46bf45c10ca024fe70a03424755c94e183e9aeb366694f04f8ac54",
+      "blockNumber": 21
+    }
+  ]
+}

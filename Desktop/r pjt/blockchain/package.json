@@ -1,0 +1,22 @@
+{
+  "name": "vehicle-passport-blockchain",
+  "version": "1.0.0",
+  "description": "Smart contracts and Hardhat environment for Blockchain Vehicle Passport",
+  "scripts": {
+    "node": "hardhat node",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.2.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.13.9",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "hardhat": "^2.22.18",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}

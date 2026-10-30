@@ -1,0 +1,14 @@
+{
+  "name": "blockchain-vehicle-passport",
+  "version": "1.0.0",
+  "description": "Production-quality tamper-evident digital vehicle passport system",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "seed": "cd backend && npm run prisma:seed",
+    "seed:demo": "cd blockchain && npx hardhat run scripts/seedDemoBlockchain.ts --network localhost && cd ../backend && npx ts-node prisma/seed_demo.ts",
+    "verify:demo": "cd blockchain && npx hardhat run scripts/verifyDemoBlockchain.ts --network localhost && cd ../backend && npx ts-node scripts/verify_demo_dataset.ts",
+    "migrate": "cd backend && npm run prisma:migrate"
+  }
+}
