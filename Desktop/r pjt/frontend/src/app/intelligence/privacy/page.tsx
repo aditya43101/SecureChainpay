@@ -450,7 +450,7 @@ export default function PrivacyVerificationCenterPage() {
               <div className="flex items-center space-x-2">
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">Privacy & Verification Center</h1>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                  Phase 9 ZKP Active
+                  ZKP Cryptography Active
                 </span>
               </div>
               <p className="text-xs text-slate-500">

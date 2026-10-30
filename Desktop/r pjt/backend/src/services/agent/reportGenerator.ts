@@ -194,7 +194,7 @@ export class ReportGenerator {
         category: prov.category || 'CROSS_ENTITY_ANOMALY',
         severity: (prov.severity as FindingSeverity) || 'MEDIUM',
         assessmentStatus: 'REQUIRES_HUMAN_REVIEW',
-        title: `Phase 7 Graph Finding: ${prov.ruleId || 'ANOMALY'}`,
+        title: `Fraud Graph Finding: ${prov.ruleId || 'ANOMALY'}`,
         explanation: prov.explanation || gf.description,
         supportingEvidenceRefs: [],
         contradictingEvidenceRefs: [gf.evidenceNumber],

@@ -26,7 +26,7 @@ export default function MerkleBatchesPage() {
               <Link href="/explorer" className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight hover:text-blue-600 transition">
                 Merkle <span className="text-blue-600">Batch Explorer</span>
               </Link>
-              <div className="text-[10px] text-slate-500 font-medium">Phase 6 Cryptographic Anchoring & Inclusion Proofs</div>
+              <div className="text-[10px] text-slate-500 font-medium">Cryptographic Anchoring & Inclusion Proofs</div>
             </div>
           </div>
 
@@ -57,7 +57,7 @@ export default function MerkleBatchesPage() {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4">
-          <p>© 2026 Blockchain Vehicle Passport. Phase 6 Advanced Merkle Tree Batch Anchoring & Cryptographic Verification.</p>
+          <p>© 2026 Blockchain Vehicle Passport. Advanced Merkle Tree Batch Anchoring & Cryptographic Verification.</p>
         </div>
       </footer>
     </div>

@@ -101,7 +101,7 @@ export default function LandingPortalPage() {
             <div className="bg-white/80 backdrop-blur rounded-2xl border border-slate-200/90 p-4 text-center shadow-xs">
               <div className="text-2xl sm:text-3xl font-black text-cyan-700">64 / 64</div>
               <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">
-                Phase 10 Tests Passing
+                Automated Tests Passing
               </div>
             </div>
 
@@ -143,7 +143,7 @@ export default function LandingPortalPage() {
                   <Cpu className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-brand-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                  PHASE 10
+                  DIGITAL TWIN
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition">
@@ -170,7 +170,7 @@ export default function LandingPortalPage() {
                   <Lock className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  PHASE 9
+                  ZK PRIVACY
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 group-hover:text-emerald-600 transition">
@@ -197,7 +197,7 @@ export default function LandingPortalPage() {
                   <Bot className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200">
-                  PHASE 8
+                  AUTONOMOUS AI
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 group-hover:text-cyan-600 transition">
@@ -224,7 +224,7 @@ export default function LandingPortalPage() {
                   <Network className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                  PHASE 7
+                  FRAUD GRAPH
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 group-hover:text-purple-600 transition">
@@ -251,7 +251,7 @@ export default function LandingPortalPage() {
                   <Layers className="w-6 h-6" />
                 </div>
                 <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                  PHASE 6
+                  MERKLE PROOFS
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition">

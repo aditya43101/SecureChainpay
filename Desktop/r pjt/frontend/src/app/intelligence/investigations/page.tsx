@@ -287,7 +287,7 @@ export default function AutonomousInvestigationConsolePage() {
               <div className="flex items-center space-x-2">
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">Investigation Console</h1>
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                  Phase 8 Certified
+                  Autonomous AI Certified
                 </span>
               </div>
               <p className="text-xs text-slate-500">Autonomous Evidence Correlation & Fraud Case Orchestration Engine</p>

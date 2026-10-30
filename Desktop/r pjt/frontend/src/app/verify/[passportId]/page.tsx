@@ -456,7 +456,7 @@ export default function PublicVerifyPage() {
               </div>
             )}
 
-            {/* PHASE 3: USED-CAR BUYER INTELLIGENCE SUMMARY */}
+            {/* USED-CAR BUYER INTELLIGENCE SUMMARY */}
             {buyerSummary && (
               <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -563,7 +563,7 @@ export default function PublicVerifyPage() {
               </div>
             )}
 
-            {/* PHASE 4: PUBLIC ECOSYSTEM PROVENANCE CARD */}
+            {/* PUBLIC ECOSYSTEM PROVENANCE CARD */}
             {ecosystemSummary && (
               <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">

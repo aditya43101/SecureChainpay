@@ -101,7 +101,7 @@ export default function DashboardPage() {
   // Passport QR Modal state
   const [isQrModalOpen, setIsQrModalOpen] = useState<boolean>(false);
 
-  // Selective Disclosure Modal state (Phase 5)
+  // Selective Disclosure Modal state
   const [isDisclosureModalOpen, setIsDisclosureModalOpen] = useState<boolean>(false);
 
   // Add Vehicle Modal state
@@ -127,19 +127,19 @@ export default function DashboardPage() {
   const [submittingEdit, setSubmittingEdit] = useState<boolean>(false);
   const [editFormError, setEditFormError] = useState<string | null>(null);
 
-  // Blockchain verification state (Phase 3)
+  // Blockchain verification state
   const [verificationResult, setVerificationResult] = useState<VehicleVerificationResult | null>(null);
   const [verifying, setVerifying] = useState<boolean>(false);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [retryingBlockchain, setRetryingBlockchain] = useState<boolean>(false);
 
-  // Phase 4 Lifecycle & Verification State
+  // Lifecycle & Verification State
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [loadingTimeline, setLoadingTimeline] = useState<boolean>(false);
   const [fullVerificationReport, setFullVerificationReport] = useState<FullVehicleVerificationReport | null>(null);
   const [loadingFullVerification, setLoadingFullVerification] = useState<boolean>(false);
 
-  // Phase 4 Modals
+  // Lifecycle Modals
   const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState<boolean>(false);
   const [isTamperModalOpen, setIsTamperModalOpen] = useState<boolean>(false);
@@ -985,7 +985,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      {/* Blockchain Verification Section (Phase 3) */}
+                      {/* Blockchain Verification Section */}
                       <div className="p-5 rounded-2xl border border-slate-200 bg-slate-900 text-white shadow-md">
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-4">
                           <div className="flex items-center gap-2.5">
@@ -1119,7 +1119,7 @@ export default function DashboardPage() {
                           </div>
                         )}
 
-                        {/* Phase 4 Lifecycle Action Bar */}
+                        {/* Lifecycle Action Bar */}
                         <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-700/60">
                           <button
                             type="button"
@@ -1220,7 +1220,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* PHASE 3: DIGITAL VEHICLE TWIN TAB */}
+          {/* DIGITAL VEHICLE TWIN TAB */}
           {activeTab === 'digital-twin' && (
             <div className="space-y-6">
               {selectedVehicle ? (
@@ -1245,7 +1245,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* PHASE 4: INDUSTRY & EV ECOSYSTEM INTELLIGENCE TAB */}
+          {/* INDUSTRY & EV ECOSYSTEM INTELLIGENCE TAB */}
           {activeTab === 'ecosystem' && (
             <div className="space-y-6">
               {selectedVehicle && token ? (
@@ -1275,7 +1275,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* PHASE 2: VEHICLE INTELLIGENCE TAB */}
+          {/* VEHICLE INTELLIGENCE TAB */}
           {activeTab === 'intelligence' && (
             <div className="space-y-6">
               {selectedVehicle ? (
@@ -1379,7 +1379,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* BLOCKCHAIN VERIFICATION TAB (Phase 3) */}
+          {/* BLOCKCHAIN VERIFICATION TAB */}
           {activeTab === 'blockchain' && (
 
             <div className="space-y-6">
@@ -1593,7 +1593,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* PHASE 4 LIFECYCLE TABS */}
+          {/* LIFECYCLE TABS */}
           {['timeline', 'ownership', 'service', 'accident', 'insurance', 'documents'].includes(activeTab) && (
             <div className="space-y-6">
               {selectedVehicle ? (
@@ -2039,7 +2039,7 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* ================= SELECTIVE DISCLOSURE MODAL (PHASE 5) ================= */}
+      {/* ================= SELECTIVE DISCLOSURE MODAL ================= */}
       {isDisclosureModalOpen && selectedVehicle && token && (
         <SelectiveDisclosureModal
           isOpen={isDisclosureModalOpen}

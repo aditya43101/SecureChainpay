@@ -203,7 +203,7 @@ export default function BlockchainExplorerPage() {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Merkle Batches & Inclusion Proofs (Phase 6)</span>
+            <span>Merkle Batches & Inclusion Proofs</span>
           </button>
           <button
             onClick={() => setActiveTab('TRANSACTIONS')}

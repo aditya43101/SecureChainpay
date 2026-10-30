@@ -98,7 +98,7 @@ export interface VerificationResponse {
 }
 
 // ============================================================================
-// PHASE 4: LIFECYCLE & VERIFICATION TYPES
+// LIFECYCLE & VERIFICATION TYPES
 // ============================================================================
 
 export interface TimelineEvent {
@@ -370,7 +370,7 @@ export interface SystemAlertItem {
 }
 
 // ============================================================================
-// PHASE 2: VEHICLE INTELLIGENCE, FRAUD DETECTION & PREDICTIVE MAINTENANCE
+// VEHICLE INTELLIGENCE, FRAUD DETECTION & PREDICTIVE MAINTENANCE
 // ============================================================================
 
 export type HealthStatus = 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR';
@@ -570,7 +570,7 @@ export interface AIQuestionResponse {
 }
 
 // ============================================================================
-// PHASE 3: DIGITAL VEHICLE TWIN & USED-CAR BUYER INTELLIGENCE
+// DIGITAL VEHICLE TWIN & USED-CAR BUYER INTELLIGENCE
 // ============================================================================
 
 export type EvidenceLevel = 'VERIFIED' | 'DERIVED' | 'ESTIMATED' | 'UNKNOWN';
@@ -885,7 +885,7 @@ export interface PublicBuyerSummary {
 }
 
 // ============================================================================
-// PHASE 4: INDUSTRY & EV ECOSYSTEM INTELLIGENCE INTERFACES
+// INDUSTRY & EV ECOSYSTEM INTELLIGENCE INTERFACES
 // ============================================================================
 
 export interface ManufacturerCertificateDTO {
@@ -1160,7 +1160,7 @@ export interface PublicEcosystemSummary {
 }
 
 // ============================================================================
-// PHASE 5: SELECTIVE DISCLOSURE & PRIVACY DTOs
+// SELECTIVE DISCLOSURE & PRIVACY DTOs
 // ============================================================================
 
 export interface DisclosureProfileDTO {
@@ -1323,7 +1323,7 @@ export interface SharedPassportDTO {
 }
 
 // ============================================================================
-// PHASE 5: ADMIN INTELLIGENCE DTOs
+// ADMIN INTELLIGENCE DTOs
 // ============================================================================
 
 export interface AdminOverviewDTO {
@@ -1445,7 +1445,7 @@ export interface DataQualityAuditDTO {
 }
 
 // ============================================================================
-// PHASE 6: MERKLE TREE BATCH ANCHORING & CRYPTOGRAPHIC VERIFICATION
+// MERKLE TREE BATCH ANCHORING & CRYPTOGRAPHIC VERIFICATION
 // ============================================================================
 
 export type MerkleBatchStatus =
@@ -1585,7 +1585,7 @@ export interface EligibleBatchRecordDTO {
 }
 
 // ============================================================================
-// PHASE 7: FRAUD INTELLIGENCE GRAPH & EVIDENCE CORRELATION TYPES
+// FRAUD INTELLIGENCE GRAPH & EVIDENCE CORRELATION TYPES
 // ============================================================================
 
 export interface GraphNodeDTO {
@@ -1720,7 +1720,7 @@ export interface GraphOverviewDTO {
 }
 
 // ============================================================================
-// PHASE 8: AUTONOMOUS VEHICLE PASSPORT INVESTIGATION AGENT TYPES
+// AUTONOMOUS VEHICLE PASSPORT INVESTIGATION AGENT TYPES
 // ============================================================================
 
 export type InvestigationStatusType =
@@ -1876,7 +1876,7 @@ export interface CreateInvestigationInput {
 }
 
 // ============================================================================
-// PHASE 9: PRIVACY-PRESERVING VEHICLE VERIFICATION & ZERO-KNOWLEDGE PROOFS
+// PRIVACY-PRESERVING VEHICLE VERIFICATION & ZERO-KNOWLEDGE PROOFS
 // ============================================================================
 
 export interface PrivacyCredentialDTO {
@@ -2006,7 +2006,7 @@ export interface PrivacyDisclosureLogDTO {
 }
 
 // ============================================================================
-// PHASE 10: AUTONOMOUS DIGITAL VEHICLE TWIN TYPES
+// AUTONOMOUS DIGITAL VEHICLE TWIN TYPES
 // ============================================================================
 
 export type TwinEvidenceLevel = 'VERIFIED' | 'DERIVED' | 'ESTIMATED' | 'UNVERIFIED' | 'SUSPICIOUS';

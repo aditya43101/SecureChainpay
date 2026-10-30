@@ -139,7 +139,7 @@ export default function Navbar() {
                   <div>
                     <div className="text-xs font-bold flex items-center gap-1.5">
                       Autonomous Digital Twin
-                      <span className="text-[9px] bg-blue-100 text-brand-700 px-1.5 py-0.2 rounded font-semibold">Phase 10</span>
+                      <span className="text-[9px] bg-blue-100 text-brand-700 px-1.5 py-0.2 rounded font-semibold">Simulation</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
                       Event-sourced state engine & hypothetical scenario simulator
@@ -159,7 +159,7 @@ export default function Navbar() {
                   <div>
                     <div className="text-xs font-bold flex items-center gap-1.5">
                       Privacy & ZKP Engine
-                      <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.2 rounded font-semibold">Phase 9</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.2 rounded font-semibold">ZK Proofs</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
                       Zero-knowledge range proofs & selective document disclosure
@@ -179,7 +179,7 @@ export default function Navbar() {
                   <div>
                     <div className="text-xs font-bold flex items-center gap-1.5">
                       Multi-Agent Investigation Console
-                      <span className="text-[9px] bg-cyan-100 text-cyan-700 px-1.5 py-0.2 rounded font-semibold">Phase 8</span>
+                      <span className="text-[9px] bg-cyan-100 text-cyan-700 px-1.5 py-0.2 rounded font-semibold">AI Agents</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
                       Autonomous agent swarm with tool calling & fraud dispute handoff
@@ -199,7 +199,7 @@ export default function Navbar() {
                   <div>
                     <div className="text-xs font-bold flex items-center gap-1.5">
                       Fraud Ring Graph
-                      <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-semibold">Phase 7</span>
+                      <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-semibold">Fraud Graph</span>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
                       Cross-vehicle anomaly graph & rollback cluster detection

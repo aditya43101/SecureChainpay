@@ -336,7 +336,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
     }
   }
 
-  // Handoff Anomaly to Phase 8 Agent
+  // Handoff Anomaly to Investigation Agent
   async function handleHandoffInvestigation(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !selectedVehicleId) return;
@@ -417,10 +417,10 @@ export default function DigitalVehicleTwinControlCenterPage() {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
-                  PHASE 10
+                  TWIN SIMULATION
                 </span>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
-                  AUTONOMOUS TWIN ENGINE V10
+                  AUTONOMOUS TWIN ENGINE
                 </span>
               </div>
               <h1 className="text-lg font-bold text-slate-900 tracking-tight">
@@ -429,14 +429,14 @@ export default function DigitalVehicleTwinControlCenterPage() {
             </div>
           </div>
 
-          {/* Quick Cross-Phase Suite Links */}
+          {/* Quick Cross-Suite Links */}
           <div className="flex items-center space-x-2">
             <Link
               href="/intelligence/investigations"
               className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-sky-700 hover:bg-sky-50/60 border border-slate-200 transition"
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>Phase 8 Agent</span>
+              <span>Investigation Agent</span>
             </Link>
 
             <Link
@@ -444,7 +444,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
               className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-sky-700 hover:bg-sky-50/60 border border-slate-200 transition"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span>Phase 9 ZKP</span>
+              <span>Privacy ZKP</span>
             </Link>
 
             <Link
@@ -452,7 +452,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
               className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-sky-700 hover:bg-sky-50/60 border border-slate-200 transition"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Phase 7 Graph</span>
+              <span>Fraud Graph</span>
             </Link>
 
             {!token && (
@@ -733,7 +733,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
                 <div>
                   <div className="text-sm font-bold text-slate-900">Autonomous Investigation Integration</div>
                   <div className="text-xs text-slate-600">
-                    Directly dispatch Phase 8 Autonomous Investigation Agent swarm from detected Digital Twin anomalies.
+                    Directly dispatch Autonomous Investigation Agent swarm from detected Digital Twin anomalies.
                   </div>
                 </div>
               </div>
@@ -994,7 +994,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
                 <div className="text-xs font-semibold text-slate-500 uppercase">Merkle Batch Verification</div>
                 <div className="text-2xl font-bold text-slate-900">{twin.integrations.merkleBatchesCount} Batches</div>
                 <p className="text-xs text-slate-500">
-                  Authoritative records anchored cryptographically into Phase 6 Merkle Trees.
+                  Authoritative records anchored cryptographically into Merkle Trees.
                 </p>
                 <Link
                   href="/explorer/batches"
@@ -1009,7 +1009,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
                 <div className="text-xs font-semibold text-slate-500 uppercase">Zero-Knowledge Credentials</div>
                 <div className="text-2xl font-bold text-slate-900">{twin.integrations.privacyCredentialsCount} Active</div>
                 <p className="text-xs text-slate-500">
-                  Pedersen commitments &amp; selective disclosure proofs issued under Phase 9.
+                  Pedersen commitments &amp; selective disclosure proofs.
                 </p>
                 <Link
                   href="/intelligence/privacy"
@@ -1024,7 +1024,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
                 <div className="text-xs font-semibold text-slate-500 uppercase">Fraud Graph &amp; Agent</div>
                 <div className="text-2xl font-bold text-slate-900">{twin.integrations.fraudFindingsCount} Findings</div>
                 <p className="text-xs text-slate-500">
-                  Correlated intelligence from Phase 7 Fraud Graph and Phase 8 Autonomous Agent.
+                  Correlated intelligence from Fraud Graph and Autonomous Agent.
                 </p>
                 <Link
                   href="/intelligence/fraud-graph"
@@ -1360,7 +1360,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
                 <div className="w-8 h-8 rounded-lg bg-sky-600 text-white flex items-center justify-center">
                   <Bot className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-900">Handoff Anomaly to Phase 8 Agent</h3>
+                <h3 className="text-sm font-bold text-slate-900">Handoff Anomaly to Investigation Agent</h3>
               </div>
               <button
                 onClick={() => setShowHandoffModal(false)}
@@ -1371,7 +1371,7 @@ export default function DigitalVehicleTwinControlCenterPage() {
             </div>
 
             <p className="text-xs text-slate-500">
-              This initiates an autonomous investigation case in Phase 8 without exposing private witness data or personal records.
+              This initiates an autonomous investigation case without exposing private witness data or personal records.
             </p>
 
             <form onSubmit={handleHandoffInvestigation} className="space-y-3">

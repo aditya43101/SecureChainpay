@@ -202,7 +202,7 @@ export async function loginAsTestUserApi(email: string): Promise<AuthResponse> {
   return res.json();
 }
 
-/* ---------------- Vehicle Endpoints (Phase 2) ---------------- */
+/* ---------------- Vehicle Endpoints ---------------- */
 
 export async function fetchMyVehicles(token: string): Promise<VehicleListResponse> {
   const res = await fetch(`${API_BASE}/vehicles`, {
@@ -258,7 +258,7 @@ export async function updateVehicle(
   return res.json();
 }
 
-/* ---------------- Blockchain Endpoints (Phase 3) ---------------- */
+/* ---------------- Blockchain Endpoints ---------------- */
 
 export async function verifyVehiclePassportApi(
   vehicleId: string,
@@ -290,7 +290,7 @@ export async function registerVehicleOnBlockchainApi(
   return res.json();
 }
 
-/* ---------------- Lifecycle & Verification Endpoints (Phase 4) ---------------- */
+/* ---------------- Lifecycle & Verification Endpoints ---------------- */
 
 export async function fetchVehicleTimeline(
   vehicleId: string,
@@ -506,7 +506,7 @@ export async function restoreTamperApi(
   return res.json();
 }
 
-/* ---------------- Phase 5: Public Verification & Trust Endpoints ---------------- */
+/* ---------------- Public Verification & Trust Endpoints ---------------- */
 
 export async function fetchPublicPassport(
   passportId: string
@@ -594,7 +594,7 @@ export async function processDocumentOCRApi(
   return res.json();
 }
 
-/* ---------------- Phase 2: Vehicle Intelligence Endpoints ---------------- */
+/* ---------------- Vehicle Intelligence Endpoints ---------------- */
 
 export async function fetchVehicleIntelligence(
   vehicleId: string,
@@ -700,7 +700,7 @@ export async function askVehicleIntelligenceAi(
   return res.json();
 }
 
-/* ---------------- Phase 3: Digital Twin & Used-Car Buyer Intelligence Endpoints ---------------- */
+/* ---------------- Digital Twin & Used-Car Buyer Intelligence Endpoints ---------------- */
 
 export async function fetchDigitalTwin(
   vehicleId: string,
@@ -775,7 +775,7 @@ export async function fetchPublicBuyerSummary(
   return res.json();
 }
 
-/* ---------------- Phase 4: Industry & EV Ecosystem Intelligence Endpoints ---------------- */
+/* ---------------- Industry & EV Ecosystem Intelligence Endpoints ---------------- */
 
 export async function fetchManufacturerCertificate(
   vehicleId: string,
@@ -965,7 +965,7 @@ export async function fetchPublicEcosystemSummary(
   return res.json();
 }
 
-/* ---------------- Phase 5: Selective Disclosure Endpoints ---------------- */
+/* ---------------- Selective Disclosure Endpoints ---------------- */
 
 export async function createSelectiveDisclosure(
   vehicleId: string,
@@ -1024,7 +1024,7 @@ export async function fetchSharedPassport(
   return res.json();
 }
 
-/* ---------------- Phase 5: Admin Intelligence Endpoints ---------------- */
+/* ---------------- Admin Intelligence Endpoints ---------------- */
 
 export async function fetchAdminOverview(
   token: string
@@ -1165,7 +1165,7 @@ export async function fetchAdminGlobalSearch(
   return res.json();
 }
 
-/* ---------------- Phase 6: Merkle Batches & Verification Endpoints ---------------- */
+/* ---------------- Merkle Batches & Verification Endpoints ---------------- */
 
 export async function fetchBatches(params?: {
   page?: number;
@@ -1352,7 +1352,7 @@ export async function fetchVehicleBlockchainVerification(vehicleId: string): Pro
   return res.json();
 }
 
-/* ---------------- Phase 7 Fraud Intelligence Graph Endpoints ---------------- */
+/* ---------------- Fraud Intelligence Graph Endpoints ---------------- */
 
 export async function fetchGraphOverview(token: string): Promise<{
   success: boolean;
@@ -1590,7 +1590,7 @@ export async function findEvidencePathApi(
   return res.json();
 }
 
-/* ---------------- Phase 8: Autonomous Vehicle Passport Investigation Agent Endpoints ---------------- */
+/* ---------------- Autonomous Vehicle Passport Investigation Agent Endpoints ---------------- */
 
 export async function createInvestigationApi(
   input: CreateInvestigationInput,
@@ -1729,7 +1729,7 @@ export async function listInvestigationToolsApi(
   return res.json();
 }
 
-/* ---------------- Phase 9: Privacy-Preserving & ZKP Endpoints ---------------- */
+/* ---------------- Privacy-Preserving & ZKP Endpoints ---------------- */
 
 export async function createZkpChallengeApi(
   vehicleId: string,
@@ -1894,7 +1894,7 @@ export async function getPrivacyDisclosureLogsApi(
   return res.json();
 }
 
-/* ---------------- Phase 10: Autonomous Digital Vehicle Twin Endpoints ---------------- */
+/* ---------------- Autonomous Digital Vehicle Twin Endpoints ---------------- */
 
 export async function getAutonomousTwinApi(
   vehicleId: string,

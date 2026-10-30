@@ -502,7 +502,7 @@ export default function FraudIntelligenceGraphPage() {
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-lg font-bold text-slate-900 tracking-tight">Fraud Intelligence Graph</h1>
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-full">Phase 7</span>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-full">Intelligence Engine</span>
               </div>
               <p className="text-xs text-slate-500">Cross-Entity Anomaly Correlation & Relational Provenance</p>
             </div>
